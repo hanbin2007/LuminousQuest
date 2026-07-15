@@ -87,6 +87,7 @@ export class OpenAICompatibleProvider implements LLMProvider {
           { role: 'system', content: `${request.prompt.text}${schemaInstruction}` },
           { role: 'user', content: userContent },
         ],
+        ...(request.temperature === undefined ? {} : { temperature: request.temperature }),
         ...(structured ? { response_format: { type: 'json_object' } } : {}),
       }),
       signal: AbortSignal.timeout(this.timeoutMilliseconds(request.timeoutMs)),

@@ -132,6 +132,7 @@ export interface AssessmentExtractionInput {
   provider: string;
   model: string;
   stepId?: string;
+  temperature?: number;
   logger?: Pick<Console, 'warn'>;
 }
 
@@ -194,6 +195,7 @@ export async function runAssessmentExtraction(
     images: [],
     schema,
     ...(input.stepId ? { stepId: input.stepId } : {}),
+    ...(input.temperature === undefined ? {} : { temperature: input.temperature }),
   }, {
     retryCount: input.config.scaffoldPolicy.extraction.retryCount,
     validateStructured: async (value) => {

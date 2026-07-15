@@ -44,6 +44,7 @@ export function createDevelopmentCacheKey(request: LLMRequest) {
     },
     schemaVersion: request.schemaVersion,
     configVersion: request.configVersion,
+    temperature: request.temperature,
     schema: request.schema,
     input: request.input,
     imageHashes: request.images.map((image) => ({

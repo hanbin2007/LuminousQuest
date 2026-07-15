@@ -55,6 +55,7 @@ const llmRequestSchema = z
       .default([]),
     schema: z.record(z.string(), z.unknown()).optional(),
     stepId: z.string().trim().min(1).optional(),
+    temperature: z.number().min(0).max(2).optional(),
   })
   .strict()
   .superRefine((request, context) => {

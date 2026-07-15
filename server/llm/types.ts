@@ -23,6 +23,7 @@ export interface LLMRequest {
   schema?: Record<string, unknown>;
   stepId?: string;
   timeoutMs?: number;
+  temperature?: number;
 }
 
 export interface LLMResponse {
