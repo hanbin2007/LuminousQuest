@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises';
+import { readFile, realpath } from 'node:fs/promises';
 import path from 'node:path';
 import { getAsset, getAssetKeys, isSea } from 'node:sea';
 
@@ -18,14 +18,19 @@ const mimeTypes: Record<string, string> = {
 };
 
 function safeAssetPath(requestPath: string) {
-  let decoded: string;
+  let decoded = requestPath;
   try {
-    decoded = decodeURIComponent(requestPath);
+    for (let count = 0; count < 3; count += 1) {
+      const next = decodeURIComponent(decoded);
+      if (next === decoded) break;
+      decoded = next;
+    }
   } catch {
     return null;
   }
+  if (decoded.includes('\\') || decoded.split('/').includes('..')) return null;
   const normalized = path.posix.normalize(decoded).replace(/^\/+/, '');
-  if (normalized.startsWith('..')) return null;
+  if (normalized.startsWith('..') || path.posix.isAbsolute(normalized)) return null;
   return normalized || 'index.html';
 }
 
@@ -42,11 +47,27 @@ async function readDiskAsset(clientRoot: string, relativePath: string) {
     return null;
   }
   try {
-    return await readFile(absoluteFile);
+    const resolvedRoot = await realpath(absoluteRoot);
+    const resolvedFile = await realpath(absoluteFile);
+    if (resolvedFile !== resolvedRoot && !resolvedFile.startsWith(`${resolvedRoot}${path.sep}`)) {
+      return null;
+    }
+    return await readFile(resolvedFile);
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
     throw error;
   }
+}
+
+export async function loadExternalAsset(contentRoot: string, requestPath: string) {
+  const relativePath = safeAssetPath(requestPath);
+  if (!relativePath || relativePath === 'index.html' && requestPath.trim() === '') return null;
+  const body = await readDiskAsset(path.join(contentRoot, 'assets'), relativePath);
+  if (!body) return null;
+  return {
+    body,
+    contentType: mimeTypes[path.extname(relativePath).toLowerCase()] ?? 'application/octet-stream',
+  };
 }
 
 export async function loadStaticAsset(clientRoot: string, requestPath: string) {

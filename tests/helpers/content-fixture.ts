@@ -86,7 +86,11 @@ export async function createTemporaryDirectory() {
 export async function writeValidContentTree(root: string) {
   const configRoot = path.join(root, 'config');
   const casesRoot = path.join(configRoot, 'cases');
+  const promptsRoot = path.join(root, 'prompts');
+  const assetsRoot = path.join(root, 'assets');
   await mkdir(casesRoot, { recursive: true });
+  await mkdir(promptsRoot, { recursive: true });
+  await mkdir(assetsRoot, { recursive: true });
 
   await Promise.all(
     Object.entries(validConfigs).map(([file, value]) =>
@@ -94,5 +98,5 @@ export async function writeValidContentTree(root: string) {
     ),
   );
   await writeFile(path.join(casesRoot, 'zinc-copper.json'), JSON.stringify(validCase));
+  await writeFile(path.join(promptsRoot, 'test.md'), 'Server-owned prompt v1');
 }
-

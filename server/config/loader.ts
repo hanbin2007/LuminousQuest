@@ -1,4 +1,5 @@
-import { readdir, readFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { readdir, readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 
 import type { ZodType } from 'zod';
@@ -81,13 +82,61 @@ async function loadCases(contentRoot: string) {
   }
 
   return Promise.all(
-    files.map((file) => parseJsonFile(contentRoot, path.join(relativeDirectory, file), caseSchema)),
+    files.map(async (file) => ({
+      file: path.join(relativeDirectory, file),
+      value: await parseJsonFile(contentRoot, path.join(relativeDirectory, file), caseSchema),
+    })),
   );
 }
 
-function validateReferences(config: LoadedConfig) {
+function assertUniqueCaseIds(cases: Awaited<ReturnType<typeof loadCases>>) {
+  const seen = new Set<string>();
+  for (const trainingCase of cases) {
+    if (seen.has(trainingCase.value.id)) {
+      throw new ConfigValidationError(
+        trainingCase.file,
+        'id',
+        `duplicate case id ${trainingCase.value.id}`,
+      );
+    }
+    seen.add(trainingCase.value.id);
+  }
+}
+
+async function validateMaterialRef(
+  contentRoot: string,
+  relativeCaseFile: string,
+  field: string,
+  materialRef: string,
+) {
+  if (materialRef.includes('\\')) {
+    throw new ConfigValidationError(relativeCaseFile, field, 'materialRef must use an assets/ path');
+  }
+  const normalized = path.posix.normalize(materialRef);
+  if (!normalized.startsWith('assets/') || normalized === 'assets/') {
+    throw new ConfigValidationError(relativeCaseFile, field, 'materialRef must stay inside assets/');
+  }
+  const assetsRoot = path.resolve(contentRoot, 'assets');
+  const absoluteFile = path.resolve(contentRoot, ...normalized.split('/'));
+  if (!absoluteFile.startsWith(`${assetsRoot}${path.sep}`)) {
+    throw new ConfigValidationError(relativeCaseFile, field, 'materialRef must stay inside assets/');
+  }
+  try {
+    const info = await stat(absoluteFile);
+    if (!info.isFile()) throw new Error('not a file');
+  } catch {
+    throw new ConfigValidationError(relativeCaseFile, field, `materialRef is missing: ${materialRef}`);
+  }
+}
+
+export async function validateReferences(
+  config: LoadedConfig,
+  contentRoot?: string,
+  caseFiles: readonly string[] = config.cases.map((trainingCase) => `config/cases/${trainingCase.id}.json`),
+) {
   const nodeIds = new Set(config.knowledgeModel.nodes.map((node) => node.id));
   const rubricIds = new Set(config.rubrics.rubrics.map((rubric) => rubric.id));
+  const scaffoldLevels = new Set(config.scaffoldPolicy.levels.map((level) => level.level));
 
   config.rubrics.rubrics.forEach((rubric, index) => {
     if (!nodeIds.has(rubric.nodeId)) {
@@ -112,29 +161,79 @@ function validateReferences(config: LoadedConfig) {
   });
 
   config.cases.forEach((trainingCase, caseIndex) => {
+    const relativeCaseFile = caseFiles[caseIndex] ?? `config/cases/${trainingCase.id}.json`;
     trainingCase.targetNodeIds.forEach((nodeId, nodeIndex) => {
       if (!nodeIds.has(nodeId)) {
         throw new ConfigValidationError(
-          `config/cases/${trainingCase.id}.json`,
+          relativeCaseFile,
           `targetNodeIds.${nodeIndex}`,
           `unknown knowledge node ${nodeId} in case index ${caseIndex}`,
         );
       }
     });
+    trainingCase.scaffold.forEach((entry, scaffoldIndex) => {
+      if (!scaffoldLevels.has(entry.level)) {
+        throw new ConfigValidationError(
+          relativeCaseFile,
+          `scaffold.${scaffoldIndex}.level`,
+          `unknown scaffold policy level ${entry.level}`,
+        );
+      }
+    });
   });
+
+  if (contentRoot) {
+    await Promise.all(
+      config.cases.flatMap((trainingCase, caseIndex) =>
+        trainingCase.materialRefs.map((materialRef, materialIndex) =>
+          validateMaterialRef(
+            contentRoot,
+            caseFiles[caseIndex] ?? `config/cases/${trainingCase.id}.json`,
+            `materialRefs.${materialIndex}`,
+            materialRef,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+async function listConfigFiles(directory: string, relativeDirectory = ''): Promise<string[]> {
+  const entries = await readdir(path.join(directory, relativeDirectory), { withFileTypes: true });
+  const files: string[] = [];
+  for (const entry of entries) {
+    const relativeFile = path.join(relativeDirectory, entry.name);
+    if (entry.isDirectory()) files.push(...(await listConfigFiles(directory, relativeFile)));
+    else if (entry.isFile()) files.push(relativeFile);
+  }
+  return files.sort();
+}
+
+async function deriveConfigVersion(contentRoot: string) {
+  const configRoot = path.join(contentRoot, 'config');
+  const hash = createHash('sha256');
+  for (const relativeFile of await listConfigFiles(configRoot)) {
+    const contents = await readFile(path.join(configRoot, relativeFile));
+    const normalizedPath = relativeFile.split(path.sep).join('/');
+    hash.update(`${Buffer.byteLength(normalizedPath)}:${normalizedPath}:${contents.length}:`);
+    hash.update(contents);
+  }
+  return `sha256:${hash.digest('hex')}`;
 }
 
 export async function loadAllConfig(contentRoot: string): Promise<LoadedConfig> {
-  const [knowledgeModel, rubrics, pretest, cases, scaffoldPolicy] = await Promise.all([
+  const [knowledgeModel, rubrics, pretest, loadedCases, scaffoldPolicy, configVersion] = await Promise.all([
     parseJsonFile(contentRoot, 'config/knowledge-model.json', knowledgeModelSchema),
     parseJsonFile(contentRoot, 'config/rubrics.json', rubricsSchema),
     parseJsonFile(contentRoot, 'config/pretest.json', pretestSchema),
     loadCases(contentRoot),
     parseJsonFile(contentRoot, 'config/scaffold-policy.json', scaffoldPolicySchema),
+    deriveConfigVersion(contentRoot),
   ]);
 
-  const config = { knowledgeModel, rubrics, pretest, cases, scaffoldPolicy };
-  validateReferences(config);
+  assertUniqueCaseIds(loadedCases);
+  const cases = loadedCases.map((entry) => entry.value);
+  const config = { configVersion, knowledgeModel, rubrics, pretest, cases, scaffoldPolicy };
+  await validateReferences(config, contentRoot, loadedCases.map((entry) => entry.file));
   return config;
 }
-
