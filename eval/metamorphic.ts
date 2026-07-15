@@ -7,6 +7,7 @@ import {
 export interface MetamorphicEvalVariant {
   variant: MetamorphicVariantName;
   case: LabeledEvalCase;
+  semanticReview: { reviewer: string; rationale: string };
 }
 
 const paraphrases = [
@@ -45,6 +46,14 @@ function transformQuotes(
 ) {
   return {
     ...evalCase.expectedExtraction,
+    anchors: evalCase.expectedExtraction.anchors.map((anchor) => ({
+      ...anchor,
+      facts: anchor.facts.map((fact) => ({
+        ...fact,
+        evidenceQuote: transform(fact.evidenceQuote),
+      })),
+      evidenceQuotes: anchor.evidenceQuotes.map(transform),
+    })),
     slots: evalCase.expectedExtraction.slots.map((slot) => ({
       ...slot,
       evidenceQuote: transform(slot.evidenceQuote),
@@ -56,6 +65,22 @@ function transformQuotes(
 export function generateMetamorphicVariants(
   evalCase: LabeledEvalCase,
 ): MetamorphicEvalVariant[] {
+  const reviewed = (
+    variant: MetamorphicVariantName,
+    generated: LabeledEvalCase,
+  ): MetamorphicEvalVariant | null => {
+    const review = evalCase.metamorphicReview.variants[variant];
+    if (review.status !== 'approved' || generated.studentAnswer === evalCase.studentAnswer) return null;
+    return {
+      variant,
+      case: generated,
+      semanticReview: {
+        reviewer: evalCase.metamorphicReview.reviewer,
+        rationale: review.rationale,
+      },
+    };
+  };
+
   if (evalCase.evaluationPath === 'equation') {
     const rewritten = (value: string) => value.includes('->')
       ? value.replace('->', '=')
@@ -72,15 +97,9 @@ export function generateMetamorphicVariants(
         })),
       },
     });
-    const noise = labeledEvalCaseSchema.parse({
-      ...evalCase,
-      studentAnswer: `  ${evalCase.studentAnswer}  `,
-    });
     return [
-      { variant: 'paraphrase', case: paraphrase },
-      { variant: 'noise', case: noise },
-      { variant: 'rename-person', case: labeledEvalCaseSchema.parse(evalCase) },
-    ];
+      reviewed('paraphrase', paraphrase),
+    ].filter((entry): entry is MetamorphicEvalVariant => entry !== null);
   }
   const paraphrase = labeledEvalCaseSchema.parse({
     ...evalCase,
@@ -104,8 +123,8 @@ export function generateMetamorphicVariants(
   });
 
   return [
-    { variant: 'paraphrase', case: paraphrase },
-    { variant: 'noise', case: noise },
-    { variant: 'rename-person', case: rename },
-  ];
+    reviewed('paraphrase', paraphrase),
+    reviewed('noise', noise),
+    reviewed('rename-person', rename),
+  ].filter((entry): entry is MetamorphicEvalVariant => entry !== null);
 }

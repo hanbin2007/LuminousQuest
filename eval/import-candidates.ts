@@ -108,7 +108,7 @@ export async function importEvalCandidates(input: {
         aliases: config.scaffoldPolicy.extraction.factValueAliases,
       });
       const pending = pendingEvalCaseSchema.parse({
-        version: 'eval-case.v1',
+        version: 'eval-case.v2',
         annotationStatus: 'pending',
         id: `m1b-${parsed.stableHash.slice(0, 16)}`,
         questionRef: { caseId, nodeId },

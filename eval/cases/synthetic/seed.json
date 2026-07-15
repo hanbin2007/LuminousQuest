@@ -1,546 +1,3191 @@
 [
   {
-    "version": "eval-case.v1",
+    "version": "eval-case.v2",
     "annotationStatus": "labeled",
     "id": "synthetic-d1-m1-reversed-site",
-    "questionRef": { "caseId": "zinc-copper", "nodeId": "D1" },
+    "questionRef": {
+      "caseId": "zinc-copper",
+      "nodeId": "D1"
+    },
     "studentAnswer": "铜极才是失电子并发生氧化的场所。",
     "expectedExtraction": {
-      "response": "substantive", "terminology": "model", "syllabus": "within", "contradiction": false, "typo": "none",
-      "errorIds": ["D1-M1"],
-      "slots": [{ "id": "oxidation-site", "value": "Cu", "evidenceQuote": "铜极" }],
-      "evidenceQuotes": ["铜极才是失电子并发生氧化的场所。"]
+      "response": "substantive",
+      "terminology": "model",
+      "syllabus": "within",
+      "contradiction": false,
+      "typo": "none",
+      "errorIds": [
+        "D1-M1"
+      ],
+      "slots": [
+        {
+          "id": "oxidation-site",
+          "value": "Cu",
+          "evidenceQuote": "铜极"
+        }
+      ],
+      "evidenceQuotes": [
+        "铜极才是失电子并发生氧化的场所。"
+      ],
+      "anchors": []
     },
-    "expectedScore": "miss", "annotator": "codex-synthetic-seed", "rubricVersion": "rubrics.v1.1", "source": "synthetic",
-    "misconceptionIds": ["D1-M1"], "tags": ["misconception"], "seriousMisjudgmentOpportunity": true
+    "expectedScore": "miss",
+    "annotator": "codex-synthetic-seed",
+    "rubricVersion": "rubrics.v1.1",
+    "source": "synthetic",
+    "misconceptionIds": [
+      "D1-M1"
+    ],
+    "tags": [
+      "misconception"
+    ],
+    "seriousMisjudgmentOpportunity": true,
+    "evaluationPath": "structured-assessment",
+    "reviewer": "codex-m1c1-independent-relabel",
+    "reviewStatus": "reviewed",
+    "adjudicationVersion": "adjudication-table.v1.1",
+    "expectedDisagreement": false,
+    "metamorphicReview": {
+      "reviewer": "codex-m1c1-independent-relabel",
+      "status": "approved",
+      "variants": {
+        "paraphrase": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        },
+        "noise": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        },
+        "rename-person": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        }
+      }
+    },
+    "rationale": {
+      "rubricRefs": [
+        "d1-miss"
+      ],
+      "adjudicationRefs": [
+        "§1"
+      ],
+      "text": "原作答直接体现诊断 D1-M1；按 d1-miss 与裁量 §1 独立标为 miss。"
+    }
   },
   {
-    "version": "eval-case.v1", "annotationStatus": "labeled", "id": "synthetic-d1-m2-active-only",
-    "questionRef": { "caseId": "zinc-copper", "nodeId": "D1" },
+    "version": "eval-case.v2",
+    "annotationStatus": "labeled",
+    "id": "synthetic-d1-m2-active-only",
+    "questionRef": {
+      "caseId": "zinc-copper",
+      "nodeId": "D1"
+    },
     "studentAnswer": "失电子场所必须是参与反应的金属，所以这里选铜。",
     "expectedExtraction": {
-      "response": "substantive", "terminology": "model", "syllabus": "within", "contradiction": false, "typo": "none",
-      "errorIds": ["D1-M2"], "slots": [{ "id": "oxidation-site", "value": "Cu", "evidenceQuote": "铜" }],
-      "evidenceQuotes": ["失电子场所必须是参与反应的金属，所以这里选铜。"]
-    },
-    "expectedScore": "miss", "annotator": "codex-synthetic-seed", "rubricVersion": "rubrics.v1.1", "source": "synthetic",
-    "misconceptionIds": ["D1-M2"], "tags": ["misconception"], "seriousMisjudgmentOpportunity": true
-  },
-  {
-    "version": "eval-case.v1", "annotationStatus": "labeled", "id": "synthetic-d1-blank",
-    "questionRef": { "caseId": "zinc-copper", "nodeId": "D1" }, "studentAnswer": "",
-    "expectedExtraction": {
-      "response": "blank", "terminology": "model", "syllabus": "within", "contradiction": false, "typo": "none",
-      "errorIds": [], "slots": [], "evidenceQuotes": []
-    },
-    "expectedScore": "unanswered", "annotator": "codex-synthetic-seed", "rubricVersion": "rubrics.v1.1", "source": "synthetic",
-    "misconceptionIds": [], "tags": ["blank"], "seriousMisjudgmentOpportunity": false
-  },
-
-  {
-    "version": "eval-case.v1", "annotationStatus": "labeled", "id": "synthetic-d2-m1-boundary",
-    "questionRef": { "caseId": "zinc-copper", "nodeId": "D2" }, "studentAnswer": "外电路就是盐桥，和内电路没有区别。",
-    "expectedExtraction": {
-      "response": "substantive", "terminology": "model", "syllabus": "within", "contradiction": false, "typo": "none",
-      "errorIds": ["D2-M1"], "slots": [{ "id": "external-carrier", "value": "salt-bridge", "evidenceQuote": "盐桥" }],
-      "evidenceQuotes": ["外电路就是盐桥，和内电路没有区别。"]
-    },
-    "expectedScore": "miss", "annotator": "codex-synthetic-seed", "rubricVersion": "rubrics.v1.1", "source": "synthetic",
-    "misconceptionIds": ["D2-M1"], "tags": ["misconception"], "seriousMisjudgmentOpportunity": true
-  },
-  {
-    "version": "eval-case.v1", "annotationStatus": "labeled", "id": "synthetic-d2-m2-ions-outside",
-    "questionRef": { "caseId": "zinc-copper", "nodeId": "D2" }, "studentAnswer": "外电路的导线里移动的是离子。",
-    "expectedExtraction": {
-      "response": "substantive", "terminology": "model", "syllabus": "within", "contradiction": false, "typo": "none",
-      "errorIds": ["D2-M2"], "slots": [{ "id": "external-carrier", "value": "ion", "evidenceQuote": "离子" }],
-      "evidenceQuotes": ["外电路的导线里移动的是离子。"]
-    },
-    "expectedScore": "miss", "annotator": "codex-synthetic-seed", "rubricVersion": "rubrics.v1.1", "source": "synthetic",
-    "misconceptionIds": ["D2-M2"], "tags": ["misconception"], "seriousMisjudgmentOpportunity": true
-  },
-  {
-    "version": "eval-case.v1", "annotationStatus": "labeled", "id": "synthetic-d2-off-topic",
-    "questionRef": { "caseId": "zinc-copper", "nodeId": "D2" }, "studentAnswer": "我今天忘记带化学作业了。",
-    "expectedExtraction": {
-      "response": "non-answer", "terminology": "colloquial", "syllabus": "within", "contradiction": false, "typo": "none",
-      "errorIds": [], "slots": [], "evidenceQuotes": []
-    },
-    "expectedScore": "unanswered", "annotator": "codex-synthetic-seed", "rubricVersion": "rubrics.v1.1", "source": "synthetic",
-    "misconceptionIds": [], "tags": ["off-topic"], "seriousMisjudgmentOpportunity": false
-  },
-
-  {
-    "version": "eval-case.v1", "annotationStatus": "labeled", "id": "synthetic-d3-m1-electrons-inside",
-    "questionRef": { "caseId": "zinc-copper", "nodeId": "D3" }, "studentAnswer": "盐桥中传的是电子，内电路走导线。",
-    "expectedExtraction": {
-      "response": "substantive", "terminology": "model", "syllabus": "within", "contradiction": false, "typo": "none",
-      "errorIds": ["D3-M1"],
-      "slots": [
-        { "id": "internal-carrier", "value": "electron", "evidenceQuote": "电子" },
-        { "id": "ion-path", "value": "导线", "evidenceQuote": "导线" }
+      "response": "substantive",
+      "terminology": "model",
+      "syllabus": "within",
+      "contradiction": false,
+      "typo": "none",
+      "errorIds": [
+        "D1-M2"
       ],
-      "evidenceQuotes": ["盐桥中传的是电子，内电路走导线。"]
-    },
-    "expectedScore": "miss", "annotator": "codex-synthetic-seed", "rubricVersion": "rubrics.v1.1", "source": "synthetic",
-    "misconceptionIds": ["D3-M1"], "tags": ["misconception"], "seriousMisjudgmentOpportunity": true
-  },
-  {
-    "version": "eval-case.v1", "annotationStatus": "labeled", "id": "synthetic-d3-m2-sugar-water",
-    "questionRef": { "caseId": "zinc-copper", "nodeId": "D3" }, "studentAnswer": "内电路靠分子在蔗糖水里移动。",
-    "expectedExtraction": {
-      "response": "substantive", "terminology": "model", "syllabus": "within", "contradiction": false, "typo": "none",
-      "errorIds": ["D3-M2"],
       "slots": [
-        { "id": "internal-carrier", "value": "分子", "evidenceQuote": "分子" },
-        { "id": "ion-path", "value": "蔗糖水", "evidenceQuote": "蔗糖水" }
+        {
+          "id": "oxidation-site",
+          "value": "Cu",
+          "evidenceQuote": "铜"
+        }
       ],
-      "evidenceQuotes": ["内电路靠分子在蔗糖水里移动。"]
+      "evidenceQuotes": [
+        "失电子场所必须是参与反应的金属，所以这里选铜。"
+      ],
+      "anchors": []
     },
-    "expectedScore": "miss", "annotator": "codex-synthetic-seed", "rubricVersion": "rubrics.v1.1", "source": "synthetic",
-    "misconceptionIds": ["D3-M2"], "tags": ["misconception"], "seriousMisjudgmentOpportunity": true
+    "expectedScore": "miss",
+    "annotator": "codex-synthetic-seed",
+    "rubricVersion": "rubrics.v1.1",
+    "source": "synthetic",
+    "misconceptionIds": [
+      "D1-M2"
+    ],
+    "tags": [
+      "misconception"
+    ],
+    "seriousMisjudgmentOpportunity": true,
+    "evaluationPath": "structured-assessment",
+    "reviewer": "codex-m1c1-independent-relabel",
+    "reviewStatus": "reviewed",
+    "adjudicationVersion": "adjudication-table.v1.1",
+    "expectedDisagreement": false,
+    "metamorphicReview": {
+      "reviewer": "codex-m1c1-independent-relabel",
+      "status": "approved",
+      "variants": {
+        "paraphrase": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        },
+        "noise": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        },
+        "rename-person": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        }
+      }
+    },
+    "rationale": {
+      "rubricRefs": [
+        "d1-miss"
+      ],
+      "adjudicationRefs": [
+        "§1"
+      ],
+      "text": "原作答直接体现诊断 D1-M2；按 d1-miss 与裁量 §1 独立标为 miss。"
+    }
   },
   {
-    "version": "eval-case.v1", "annotationStatus": "labeled", "id": "synthetic-d3-m3-no-bridge",
-    "questionRef": { "caseId": "zinc-copper", "nodeId": "D3" }, "studentAnswer": "双液原电池不用盐桥也能一直闭合。",
-    "expectedExtraction": {
-      "response": "substantive", "terminology": "model", "syllabus": "within", "contradiction": false, "typo": "none",
-      "errorIds": ["D3-M3"], "slots": [], "evidenceQuotes": ["双液原电池不用盐桥也能一直闭合。"]
+    "version": "eval-case.v2",
+    "annotationStatus": "labeled",
+    "id": "synthetic-d1-blank",
+    "questionRef": {
+      "caseId": "zinc-copper",
+      "nodeId": "D1"
     },
-    "expectedScore": "miss", "annotator": "codex-synthetic-seed", "rubricVersion": "rubrics.v1.1", "source": "synthetic",
-    "misconceptionIds": ["D3-M3"], "tags": ["misconception"], "seriousMisjudgmentOpportunity": true
+    "studentAnswer": "",
+    "expectedExtraction": {
+      "response": "blank",
+      "terminology": "model",
+      "syllabus": "within",
+      "contradiction": false,
+      "typo": "none",
+      "errorIds": [],
+      "slots": [],
+      "evidenceQuotes": [],
+      "anchors": []
+    },
+    "expectedScore": "unanswered",
+    "annotator": "codex-synthetic-seed",
+    "rubricVersion": "rubrics.v1.1",
+    "source": "synthetic",
+    "misconceptionIds": [],
+    "tags": [
+      "blank"
+    ],
+    "seriousMisjudgmentOpportunity": false,
+    "evaluationPath": "structured-assessment",
+    "reviewer": "codex-m1c1-independent-relabel",
+    "reviewStatus": "reviewed",
+    "adjudicationVersion": "adjudication-table.v1.1",
+    "expectedDisagreement": false,
+    "metamorphicReview": {
+      "reviewer": "codex-m1c1-independent-relabel",
+      "status": "approved",
+      "variants": {
+        "paraphrase": {
+          "status": "not-applicable",
+          "rationale": "空答没有可释义内容，空白改写是 no-op。"
+        },
+        "noise": {
+          "status": "not-applicable",
+          "rationale": "给空答添加文本会改变 response 类别，语义不等价。"
+        },
+        "rename-person": {
+          "status": "not-applicable",
+          "rationale": "空答不含人物指代，添加人物叙述会改变 response 类别。"
+        }
+      }
+    },
+    "rationale": {
+      "rubricRefs": [
+        "D1-E1"
+      ],
+      "adjudicationRefs": [
+        "§6"
+      ],
+      "text": "作答未实质尝试 D1；按裁量 §6 标为 unanswered。"
+    }
   },
   {
-    "version": "eval-case.v1", "annotationStatus": "labeled", "id": "synthetic-d3-m4-omit-inside",
-    "questionRef": { "caseId": "zinc-copper", "nodeId": "D3" }, "studentAnswer": "装置只要两根电极和一根导线就够了。",
-    "expectedExtraction": {
-      "response": "substantive", "terminology": "model", "syllabus": "within", "contradiction": false, "typo": "none",
-      "errorIds": ["D3-M4"], "slots": [], "evidenceQuotes": ["装置只要两根电极和一根导线就够了。"]
+    "version": "eval-case.v2",
+    "annotationStatus": "labeled",
+    "id": "synthetic-d2-m1-boundary",
+    "questionRef": {
+      "caseId": "zinc-copper",
+      "nodeId": "D2"
     },
-    "expectedScore": "miss", "annotator": "codex-synthetic-seed", "rubricVersion": "rubrics.v1.1", "source": "synthetic",
-    "misconceptionIds": ["D3-M4"], "tags": ["misconception"], "seriousMisjudgmentOpportunity": true
+    "studentAnswer": "外电路就是盐桥，和内电路没有区别。",
+    "expectedExtraction": {
+      "response": "substantive",
+      "terminology": "model",
+      "syllabus": "within",
+      "contradiction": false,
+      "typo": "none",
+      "errorIds": [
+        "D2-M1"
+      ],
+      "slots": [],
+      "evidenceQuotes": [
+        "外电路就是盐桥，和内电路没有区别。"
+      ],
+      "anchors": []
+    },
+    "expectedScore": "miss",
+    "annotator": "codex-synthetic-seed",
+    "rubricVersion": "rubrics.v1.1",
+    "source": "synthetic",
+    "misconceptionIds": [
+      "D2-M1"
+    ],
+    "tags": [
+      "misconception"
+    ],
+    "seriousMisjudgmentOpportunity": true,
+    "evaluationPath": "structured-assessment",
+    "reviewer": "codex-m1c1-independent-relabel",
+    "reviewStatus": "reviewed",
+    "adjudicationVersion": "adjudication-table.v1.1",
+    "expectedDisagreement": false,
+    "metamorphicReview": {
+      "reviewer": "codex-m1c1-independent-relabel",
+      "status": "approved",
+      "variants": {
+        "paraphrase": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        },
+        "noise": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        },
+        "rename-person": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        }
+      }
+    },
+    "rationale": {
+      "rubricRefs": [
+        "d2-miss"
+      ],
+      "adjudicationRefs": [
+        "§1"
+      ],
+      "text": "原作答直接体现诊断 D2-M1；按 d2-miss 与裁量 §1 独立标为 miss。"
+    }
   },
   {
-    "version": "eval-case.v1", "annotationStatus": "labeled", "id": "synthetic-d3-colloquial-correct",
-    "questionRef": { "caseId": "zinc-copper", "nodeId": "D3" }, "studentAnswer": "里头跑的是离子，走的那条路就是盐桥。",
+    "version": "eval-case.v2",
+    "annotationStatus": "labeled",
+    "id": "synthetic-d2-m2-ions-outside",
+    "questionRef": {
+      "caseId": "zinc-copper",
+      "nodeId": "D2"
+    },
+    "studentAnswer": "外电路的导线里移动的是离子。",
     "expectedExtraction": {
-      "response": "substantive", "terminology": "colloquial", "syllabus": "within", "contradiction": false, "typo": "none",
+      "response": "substantive",
+      "terminology": "model",
+      "syllabus": "within",
+      "contradiction": false,
+      "typo": "none",
+      "errorIds": [
+        "D2-M2"
+      ],
+      "slots": [
+        {
+          "id": "external-carrier",
+          "value": "ion",
+          "evidenceQuote": "离子"
+        }
+      ],
+      "evidenceQuotes": [
+        "外电路的导线里移动的是离子。"
+      ],
+      "anchors": []
+    },
+    "expectedScore": "miss",
+    "annotator": "codex-synthetic-seed",
+    "rubricVersion": "rubrics.v1.1",
+    "source": "synthetic",
+    "misconceptionIds": [
+      "D2-M2"
+    ],
+    "tags": [
+      "misconception"
+    ],
+    "seriousMisjudgmentOpportunity": true,
+    "evaluationPath": "structured-assessment",
+    "reviewer": "codex-m1c1-independent-relabel",
+    "reviewStatus": "reviewed",
+    "adjudicationVersion": "adjudication-table.v1.1",
+    "expectedDisagreement": false,
+    "metamorphicReview": {
+      "reviewer": "codex-m1c1-independent-relabel",
+      "status": "approved",
+      "variants": {
+        "paraphrase": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        },
+        "noise": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        },
+        "rename-person": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        }
+      }
+    },
+    "rationale": {
+      "rubricRefs": [
+        "d2-miss"
+      ],
+      "adjudicationRefs": [
+        "§1"
+      ],
+      "text": "原作答直接体现诊断 D2-M2；按 d2-miss 与裁量 §1 独立标为 miss。"
+    }
+  },
+  {
+    "version": "eval-case.v2",
+    "annotationStatus": "labeled",
+    "id": "synthetic-d2-off-topic",
+    "questionRef": {
+      "caseId": "zinc-copper",
+      "nodeId": "D2"
+    },
+    "studentAnswer": "我今天忘记带化学作业了。",
+    "expectedExtraction": {
+      "response": "non-answer",
+      "terminology": "colloquial",
+      "syllabus": "within",
+      "contradiction": false,
+      "typo": "none",
+      "errorIds": [],
+      "slots": [],
+      "evidenceQuotes": [],
+      "anchors": []
+    },
+    "expectedScore": "unanswered",
+    "annotator": "codex-synthetic-seed",
+    "rubricVersion": "rubrics.v1.1",
+    "source": "synthetic",
+    "misconceptionIds": [],
+    "tags": [
+      "off-topic"
+    ],
+    "seriousMisjudgmentOpportunity": false,
+    "evaluationPath": "structured-assessment",
+    "reviewer": "codex-m1c1-independent-relabel",
+    "reviewStatus": "reviewed",
+    "adjudicationVersion": "adjudication-table.v1.1",
+    "expectedDisagreement": false,
+    "metamorphicReview": {
+      "reviewer": "codex-m1c1-independent-relabel",
+      "status": "approved",
+      "variants": {
+        "paraphrase": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        },
+        "noise": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        },
+        "rename-person": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        }
+      }
+    },
+    "rationale": {
+      "rubricRefs": [
+        "D2-E1"
+      ],
+      "adjudicationRefs": [
+        "§6"
+      ],
+      "text": "作答未实质尝试 D2；按裁量 §6 标为 unanswered。"
+    }
+  },
+  {
+    "version": "eval-case.v2",
+    "annotationStatus": "labeled",
+    "id": "synthetic-d3-m1-electrons-inside",
+    "questionRef": {
+      "caseId": "zinc-copper",
+      "nodeId": "D3"
+    },
+    "studentAnswer": "盐桥中传的是电子，内电路走导线。",
+    "expectedExtraction": {
+      "response": "substantive",
+      "terminology": "model",
+      "syllabus": "within",
+      "contradiction": false,
+      "typo": "none",
+      "errorIds": [
+        "D3-M1"
+      ],
+      "slots": [
+        {
+          "id": "internal-carrier",
+          "value": "electron",
+          "evidenceQuote": "电子"
+        },
+        {
+          "id": "ion-path",
+          "value": "导线",
+          "evidenceQuote": "导线"
+        }
+      ],
+      "evidenceQuotes": [
+        "盐桥中传的是电子，内电路走导线。"
+      ],
+      "anchors": []
+    },
+    "expectedScore": "miss",
+    "annotator": "codex-synthetic-seed",
+    "rubricVersion": "rubrics.v1.1",
+    "source": "synthetic",
+    "misconceptionIds": [
+      "D3-M1"
+    ],
+    "tags": [
+      "misconception"
+    ],
+    "seriousMisjudgmentOpportunity": true,
+    "evaluationPath": "structured-assessment",
+    "reviewer": "codex-m1c1-independent-relabel",
+    "reviewStatus": "reviewed",
+    "adjudicationVersion": "adjudication-table.v1.1",
+    "expectedDisagreement": false,
+    "metamorphicReview": {
+      "reviewer": "codex-m1c1-independent-relabel",
+      "status": "approved",
+      "variants": {
+        "paraphrase": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        },
+        "noise": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        },
+        "rename-person": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        }
+      }
+    },
+    "rationale": {
+      "rubricRefs": [
+        "d3-miss"
+      ],
+      "adjudicationRefs": [
+        "§1"
+      ],
+      "text": "原作答直接体现诊断 D3-M1；按 d3-miss 与裁量 §1 独立标为 miss。"
+    }
+  },
+  {
+    "version": "eval-case.v2",
+    "annotationStatus": "labeled",
+    "id": "synthetic-d3-m2-sugar-water",
+    "questionRef": {
+      "caseId": "zinc-copper",
+      "nodeId": "D3"
+    },
+    "studentAnswer": "内电路靠分子在蔗糖水里移动。",
+    "expectedExtraction": {
+      "response": "substantive",
+      "terminology": "model",
+      "syllabus": "within",
+      "contradiction": false,
+      "typo": "none",
+      "errorIds": [
+        "D3-M2"
+      ],
+      "slots": [
+        {
+          "id": "internal-carrier",
+          "value": "分子",
+          "evidenceQuote": "分子"
+        },
+        {
+          "id": "ion-path",
+          "value": "蔗糖水",
+          "evidenceQuote": "蔗糖水"
+        }
+      ],
+      "evidenceQuotes": [
+        "内电路靠分子在蔗糖水里移动。"
+      ],
+      "anchors": []
+    },
+    "expectedScore": "miss",
+    "annotator": "codex-synthetic-seed",
+    "rubricVersion": "rubrics.v1.1",
+    "source": "synthetic",
+    "misconceptionIds": [
+      "D3-M2"
+    ],
+    "tags": [
+      "misconception"
+    ],
+    "seriousMisjudgmentOpportunity": true,
+    "evaluationPath": "structured-assessment",
+    "reviewer": "codex-m1c1-independent-relabel",
+    "reviewStatus": "reviewed",
+    "adjudicationVersion": "adjudication-table.v1.1",
+    "expectedDisagreement": false,
+    "metamorphicReview": {
+      "reviewer": "codex-m1c1-independent-relabel",
+      "status": "approved",
+      "variants": {
+        "paraphrase": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        },
+        "noise": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        },
+        "rename-person": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        }
+      }
+    },
+    "rationale": {
+      "rubricRefs": [
+        "d3-miss"
+      ],
+      "adjudicationRefs": [
+        "§1"
+      ],
+      "text": "原作答直接体现诊断 D3-M2；按 d3-miss 与裁量 §1 独立标为 miss。"
+    }
+  },
+  {
+    "version": "eval-case.v2",
+    "annotationStatus": "labeled",
+    "id": "synthetic-d3-m3-no-bridge",
+    "questionRef": {
+      "caseId": "zinc-copper",
+      "nodeId": "D3"
+    },
+    "studentAnswer": "双液原电池不用盐桥也能一直闭合。",
+    "expectedExtraction": {
+      "response": "substantive",
+      "terminology": "model",
+      "syllabus": "within",
+      "contradiction": false,
+      "typo": "none",
+      "errorIds": [
+        "D3-M3"
+      ],
+      "slots": [],
+      "evidenceQuotes": [
+        "双液原电池不用盐桥也能一直闭合。"
+      ],
+      "anchors": []
+    },
+    "expectedScore": "miss",
+    "annotator": "codex-synthetic-seed",
+    "rubricVersion": "rubrics.v1.1",
+    "source": "synthetic",
+    "misconceptionIds": [
+      "D3-M3"
+    ],
+    "tags": [
+      "misconception"
+    ],
+    "seriousMisjudgmentOpportunity": true,
+    "evaluationPath": "structured-assessment",
+    "reviewer": "codex-m1c1-independent-relabel",
+    "reviewStatus": "reviewed",
+    "adjudicationVersion": "adjudication-table.v1.1",
+    "expectedDisagreement": false,
+    "metamorphicReview": {
+      "reviewer": "codex-m1c1-independent-relabel",
+      "status": "approved",
+      "variants": {
+        "paraphrase": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        },
+        "noise": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        },
+        "rename-person": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        }
+      }
+    },
+    "rationale": {
+      "rubricRefs": [
+        "d3-miss"
+      ],
+      "adjudicationRefs": [
+        "§1"
+      ],
+      "text": "原作答直接体现诊断 D3-M3；按 d3-miss 与裁量 §1 独立标为 miss。"
+    }
+  },
+  {
+    "version": "eval-case.v2",
+    "annotationStatus": "labeled",
+    "id": "synthetic-d3-m4-omit-inside",
+    "questionRef": {
+      "caseId": "zinc-copper",
+      "nodeId": "D3"
+    },
+    "studentAnswer": "装置只要两根电极和一根导线就够了。",
+    "expectedExtraction": {
+      "response": "substantive",
+      "terminology": "model",
+      "syllabus": "within",
+      "contradiction": false,
+      "typo": "none",
+      "errorIds": [
+        "D3-M4"
+      ],
+      "slots": [],
+      "evidenceQuotes": [
+        "装置只要两根电极和一根导线就够了。"
+      ],
+      "anchors": []
+    },
+    "expectedScore": "miss",
+    "annotator": "codex-synthetic-seed",
+    "rubricVersion": "rubrics.v1.1",
+    "source": "synthetic",
+    "misconceptionIds": [
+      "D3-M4"
+    ],
+    "tags": [
+      "misconception"
+    ],
+    "seriousMisjudgmentOpportunity": true,
+    "evaluationPath": "structured-assessment",
+    "reviewer": "codex-m1c1-independent-relabel",
+    "reviewStatus": "reviewed",
+    "adjudicationVersion": "adjudication-table.v1.1",
+    "expectedDisagreement": false,
+    "metamorphicReview": {
+      "reviewer": "codex-m1c1-independent-relabel",
+      "status": "approved",
+      "variants": {
+        "paraphrase": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        },
+        "noise": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        },
+        "rename-person": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        }
+      }
+    },
+    "rationale": {
+      "rubricRefs": [
+        "d3-miss"
+      ],
+      "adjudicationRefs": [
+        "§1"
+      ],
+      "text": "原作答直接体现诊断 D3-M4；按 d3-miss 与裁量 §1 独立标为 miss。"
+    }
+  },
+  {
+    "version": "eval-case.v2",
+    "annotationStatus": "labeled",
+    "id": "synthetic-d3-colloquial-correct",
+    "questionRef": {
+      "caseId": "zinc-copper",
+      "nodeId": "D3"
+    },
+    "studentAnswer": "里头跑的是离子，走的那条路就是盐桥。",
+    "expectedExtraction": {
+      "response": "substantive",
+      "terminology": "colloquial",
+      "syllabus": "within",
+      "contradiction": false,
+      "typo": "none",
       "errorIds": [],
       "slots": [
-        { "id": "internal-carrier", "value": "ion", "evidenceQuote": "离子" },
-        { "id": "ion-path", "value": "salt-bridge", "evidenceQuote": "盐桥" }
+        {
+          "id": "internal-carrier",
+          "value": "ion",
+          "evidenceQuote": "离子"
+        },
+        {
+          "id": "ion-path",
+          "value": "salt-bridge",
+          "evidenceQuote": "盐桥"
+        }
       ],
-      "evidenceQuotes": ["里头跑的是离子，走的那条路就是盐桥。"]
+      "evidenceQuotes": [
+        "里头跑的是离子，走的那条路就是盐桥。"
+      ],
+      "anchors": []
     },
-    "expectedScore": "hit", "annotator": "codex-synthetic-seed", "rubricVersion": "rubrics.v1.1", "source": "synthetic",
-    "misconceptionIds": [], "tags": ["colloquial"], "seriousMisjudgmentOpportunity": false
-  },
-
-  {
-    "version": "eval-case.v1", "annotationStatus": "labeled", "id": "synthetic-d4-m1-material-reduced",
-    "questionRef": { "caseId": "zinc-copper", "nodeId": "D4" }, "studentAnswer": "正极材料必须自己被还原，所以还原场所是锌极。",
-    "expectedExtraction": {
-      "response": "substantive", "terminology": "model", "syllabus": "within", "contradiction": false, "typo": "none",
-      "errorIds": ["D4-M1"], "slots": [{ "id": "reduction-site", "value": "Zn", "evidenceQuote": "锌极" }],
-      "evidenceQuotes": ["正极材料必须自己被还原，所以还原场所是锌极。"]
+    "expectedScore": "hit",
+    "annotator": "codex-synthetic-seed",
+    "rubricVersion": "rubrics.v1.1",
+    "source": "synthetic",
+    "misconceptionIds": [],
+    "tags": [
+      "colloquial"
+    ],
+    "seriousMisjudgmentOpportunity": false,
+    "evaluationPath": "structured-assessment",
+    "reviewer": "codex-m1c1-independent-relabel",
+    "reviewStatus": "reviewed",
+    "adjudicationVersion": "adjudication-table.v1.1",
+    "expectedDisagreement": false,
+    "metamorphicReview": {
+      "reviewer": "codex-m1c1-independent-relabel",
+      "status": "approved",
+      "variants": {
+        "paraphrase": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        },
+        "noise": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        },
+        "rename-person": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        }
+      }
     },
-    "expectedScore": "miss", "annotator": "codex-synthetic-seed", "rubricVersion": "rubrics.v1.1", "source": "synthetic",
-    "misconceptionIds": ["D4-M1"], "tags": ["misconception"], "seriousMisjudgmentOpportunity": true
+    "rationale": {
+      "rubricRefs": [
+        "d3-hit"
+      ],
+      "adjudicationRefs": [
+        "§3"
+      ],
+      "text": "原作答对 D3 的事实覆盖与 d3-hit 一致；按裁量 §3 标为 hit。"
+    }
   },
   {
-    "version": "eval-case.v1", "annotationStatus": "labeled", "id": "synthetic-d4-m2-wrong-redox",
-    "questionRef": { "caseId": "zinc-copper", "nodeId": "D4" }, "studentAnswer": "失电子的锌极发生还原，所以得电子场所也是锌。",
-    "expectedExtraction": {
-      "response": "substantive", "terminology": "model", "syllabus": "within", "contradiction": false, "typo": "none",
-      "errorIds": ["D4-M2"], "slots": [{ "id": "reduction-site", "value": "Zn", "evidenceQuote": "锌" }],
-      "evidenceQuotes": ["失电子的锌极发生还原，所以得电子场所也是锌。"]
+    "version": "eval-case.v2",
+    "annotationStatus": "labeled",
+    "id": "synthetic-d4-m1-material-reduced",
+    "questionRef": {
+      "caseId": "zinc-copper",
+      "nodeId": "D4"
     },
-    "expectedScore": "miss", "annotator": "codex-synthetic-seed", "rubricVersion": "rubrics.v1.1", "source": "synthetic",
-    "misconceptionIds": ["D4-M2"], "tags": ["misconception"], "seriousMisjudgmentOpportunity": true
-  },
-  {
-    "version": "eval-case.v1", "annotationStatus": "labeled", "id": "synthetic-d4-unambiguous-typo",
-    "questionRef": { "caseId": "zinc-copper", "nodeId": "D4" }, "studentAnswer": "铜电级是得电子的还原场所。",
+    "studentAnswer": "正极材料必须自己被还原，所以还原场所是锌极。",
     "expectedExtraction": {
-      "response": "substantive", "terminology": "model", "syllabus": "within", "contradiction": false, "typo": "unambiguous",
-      "errorIds": [], "slots": [{ "id": "reduction-site", "value": "Cu", "evidenceQuote": "铜电级" }],
-      "evidenceQuotes": ["铜电级是得电子的还原场所。"]
-    },
-    "expectedScore": "hit", "annotator": "codex-synthetic-seed", "rubricVersion": "rubrics.v1.1", "source": "synthetic",
-    "misconceptionIds": [], "tags": ["typo"], "seriousMisjudgmentOpportunity": false
-  },
-
-  {
-    "version": "eval-case.v1", "annotationStatus": "labeled", "id": "synthetic-d5-m1-site-equals-reactant",
-    "questionRef": { "caseId": "zinc-copper", "nodeId": "D5" }, "studentAnswer": "正极铜片就是得电子的反应物。",
-    "expectedExtraction": {
-      "response": "substantive", "terminology": "model", "syllabus": "within", "contradiction": false, "typo": "none",
-      "errorIds": ["D5-M1"],
+      "response": "substantive",
+      "terminology": "model",
+      "syllabus": "within",
+      "contradiction": false,
+      "typo": "none",
+      "errorIds": [
+        "D4-M1"
+      ],
       "slots": [
-        { "id": "positive-site", "value": "Cu", "evidenceQuote": "铜片" },
-        { "id": "positive-reactant", "value": "Cu", "evidenceQuote": "铜片" }
+        {
+          "id": "reduction-site",
+          "value": "Zn",
+          "evidenceQuote": "锌极"
+        }
       ],
-      "evidenceQuotes": ["正极铜片就是得电子的反应物。"]
+      "evidenceQuotes": [
+        "正极材料必须自己被还原，所以还原场所是锌极。"
+      ],
+      "anchors": []
     },
-    "expectedScore": "partial", "annotator": "codex-synthetic-seed", "rubricVersion": "rubrics.v1.1", "source": "synthetic",
-    "misconceptionIds": ["D5-M1"], "tags": ["misconception", "partial"], "seriousMisjudgmentOpportunity": false
+    "expectedScore": "miss",
+    "annotator": "codex-synthetic-seed",
+    "rubricVersion": "rubrics.v1.1",
+    "source": "synthetic",
+    "misconceptionIds": [
+      "D4-M1"
+    ],
+    "tags": [
+      "misconception"
+    ],
+    "seriousMisjudgmentOpportunity": true,
+    "evaluationPath": "structured-assessment",
+    "reviewer": "codex-m1c1-independent-relabel",
+    "reviewStatus": "reviewed",
+    "adjudicationVersion": "adjudication-table.v1.1",
+    "expectedDisagreement": false,
+    "metamorphicReview": {
+      "reviewer": "codex-m1c1-independent-relabel",
+      "status": "approved",
+      "variants": {
+        "paraphrase": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        },
+        "noise": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        },
+        "rename-person": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        }
+      }
+    },
+    "rationale": {
+      "rubricRefs": [
+        "d4-miss"
+      ],
+      "adjudicationRefs": [
+        "§1"
+      ],
+      "text": "原作答直接体现诊断 D4-M1；按 d4-miss 与裁量 §1 独立标为 miss。"
+    }
   },
   {
-    "version": "eval-case.v1", "annotationStatus": "labeled", "id": "synthetic-d5-m2-no-reactant",
-    "questionRef": { "caseId": "zinc-copper", "nodeId": "D5" }, "studentAnswer": "铜极是惰性的，所以正极没有真正反应物。",
-    "expectedExtraction": {
-      "response": "substantive", "terminology": "model", "syllabus": "within", "contradiction": false, "typo": "none",
-      "errorIds": ["D5-M2"], "slots": [{ "id": "positive-site", "value": "Cu", "evidenceQuote": "铜极" }],
-      "evidenceQuotes": ["铜极是惰性的，所以正极没有真正反应物。"]
+    "version": "eval-case.v2",
+    "annotationStatus": "labeled",
+    "id": "synthetic-d4-m2-wrong-redox",
+    "questionRef": {
+      "caseId": "zinc-copper",
+      "nodeId": "D4"
     },
-    "expectedScore": "partial", "annotator": "codex-synthetic-seed", "rubricVersion": "rubrics.v1.1", "source": "synthetic",
-    "misconceptionIds": ["D5-M2"], "tags": ["misconception", "partial"], "seriousMisjudgmentOpportunity": false
-  },
-  {
-    "version": "eval-case.v1", "annotationStatus": "labeled", "id": "synthetic-d5-m3-ion-as-electrode",
-    "questionRef": { "caseId": "zinc-copper", "nodeId": "D5" }, "studentAnswer": "反应物必须做成电极，所以铜离子既是场所也是反应物。",
+    "studentAnswer": "失电子的锌极发生还原，所以得电子场所也是锌。",
     "expectedExtraction": {
-      "response": "substantive", "terminology": "model", "syllabus": "within", "contradiction": false, "typo": "none",
-      "errorIds": ["D5-M3"],
+      "response": "substantive",
+      "terminology": "model",
+      "syllabus": "within",
+      "contradiction": false,
+      "typo": "none",
+      "errorIds": [
+        "D4-M2"
+      ],
       "slots": [
-        { "id": "positive-site", "value": "Cu^2+", "evidenceQuote": "铜离子" },
-        { "id": "positive-reactant", "value": "Cu^2+", "evidenceQuote": "铜离子" }
+        {
+          "id": "reduction-site",
+          "value": "Zn",
+          "evidenceQuote": "锌"
+        }
       ],
-      "evidenceQuotes": ["反应物必须做成电极，所以铜离子既是场所也是反应物。"]
+      "evidenceQuotes": [
+        "失电子的锌极发生还原，所以得电子场所也是锌。"
+      ],
+      "anchors": []
     },
-    "expectedScore": "partial", "annotator": "codex-synthetic-seed", "rubricVersion": "rubrics.v1.1", "source": "synthetic",
-    "misconceptionIds": ["D5-M3"], "tags": ["misconception", "partial"], "seriousMisjudgmentOpportunity": false
+    "expectedScore": "miss",
+    "annotator": "codex-synthetic-seed",
+    "rubricVersion": "rubrics.v1.1",
+    "source": "synthetic",
+    "misconceptionIds": [
+      "D4-M2"
+    ],
+    "tags": [
+      "misconception"
+    ],
+    "seriousMisjudgmentOpportunity": true,
+    "evaluationPath": "structured-assessment",
+    "reviewer": "codex-m1c1-independent-relabel",
+    "reviewStatus": "reviewed",
+    "adjudicationVersion": "adjudication-table.v1.1",
+    "expectedDisagreement": false,
+    "metamorphicReview": {
+      "reviewer": "codex-m1c1-independent-relabel",
+      "status": "approved",
+      "variants": {
+        "paraphrase": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        },
+        "noise": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        },
+        "rename-person": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        }
+      }
+    },
+    "rationale": {
+      "rubricRefs": [
+        "d4-miss"
+      ],
+      "adjudicationRefs": [
+        "§1"
+      ],
+      "text": "原作答直接体现诊断 D4-M2；按 d4-miss 与裁量 §1 独立标为 miss。"
+    }
   },
   {
-    "version": "eval-case.v1", "annotationStatus": "labeled", "id": "synthetic-d5-correct",
-    "questionRef": { "caseId": "zinc-copper", "nodeId": "D5" }, "studentAnswer": "正极场所是铜极，真正得电子的反应物是铜离子。",
+    "version": "eval-case.v2",
+    "annotationStatus": "labeled",
+    "id": "synthetic-d4-unambiguous-typo",
+    "questionRef": {
+      "caseId": "zinc-copper",
+      "nodeId": "D4"
+    },
+    "studentAnswer": "铜电级是得电子的还原场所。",
     "expectedExtraction": {
-      "response": "substantive", "terminology": "model", "syllabus": "within", "contradiction": false, "typo": "none",
+      "response": "substantive",
+      "terminology": "model",
+      "syllabus": "within",
+      "contradiction": false,
+      "typo": "unambiguous",
       "errorIds": [],
       "slots": [
-        { "id": "positive-site", "value": "Cu", "evidenceQuote": "铜极" },
-        { "id": "positive-reactant", "value": "Cu^2+", "evidenceQuote": "铜离子" }
+        {
+          "id": "reduction-site",
+          "value": "Cu",
+          "evidenceQuote": "铜电级"
+        }
       ],
-      "evidenceQuotes": ["正极场所是铜极，真正得电子的反应物是铜离子。"]
+      "evidenceQuotes": [
+        "铜电级是得电子的还原场所。"
+      ],
+      "anchors": []
     },
-    "expectedScore": "hit", "annotator": "codex-synthetic-seed", "rubricVersion": "rubrics.v1.1", "source": "synthetic",
-    "misconceptionIds": [], "tags": ["correct"], "seriousMisjudgmentOpportunity": false
+    "expectedScore": "hit",
+    "annotator": "codex-synthetic-seed",
+    "rubricVersion": "rubrics.v1.1",
+    "source": "synthetic",
+    "misconceptionIds": [],
+    "tags": [
+      "typo"
+    ],
+    "seriousMisjudgmentOpportunity": false,
+    "evaluationPath": "structured-assessment",
+    "reviewer": "codex-m1c1-independent-relabel",
+    "reviewStatus": "reviewed",
+    "adjudicationVersion": "adjudication-table.v1.1",
+    "expectedDisagreement": false,
+    "metamorphicReview": {
+      "reviewer": "codex-m1c1-independent-relabel",
+      "status": "approved",
+      "variants": {
+        "paraphrase": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        },
+        "noise": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        },
+        "rename-person": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        }
+      }
+    },
+    "rationale": {
+      "rubricRefs": [
+        "d4-hit"
+      ],
+      "adjudicationRefs": [
+        "§7"
+      ],
+      "text": "原作答对 D4 的事实覆盖与 d4-hit 一致；按裁量 §7 标为 hit。"
+    }
   },
-
   {
-    "version": "eval-case.v1", "annotationStatus": "labeled", "id": "synthetic-p1-m1-any-reaction",
-    "questionRef": { "caseId": "zinc-copper", "nodeId": "P1" }, "studentAnswer": "不必自发，两个半反应也不用分开，任何反应都能做电池。",
+    "version": "eval-case.v2",
+    "annotationStatus": "labeled",
+    "id": "synthetic-d5-m1-site-equals-reactant",
+    "questionRef": {
+      "caseId": "zinc-copper",
+      "nodeId": "D5"
+    },
+    "studentAnswer": "正极铜片就是得电子的反应物。",
     "expectedExtraction": {
-      "response": "substantive", "terminology": "model", "syllabus": "within", "contradiction": false, "typo": "none",
-      "errorIds": ["P1-M1"],
+      "response": "substantive",
+      "terminology": "model",
+      "syllabus": "within",
+      "contradiction": false,
+      "typo": "none",
+      "errorIds": [
+        "D5-M1"
+      ],
       "slots": [
-        { "id": "spontaneous", "value": "false", "evidenceQuote": "不必自发" },
-        { "id": "half-reactions-separated", "value": "false", "evidenceQuote": "不用分开" }
+        {
+          "id": "positive-site",
+          "value": "Cu",
+          "evidenceQuote": "铜片"
+        },
+        {
+          "id": "positive-reactant",
+          "value": "Cu",
+          "evidenceQuote": "铜片"
+        }
       ],
-      "evidenceQuotes": ["不必自发，两个半反应也不用分开，任何反应都能做电池。"]
+      "evidenceQuotes": [
+        "正极铜片就是得电子的反应物。"
+      ],
+      "anchors": []
     },
-    "expectedScore": "miss", "annotator": "codex-synthetic-seed", "rubricVersion": "rubrics.v1.1", "source": "synthetic",
-    "misconceptionIds": ["P1-M1"], "tags": ["misconception"], "seriousMisjudgmentOpportunity": true
+    "expectedScore": "miss",
+    "annotator": "codex-synthetic-seed",
+    "rubricVersion": "rubrics.v1.1",
+    "source": "synthetic",
+    "misconceptionIds": [
+      "D5-M1"
+    ],
+    "tags": [
+      "misconception",
+      "partial"
+    ],
+    "seriousMisjudgmentOpportunity": false,
+    "evaluationPath": "structured-assessment",
+    "reviewer": "codex-m1c1-independent-relabel",
+    "reviewStatus": "reviewed",
+    "adjudicationVersion": "adjudication-table.v1.1",
+    "expectedDisagreement": false,
+    "metamorphicReview": {
+      "reviewer": "codex-m1c1-independent-relabel",
+      "status": "approved",
+      "variants": {
+        "paraphrase": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        },
+        "noise": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        },
+        "rename-person": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        }
+      }
+    },
+    "rationale": {
+      "rubricRefs": [
+        "d5-miss"
+      ],
+      "adjudicationRefs": [
+        "§1"
+      ],
+      "text": "原作答直接体现诊断 D5-M1；按 d5-miss 与裁量 §1 独立标为 miss。"
+    }
   },
   {
-    "version": "eval-case.v1", "annotationStatus": "labeled", "id": "synthetic-p1-m2-not-separated",
-    "questionRef": { "caseId": "zinc-copper", "nodeId": "P1" }, "studentAnswer": "反应是自发的，但氧化和还原不用分在两处。",
+    "version": "eval-case.v2",
+    "annotationStatus": "labeled",
+    "id": "synthetic-d5-m2-no-reactant",
+    "questionRef": {
+      "caseId": "zinc-copper",
+      "nodeId": "D5"
+    },
+    "studentAnswer": "铜极是惰性的，所以正极没有真正反应物。",
     "expectedExtraction": {
-      "response": "substantive", "terminology": "model", "syllabus": "within", "contradiction": false, "typo": "none",
-      "errorIds": ["P1-M2"],
+      "response": "substantive",
+      "terminology": "model",
+      "syllabus": "within",
+      "contradiction": false,
+      "typo": "none",
+      "errorIds": [
+        "D5-M2"
+      ],
       "slots": [
-        { "id": "spontaneous", "value": "true", "evidenceQuote": "自发" },
-        { "id": "half-reactions-separated", "value": "false", "evidenceQuote": "不用分在两处" }
+        {
+          "id": "positive-site",
+          "value": "Cu",
+          "evidenceQuote": "铜极"
+        }
       ],
-      "evidenceQuotes": ["反应是自发的，但氧化和还原不用分在两处。"]
+      "evidenceQuotes": [
+        "铜极是惰性的，所以正极没有真正反应物。"
+      ],
+      "anchors": []
     },
-    "expectedScore": "partial", "annotator": "codex-synthetic-seed", "rubricVersion": "rubrics.v1.1", "source": "synthetic",
-    "misconceptionIds": ["P1-M2"], "tags": ["misconception", "partial"], "seriousMisjudgmentOpportunity": false
+    "expectedScore": "partial",
+    "annotator": "codex-synthetic-seed",
+    "rubricVersion": "rubrics.v1.1",
+    "source": "synthetic",
+    "misconceptionIds": [
+      "D5-M2"
+    ],
+    "tags": [
+      "misconception",
+      "partial"
+    ],
+    "seriousMisjudgmentOpportunity": false,
+    "evaluationPath": "structured-assessment",
+    "reviewer": "codex-m1c1-independent-relabel",
+    "reviewStatus": "reviewed",
+    "adjudicationVersion": "adjudication-table.v1.1",
+    "expectedDisagreement": false,
+    "metamorphicReview": {
+      "reviewer": "codex-m1c1-independent-relabel",
+      "status": "approved",
+      "variants": {
+        "paraphrase": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        },
+        "noise": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        },
+        "rename-person": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        }
+      }
+    },
+    "rationale": {
+      "rubricRefs": [
+        "d5-partial"
+      ],
+      "adjudicationRefs": [
+        "§1"
+      ],
+      "text": "原作答直接体现诊断 D5-M2；按 d5-partial 与裁量 §1 独立标为 partial。"
+    }
   },
   {
-    "version": "eval-case.v1", "annotationStatus": "labeled", "id": "synthetic-p1-double-negation",
-    "questionRef": { "caseId": "zinc-copper", "nodeId": "P1" }, "studentAnswer": "这个反应并不是不能自发，两个半反应也不是不分处两极。",
+    "version": "eval-case.v2",
+    "annotationStatus": "labeled",
+    "id": "synthetic-d5-m3-ion-as-electrode",
+    "questionRef": {
+      "caseId": "zinc-copper",
+      "nodeId": "D5"
+    },
+    "studentAnswer": "反应物必须做成电极，所以铜离子既是场所也是反应物。",
     "expectedExtraction": {
-      "response": "substantive", "terminology": "model", "syllabus": "within", "contradiction": false, "typo": "none",
+      "response": "substantive",
+      "terminology": "model",
+      "syllabus": "within",
+      "contradiction": false,
+      "typo": "none",
+      "errorIds": [
+        "D5-M3"
+      ],
+      "slots": [
+        {
+          "id": "positive-site",
+          "value": "Cu^2+",
+          "evidenceQuote": "铜离子"
+        },
+        {
+          "id": "positive-reactant",
+          "value": "Cu^2+",
+          "evidenceQuote": "铜离子"
+        }
+      ],
+      "evidenceQuotes": [
+        "反应物必须做成电极，所以铜离子既是场所也是反应物。"
+      ],
+      "anchors": []
+    },
+    "expectedScore": "miss",
+    "annotator": "codex-synthetic-seed",
+    "rubricVersion": "rubrics.v1.1",
+    "source": "synthetic",
+    "misconceptionIds": [
+      "D5-M3"
+    ],
+    "tags": [
+      "misconception",
+      "partial"
+    ],
+    "seriousMisjudgmentOpportunity": false,
+    "evaluationPath": "structured-assessment",
+    "reviewer": "codex-m1c1-independent-relabel",
+    "reviewStatus": "reviewed",
+    "adjudicationVersion": "adjudication-table.v1.1",
+    "expectedDisagreement": false,
+    "metamorphicReview": {
+      "reviewer": "codex-m1c1-independent-relabel",
+      "status": "approved",
+      "variants": {
+        "paraphrase": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        },
+        "noise": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        },
+        "rename-person": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        }
+      }
+    },
+    "rationale": {
+      "rubricRefs": [
+        "d5-miss"
+      ],
+      "adjudicationRefs": [
+        "§1"
+      ],
+      "text": "原作答直接体现诊断 D5-M3；按 d5-miss 与裁量 §1 独立标为 miss。"
+    }
+  },
+  {
+    "version": "eval-case.v2",
+    "annotationStatus": "labeled",
+    "id": "synthetic-d5-correct",
+    "questionRef": {
+      "caseId": "zinc-copper",
+      "nodeId": "D5"
+    },
+    "studentAnswer": "正极场所是铜极，真正得电子的反应物是铜离子。",
+    "expectedExtraction": {
+      "response": "substantive",
+      "terminology": "model",
+      "syllabus": "within",
+      "contradiction": false,
+      "typo": "none",
       "errorIds": [],
       "slots": [
-        { "id": "spontaneous", "value": "true", "evidenceQuote": "并不是不能自发" },
-        { "id": "half-reactions-separated", "value": "true", "evidenceQuote": "不是不分处两极" }
+        {
+          "id": "positive-site",
+          "value": "Cu",
+          "evidenceQuote": "铜极"
+        },
+        {
+          "id": "positive-reactant",
+          "value": "Cu^2+",
+          "evidenceQuote": "铜离子"
+        }
       ],
-      "evidenceQuotes": ["这个反应并不是不能自发，两个半反应也不是不分处两极。"]
+      "evidenceQuotes": [
+        "正极场所是铜极，真正得电子的反应物是铜离子。"
+      ],
+      "anchors": []
     },
-    "expectedScore": "needs-review", "annotator": "codex-synthetic-seed", "rubricVersion": "rubrics.v1.1", "source": "synthetic",
-    "misconceptionIds": [], "tags": ["double-negation"], "seriousMisjudgmentOpportunity": false
+    "expectedScore": "hit",
+    "annotator": "codex-synthetic-seed",
+    "rubricVersion": "rubrics.v1.1",
+    "source": "synthetic",
+    "misconceptionIds": [],
+    "tags": [
+      "correct"
+    ],
+    "seriousMisjudgmentOpportunity": false,
+    "evaluationPath": "structured-assessment",
+    "reviewer": "codex-m1c1-independent-relabel",
+    "reviewStatus": "reviewed",
+    "adjudicationVersion": "adjudication-table.v1.1",
+    "expectedDisagreement": false,
+    "metamorphicReview": {
+      "reviewer": "codex-m1c1-independent-relabel",
+      "status": "approved",
+      "variants": {
+        "paraphrase": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        },
+        "noise": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        },
+        "rename-person": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        }
+      }
+    },
+    "rationale": {
+      "rubricRefs": [
+        "d5-hit"
+      ],
+      "adjudicationRefs": [
+        "§1"
+      ],
+      "text": "原作答对 D5 的事实覆盖与 d5-hit 一致；按裁量 §1 标为 hit。"
+    }
   },
-
   {
-    "version": "eval-case.v1", "annotationStatus": "labeled", "id": "synthetic-p2-m1-swapped",
-    "questionRef": { "caseId": "zinc-copper", "nodeId": "P2" }, "studentAnswer": "铜是还原剂，锌是氧化剂。",
+    "version": "eval-case.v2",
+    "annotationStatus": "labeled",
+    "id": "synthetic-p1-m1-any-reaction",
+    "questionRef": {
+      "caseId": "zinc-copper",
+      "nodeId": "P1"
+    },
+    "studentAnswer": "不必自发，两个半反应也不用分开，任何反应都能做电池。",
     "expectedExtraction": {
-      "response": "substantive", "terminology": "model", "syllabus": "within", "contradiction": false, "typo": "none",
-      "errorIds": ["P2-M1"],
+      "response": "substantive",
+      "terminology": "model",
+      "syllabus": "within",
+      "contradiction": false,
+      "typo": "none",
+      "errorIds": [
+        "P1-M1"
+      ],
       "slots": [
-        { "id": "reducing-agent", "value": "Cu", "evidenceQuote": "铜" },
-        { "id": "oxidizing-agent", "value": "Zn", "evidenceQuote": "锌" }
+        {
+          "id": "spontaneous",
+          "value": "false",
+          "evidenceQuote": "不必自发"
+        },
+        {
+          "id": "half-reactions-separated",
+          "value": "false",
+          "evidenceQuote": "不用分开"
+        }
       ],
-      "evidenceQuotes": ["铜是还原剂，锌是氧化剂。"]
+      "evidenceQuotes": [
+        "不必自发，两个半反应也不用分开，任何反应都能做电池。"
+      ],
+      "anchors": []
     },
-    "expectedScore": "miss", "annotator": "codex-synthetic-seed", "rubricVersion": "rubrics.v1.1", "source": "synthetic",
-    "misconceptionIds": ["P2-M1"], "tags": ["misconception"], "seriousMisjudgmentOpportunity": true
+    "expectedScore": "miss",
+    "annotator": "codex-synthetic-seed",
+    "rubricVersion": "rubrics.v1.1",
+    "source": "synthetic",
+    "misconceptionIds": [
+      "P1-M1"
+    ],
+    "tags": [
+      "misconception"
+    ],
+    "seriousMisjudgmentOpportunity": true,
+    "evaluationPath": "structured-assessment",
+    "reviewer": "codex-m1c1-independent-relabel",
+    "reviewStatus": "reviewed",
+    "adjudicationVersion": "adjudication-table.v1.1",
+    "expectedDisagreement": false,
+    "metamorphicReview": {
+      "reviewer": "codex-m1c1-independent-relabel",
+      "status": "approved",
+      "variants": {
+        "paraphrase": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        },
+        "noise": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        },
+        "rename-person": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        }
+      }
+    },
+    "rationale": {
+      "rubricRefs": [
+        "p1-miss"
+      ],
+      "adjudicationRefs": [
+        "§1"
+      ],
+      "text": "原作答直接体现诊断 P1-M1；按 p1-miss 与裁量 §1 独立标为 miss。"
+    }
   },
   {
-    "version": "eval-case.v1", "annotationStatus": "labeled", "id": "synthetic-p2-m2-wrong-agents",
-    "questionRef": { "caseId": "zinc-copper", "nodeId": "P2" }, "studentAnswer": "铜既是还原剂也是氧化剂。",
+    "version": "eval-case.v2",
+    "annotationStatus": "labeled",
+    "id": "synthetic-p1-m2-not-separated",
+    "questionRef": {
+      "caseId": "zinc-copper",
+      "nodeId": "P1"
+    },
+    "studentAnswer": "反应是自发的，但氧化和还原不用分在两处。",
     "expectedExtraction": {
-      "response": "substantive", "terminology": "model", "syllabus": "within", "contradiction": false, "typo": "none",
-      "errorIds": ["P2-M2"],
+      "response": "substantive",
+      "terminology": "model",
+      "syllabus": "within",
+      "contradiction": false,
+      "typo": "none",
+      "errorIds": [
+        "P1-M2"
+      ],
       "slots": [
-        { "id": "reducing-agent", "value": "Cu", "evidenceQuote": "铜" },
-        { "id": "oxidizing-agent", "value": "Cu", "evidenceQuote": "铜" }
+        {
+          "id": "spontaneous",
+          "value": "true",
+          "evidenceQuote": "自发"
+        },
+        {
+          "id": "half-reactions-separated",
+          "value": "false",
+          "evidenceQuote": "不用分在两处"
+        }
       ],
-      "evidenceQuotes": ["铜既是还原剂也是氧化剂。"]
+      "evidenceQuotes": [
+        "反应是自发的，但氧化和还原不用分在两处。"
+      ],
+      "anchors": []
     },
-    "expectedScore": "miss", "annotator": "codex-synthetic-seed", "rubricVersion": "rubrics.v1.1", "source": "synthetic",
-    "misconceptionIds": ["P2-M2"], "tags": ["misconception"], "seriousMisjudgmentOpportunity": true
+    "expectedScore": "partial",
+    "annotator": "codex-synthetic-seed",
+    "rubricVersion": "rubrics.v1.1",
+    "source": "synthetic",
+    "misconceptionIds": [
+      "P1-M2"
+    ],
+    "tags": [
+      "misconception",
+      "partial"
+    ],
+    "seriousMisjudgmentOpportunity": false,
+    "evaluationPath": "structured-assessment",
+    "reviewer": "codex-m1c1-independent-relabel",
+    "reviewStatus": "reviewed",
+    "adjudicationVersion": "adjudication-table.v1.1",
+    "expectedDisagreement": false,
+    "metamorphicReview": {
+      "reviewer": "codex-m1c1-independent-relabel",
+      "status": "approved",
+      "variants": {
+        "paraphrase": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        },
+        "noise": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        },
+        "rename-person": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        }
+      }
+    },
+    "rationale": {
+      "rubricRefs": [
+        "p1-partial"
+      ],
+      "adjudicationRefs": [
+        "§1"
+      ],
+      "text": "原作答直接体现诊断 P1-M2；按 p1-partial 与裁量 §1 独立标为 partial。"
+    }
   },
   {
-    "version": "eval-case.v1", "annotationStatus": "labeled", "id": "synthetic-p2-partial",
-    "questionRef": { "caseId": "zinc-copper", "nodeId": "P2" }, "studentAnswer": "锌是还原剂，氧化剂我不确定。",
-    "expectedExtraction": {
-      "response": "substantive", "terminology": "model", "syllabus": "within", "contradiction": false, "typo": "none",
-      "errorIds": [], "slots": [{ "id": "reducing-agent", "value": "Zn", "evidenceQuote": "锌" }],
-      "evidenceQuotes": ["锌是还原剂，氧化剂我不确定。"]
+    "version": "eval-case.v2",
+    "annotationStatus": "labeled",
+    "id": "synthetic-p1-double-negation",
+    "questionRef": {
+      "caseId": "zinc-copper",
+      "nodeId": "P1"
     },
-    "expectedScore": "partial", "annotator": "codex-synthetic-seed", "rubricVersion": "rubrics.v1.1", "source": "synthetic",
-    "misconceptionIds": [], "tags": ["partial"], "seriousMisjudgmentOpportunity": false
-  },
-
-  {
-    "version": "eval-case.v1", "annotationStatus": "labeled", "id": "synthetic-p4-m1-electrons-reversed",
-    "questionRef": { "caseId": "zinc-copper", "nodeId": "P4" }, "studentAnswer": "电子由铜极流向锌极。",
+    "studentAnswer": "这个反应并不是不能自发，两个半反应也不是不分处两极。",
     "expectedExtraction": {
-      "response": "substantive", "terminology": "model", "syllabus": "within", "contradiction": false, "typo": "none",
-      "errorIds": ["P4-M1"],
+      "response": "substantive",
+      "terminology": "model",
+      "syllabus": "within",
+      "contradiction": false,
+      "typo": "none",
+      "errorIds": [],
+      "slots": [],
+      "evidenceQuotes": [
+        "这个反应并不是不能自发，两个半反应也不是不分处两极。"
+      ],
+      "anchors": []
+    },
+    "expectedScore": "needs-review",
+    "annotator": "codex-synthetic-seed",
+    "rubricVersion": "rubrics.v1.1",
+    "source": "synthetic",
+    "misconceptionIds": [],
+    "tags": [
+      "double-negation"
+    ],
+    "seriousMisjudgmentOpportunity": false,
+    "evaluationPath": "structured-assessment",
+    "reviewer": "codex-m1c1-independent-relabel",
+    "reviewStatus": "reviewed",
+    "adjudicationVersion": "adjudication-table.v1.1",
+    "expectedDisagreement": false,
+    "metamorphicReview": {
+      "reviewer": "codex-m1c1-independent-relabel",
+      "status": "approved",
+      "variants": {
+        "paraphrase": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        },
+        "noise": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        },
+        "rename-person": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        }
+      }
+    },
+    "rationale": {
+      "rubricRefs": [
+        "P1-E1"
+      ],
+      "adjudicationRefs": [
+        "§21"
+      ],
+      "text": "双重否定具有多重解析路径；按裁量 §21 保守转人工复核，不用引擎结果倒推标签。"
+    }
+  },
+  {
+    "version": "eval-case.v2",
+    "annotationStatus": "labeled",
+    "id": "synthetic-p2-m1-swapped",
+    "questionRef": {
+      "caseId": "zinc-copper",
+      "nodeId": "P2"
+    },
+    "studentAnswer": "铜是还原剂，锌是氧化剂。",
+    "expectedExtraction": {
+      "response": "substantive",
+      "terminology": "model",
+      "syllabus": "within",
+      "contradiction": false,
+      "typo": "none",
+      "errorIds": [
+        "P2-M1"
+      ],
       "slots": [
-        { "id": "electron-from", "value": "Cu", "evidenceQuote": "铜极" },
-        { "id": "electron-to", "value": "Zn", "evidenceQuote": "锌极" }
+        {
+          "id": "reducing-agent",
+          "value": "Cu",
+          "evidenceQuote": "铜"
+        },
+        {
+          "id": "oxidizing-agent",
+          "value": "Zn",
+          "evidenceQuote": "锌"
+        }
       ],
-      "evidenceQuotes": ["电子由铜极流向锌极。"]
+      "evidenceQuotes": [
+        "铜是还原剂，锌是氧化剂。"
+      ],
+      "anchors": []
     },
-    "expectedScore": "miss", "annotator": "codex-synthetic-seed", "rubricVersion": "rubrics.v1.1", "source": "synthetic",
-    "misconceptionIds": ["P4-M1"], "tags": ["misconception"], "seriousMisjudgmentOpportunity": true
+    "expectedScore": "miss",
+    "annotator": "codex-synthetic-seed",
+    "rubricVersion": "rubrics.v1.1",
+    "source": "synthetic",
+    "misconceptionIds": [
+      "P2-M1"
+    ],
+    "tags": [
+      "misconception"
+    ],
+    "seriousMisjudgmentOpportunity": true,
+    "evaluationPath": "structured-assessment",
+    "reviewer": "codex-m1c1-independent-relabel",
+    "reviewStatus": "reviewed",
+    "adjudicationVersion": "adjudication-table.v1.1",
+    "expectedDisagreement": false,
+    "metamorphicReview": {
+      "reviewer": "codex-m1c1-independent-relabel",
+      "status": "approved",
+      "variants": {
+        "paraphrase": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        },
+        "noise": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        },
+        "rename-person": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        }
+      }
+    },
+    "rationale": {
+      "rubricRefs": [
+        "p2-miss"
+      ],
+      "adjudicationRefs": [
+        "§1"
+      ],
+      "text": "原作答直接体现诊断 P2-M1；按 p2-miss 与裁量 §1 独立标为 miss。"
+    }
   },
   {
-    "version": "eval-case.v1", "annotationStatus": "labeled", "id": "synthetic-p4-m2-electrons-in-bridge",
-    "questionRef": { "caseId": "zinc-copper", "nodeId": "P4" }, "studentAnswer": "电子从锌极到铜极，而且会经过盐桥。",
+    "version": "eval-case.v2",
+    "annotationStatus": "labeled",
+    "id": "synthetic-p2-m2-wrong-agents",
+    "questionRef": {
+      "caseId": "zinc-copper",
+      "nodeId": "P2"
+    },
+    "studentAnswer": "铜既是还原剂也是氧化剂。",
     "expectedExtraction": {
-      "response": "substantive", "terminology": "model", "syllabus": "within", "contradiction": false, "typo": "none",
-      "errorIds": ["P4-M2"],
+      "response": "substantive",
+      "terminology": "model",
+      "syllabus": "within",
+      "contradiction": false,
+      "typo": "none",
+      "errorIds": [
+        "P2-M2"
+      ],
       "slots": [
-        { "id": "electron-from", "value": "Zn", "evidenceQuote": "锌极" },
-        { "id": "electron-to", "value": "Cu", "evidenceQuote": "铜极" }
+        {
+          "id": "reducing-agent",
+          "value": "Cu",
+          "evidenceQuote": "铜"
+        },
+        {
+          "id": "oxidizing-agent",
+          "value": "Cu",
+          "evidenceQuote": "铜"
+        }
       ],
-      "evidenceQuotes": ["电子从锌极到铜极，而且会经过盐桥。"]
+      "evidenceQuotes": [
+        "铜既是还原剂也是氧化剂。"
+      ],
+      "anchors": []
     },
-    "expectedScore": "partial", "annotator": "codex-synthetic-seed", "rubricVersion": "rubrics.v1.1", "source": "synthetic",
-    "misconceptionIds": ["P4-M2"], "tags": ["misconception", "partial"], "seriousMisjudgmentOpportunity": false
+    "expectedScore": "miss",
+    "annotator": "codex-synthetic-seed",
+    "rubricVersion": "rubrics.v1.1",
+    "source": "synthetic",
+    "misconceptionIds": [
+      "P2-M2"
+    ],
+    "tags": [
+      "misconception"
+    ],
+    "seriousMisjudgmentOpportunity": true,
+    "evaluationPath": "structured-assessment",
+    "reviewer": "codex-m1c1-independent-relabel",
+    "reviewStatus": "reviewed",
+    "adjudicationVersion": "adjudication-table.v1.1",
+    "expectedDisagreement": false,
+    "metamorphicReview": {
+      "reviewer": "codex-m1c1-independent-relabel",
+      "status": "approved",
+      "variants": {
+        "paraphrase": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        },
+        "noise": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        },
+        "rename-person": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        }
+      }
+    },
+    "rationale": {
+      "rubricRefs": [
+        "p2-miss"
+      ],
+      "adjudicationRefs": [
+        "§1"
+      ],
+      "text": "原作答直接体现诊断 P2-M2；按 p2-miss 与裁量 §1 独立标为 miss。"
+    }
   },
   {
-    "version": "eval-case.v1", "annotationStatus": "labeled", "id": "synthetic-p4-m3-ions-reversed",
-    "questionRef": { "caseId": "zinc-copper", "nodeId": "P4" }, "studentAnswer": "阴离子移向铜极，阳离子移向锌极。",
-    "expectedExtraction": {
-      "response": "substantive", "terminology": "model", "syllabus": "within", "contradiction": false, "typo": "none",
-      "errorIds": ["P4-M3"],
-      "slots": [
-        { "id": "anion-toward", "value": "Cu", "evidenceQuote": "铜极" },
-        { "id": "cation-toward", "value": "Zn", "evidenceQuote": "锌极" }
-      ],
-      "evidenceQuotes": ["阴离子移向铜极，阳离子移向锌极。"]
+    "version": "eval-case.v2",
+    "annotationStatus": "labeled",
+    "id": "synthetic-p2-partial",
+    "questionRef": {
+      "caseId": "zinc-copper",
+      "nodeId": "P2"
     },
-    "expectedScore": "miss", "annotator": "codex-synthetic-seed", "rubricVersion": "rubrics.v1.1", "source": "synthetic",
-    "misconceptionIds": ["P4-M3"], "tags": ["misconception"], "seriousMisjudgmentOpportunity": true
-  },
-  {
-    "version": "eval-case.v1", "annotationStatus": "labeled", "id": "synthetic-p4-contradiction",
-    "questionRef": { "caseId": "zinc-copper", "nodeId": "P4" }, "studentAnswer": "电子由锌极流向铜极，但后面我又觉得电子由铜极流回锌极；阴离子向锌极，阳离子向铜极。",
+    "studentAnswer": "锌是还原剂，氧化剂我不确定。",
     "expectedExtraction": {
-      "response": "substantive", "terminology": "model", "syllabus": "within", "contradiction": true, "typo": "none",
+      "response": "substantive",
+      "terminology": "model",
+      "syllabus": "within",
+      "contradiction": false,
+      "typo": "none",
       "errorIds": [],
       "slots": [
-        { "id": "electron-from", "value": "Zn", "evidenceQuote": "锌极" },
-        { "id": "electron-to", "value": "Cu", "evidenceQuote": "铜极" },
-        { "id": "anion-toward", "value": "Zn", "evidenceQuote": "锌极" },
-        { "id": "cation-toward", "value": "Cu", "evidenceQuote": "铜极" }
+        {
+          "id": "reducing-agent",
+          "value": "Zn",
+          "evidenceQuote": "锌"
+        }
       ],
-      "evidenceQuotes": ["电子由锌极流向铜极，但后面我又觉得电子由铜极流回锌极；阴离子向锌极，阳离子向铜极。"]
+      "evidenceQuotes": [
+        "锌是还原剂，氧化剂我不确定。"
+      ],
+      "anchors": []
     },
-    "expectedScore": "miss", "annotator": "codex-synthetic-seed", "rubricVersion": "rubrics.v1.1", "source": "synthetic",
-    "misconceptionIds": [], "tags": ["contradiction"], "seriousMisjudgmentOpportunity": true
-  },
-
-  {
-    "version": "eval-case.v1", "annotationStatus": "labeled", "id": "synthetic-p5-m1-current-electron",
-    "questionRef": { "caseId": "zinc-copper", "nodeId": "P5" }, "studentAnswer": "电流方向和电子方向完全一样，现象不重要。",
-    "expectedExtraction": {
-      "response": "substantive", "terminology": "model", "syllabus": "within", "contradiction": false, "typo": "none",
-      "errorIds": ["P5-M1"], "slots": [], "evidenceQuotes": ["电流方向和电子方向完全一样，现象不重要。"]
+    "expectedScore": "partial",
+    "annotator": "codex-synthetic-seed",
+    "rubricVersion": "rubrics.v1.1",
+    "source": "synthetic",
+    "misconceptionIds": [],
+    "tags": [
+      "partial"
+    ],
+    "seriousMisjudgmentOpportunity": false,
+    "evaluationPath": "structured-assessment",
+    "reviewer": "codex-m1c1-independent-relabel",
+    "reviewStatus": "reviewed",
+    "adjudicationVersion": "adjudication-table.v1.1",
+    "expectedDisagreement": false,
+    "metamorphicReview": {
+      "reviewer": "codex-m1c1-independent-relabel",
+      "status": "approved",
+      "variants": {
+        "paraphrase": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        },
+        "noise": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        },
+        "rename-person": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        }
+      }
     },
-    "expectedScore": "miss", "annotator": "codex-synthetic-seed", "rubricVersion": "rubrics.v1.1", "source": "synthetic",
-    "misconceptionIds": ["P5-M1"], "tags": ["misconception"], "seriousMisjudgmentOpportunity": true
+    "rationale": {
+      "rubricRefs": [
+        "p2-partial"
+      ],
+      "adjudicationRefs": [
+        "§1"
+      ],
+      "text": "原作答对 P2 的事实覆盖与 p2-partial 一致；按裁量 §1 标为 partial。"
+    }
   },
   {
-    "version": "eval-case.v1", "annotationStatus": "labeled", "id": "synthetic-p5-m2-mass-reversed",
-    "questionRef": { "caseId": "zinc-copper", "nodeId": "P5" }, "studentAnswer": "铜片质量减小，锌片质量增加。",
+    "version": "eval-case.v2",
+    "annotationStatus": "labeled",
+    "id": "synthetic-p4-m1-electrons-reversed",
+    "questionRef": {
+      "caseId": "zinc-copper",
+      "nodeId": "P4"
+    },
+    "studentAnswer": "电子由铜极流向锌极。",
     "expectedExtraction": {
-      "response": "substantive", "terminology": "model", "syllabus": "within", "contradiction": false, "typo": "none",
-      "errorIds": ["P5-M2"],
+      "response": "substantive",
+      "terminology": "model",
+      "syllabus": "within",
+      "contradiction": false,
+      "typo": "none",
+      "errorIds": [
+        "P4-M1"
+      ],
       "slots": [
-        { "id": "mass-loss", "value": "Cu", "evidenceQuote": "铜片" },
-        { "id": "mass-gain", "value": "Zn", "evidenceQuote": "锌片" }
+        {
+          "id": "electron-from",
+          "value": "Cu",
+          "evidenceQuote": "铜极"
+        },
+        {
+          "id": "electron-to",
+          "value": "Zn",
+          "evidenceQuote": "锌极"
+        }
       ],
-      "evidenceQuotes": ["铜片质量减小，锌片质量增加。"]
+      "evidenceQuotes": [
+        "电子由铜极流向锌极。"
+      ],
+      "anchors": []
     },
-    "expectedScore": "miss", "annotator": "codex-synthetic-seed", "rubricVersion": "rubrics.v1.1", "source": "synthetic",
-    "misconceptionIds": ["P5-M2"], "tags": ["misconception"], "seriousMisjudgmentOpportunity": true
+    "expectedScore": "miss",
+    "annotator": "codex-synthetic-seed",
+    "rubricVersion": "rubrics.v1.1",
+    "source": "synthetic",
+    "misconceptionIds": [
+      "P4-M1"
+    ],
+    "tags": [
+      "misconception"
+    ],
+    "seriousMisjudgmentOpportunity": true,
+    "evaluationPath": "structured-assessment",
+    "reviewer": "codex-m1c1-independent-relabel",
+    "reviewStatus": "reviewed",
+    "adjudicationVersion": "adjudication-table.v1.1",
+    "expectedDisagreement": false,
+    "metamorphicReview": {
+      "reviewer": "codex-m1c1-independent-relabel",
+      "status": "approved",
+      "variants": {
+        "paraphrase": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        },
+        "noise": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        },
+        "rename-person": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        }
+      }
+    },
+    "rationale": {
+      "rubricRefs": [
+        "p4-miss"
+      ],
+      "adjudicationRefs": [
+        "§1"
+      ],
+      "text": "原作答直接体现诊断 P4-M1；按 p4-miss 与裁量 §1 独立标为 miss。"
+    }
   },
   {
-    "version": "eval-case.v1", "annotationStatus": "labeled", "id": "synthetic-p5-correct",
-    "questionRef": { "caseId": "zinc-copper", "nodeId": "P5" }, "studentAnswer": "锌片质量减小，铜片质量增加。",
+    "version": "eval-case.v2",
+    "annotationStatus": "labeled",
+    "id": "synthetic-p4-m2-electrons-in-bridge",
+    "questionRef": {
+      "caseId": "zinc-copper",
+      "nodeId": "P4"
+    },
+    "studentAnswer": "电子从锌极到铜极，而且会经过盐桥。",
     "expectedExtraction": {
-      "response": "substantive", "terminology": "model", "syllabus": "within", "contradiction": false, "typo": "none",
+      "response": "substantive",
+      "terminology": "model",
+      "syllabus": "within",
+      "contradiction": false,
+      "typo": "none",
+      "errorIds": [
+        "P4-M2"
+      ],
+      "slots": [
+        {
+          "id": "electron-from",
+          "value": "Zn",
+          "evidenceQuote": "锌极"
+        },
+        {
+          "id": "electron-to",
+          "value": "Cu",
+          "evidenceQuote": "铜极"
+        }
+      ],
+      "evidenceQuotes": [
+        "电子从锌极到铜极，而且会经过盐桥。"
+      ],
+      "anchors": []
+    },
+    "expectedScore": "miss",
+    "annotator": "codex-synthetic-seed",
+    "rubricVersion": "rubrics.v1.1",
+    "source": "synthetic",
+    "misconceptionIds": [
+      "P4-M2"
+    ],
+    "tags": [
+      "misconception",
+      "partial"
+    ],
+    "seriousMisjudgmentOpportunity": false,
+    "evaluationPath": "structured-assessment",
+    "reviewer": "codex-m1c1-independent-relabel",
+    "reviewStatus": "reviewed",
+    "adjudicationVersion": "adjudication-table.v1.1",
+    "expectedDisagreement": false,
+    "metamorphicReview": {
+      "reviewer": "codex-m1c1-independent-relabel",
+      "status": "approved",
+      "variants": {
+        "paraphrase": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        },
+        "noise": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        },
+        "rename-person": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        }
+      }
+    },
+    "rationale": {
+      "rubricRefs": [
+        "p4-miss"
+      ],
+      "adjudicationRefs": [
+        "§1"
+      ],
+      "text": "原作答直接体现诊断 P4-M2；按 p4-miss 与裁量 §1 独立标为 miss。"
+    }
+  },
+  {
+    "version": "eval-case.v2",
+    "annotationStatus": "labeled",
+    "id": "synthetic-p4-m3-ions-reversed",
+    "questionRef": {
+      "caseId": "zinc-copper",
+      "nodeId": "P4"
+    },
+    "studentAnswer": "阴离子移向铜极，阳离子移向锌极。",
+    "expectedExtraction": {
+      "response": "substantive",
+      "terminology": "model",
+      "syllabus": "within",
+      "contradiction": false,
+      "typo": "none",
+      "errorIds": [
+        "P4-M3"
+      ],
+      "slots": [
+        {
+          "id": "anion-toward",
+          "value": "Cu",
+          "evidenceQuote": "铜极"
+        },
+        {
+          "id": "cation-toward",
+          "value": "Zn",
+          "evidenceQuote": "锌极"
+        }
+      ],
+      "evidenceQuotes": [
+        "阴离子移向铜极，阳离子移向锌极。"
+      ],
+      "anchors": []
+    },
+    "expectedScore": "miss",
+    "annotator": "codex-synthetic-seed",
+    "rubricVersion": "rubrics.v1.1",
+    "source": "synthetic",
+    "misconceptionIds": [
+      "P4-M3"
+    ],
+    "tags": [
+      "misconception"
+    ],
+    "seriousMisjudgmentOpportunity": true,
+    "evaluationPath": "structured-assessment",
+    "reviewer": "codex-m1c1-independent-relabel",
+    "reviewStatus": "reviewed",
+    "adjudicationVersion": "adjudication-table.v1.1",
+    "expectedDisagreement": false,
+    "metamorphicReview": {
+      "reviewer": "codex-m1c1-independent-relabel",
+      "status": "approved",
+      "variants": {
+        "paraphrase": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        },
+        "noise": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        },
+        "rename-person": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        }
+      }
+    },
+    "rationale": {
+      "rubricRefs": [
+        "p4-miss"
+      ],
+      "adjudicationRefs": [
+        "§1"
+      ],
+      "text": "原作答直接体现诊断 P4-M3；按 p4-miss 与裁量 §1 独立标为 miss。"
+    }
+  },
+  {
+    "version": "eval-case.v2",
+    "annotationStatus": "labeled",
+    "id": "synthetic-p4-contradiction",
+    "questionRef": {
+      "caseId": "zinc-copper",
+      "nodeId": "P4"
+    },
+    "studentAnswer": "电子由锌极流向铜极，但后面我又觉得电子由铜极流回锌极；阴离子向锌极，阳离子向铜极。",
+    "expectedExtraction": {
+      "response": "substantive",
+      "terminology": "model",
+      "syllabus": "within",
+      "contradiction": true,
+      "typo": "none",
       "errorIds": [],
       "slots": [
-        { "id": "mass-loss", "value": "Zn", "evidenceQuote": "锌片" },
-        { "id": "mass-gain", "value": "Cu", "evidenceQuote": "铜片" }
+        {
+          "id": "electron-from",
+          "value": "Zn",
+          "evidenceQuote": "锌极"
+        },
+        {
+          "id": "electron-to",
+          "value": "Cu",
+          "evidenceQuote": "铜极"
+        },
+        {
+          "id": "anion-toward",
+          "value": "Zn",
+          "evidenceQuote": "锌极"
+        },
+        {
+          "id": "cation-toward",
+          "value": "Cu",
+          "evidenceQuote": "铜极"
+        }
       ],
-      "evidenceQuotes": ["锌片质量减小，铜片质量增加。"]
+      "evidenceQuotes": [
+        "电子由锌极流向铜极，但后面我又觉得电子由铜极流回锌极；阴离子向锌极，阳离子向铜极。"
+      ],
+      "anchors": []
     },
-    "expectedScore": "hit", "annotator": "codex-synthetic-seed", "rubricVersion": "rubrics.v1.1", "source": "synthetic",
-    "misconceptionIds": [], "tags": ["correct"], "seriousMisjudgmentOpportunity": false
+    "expectedScore": "miss",
+    "annotator": "codex-synthetic-seed",
+    "rubricVersion": "rubrics.v1.1",
+    "source": "synthetic",
+    "misconceptionIds": [],
+    "tags": [
+      "contradiction"
+    ],
+    "seriousMisjudgmentOpportunity": true,
+    "evaluationPath": "structured-assessment",
+    "reviewer": "codex-m1c1-independent-relabel",
+    "reviewStatus": "reviewed",
+    "adjudicationVersion": "adjudication-table.v1.1",
+    "expectedDisagreement": false,
+    "metamorphicReview": {
+      "reviewer": "codex-m1c1-independent-relabel",
+      "status": "approved",
+      "variants": {
+        "paraphrase": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        },
+        "noise": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        },
+        "rename-person": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        }
+      }
+    },
+    "rationale": {
+      "rubricRefs": [
+        "p4-miss"
+      ],
+      "adjudicationRefs": [
+        "§5"
+      ],
+      "text": "原作答对 P4 的事实覆盖与 p4-miss 一致；按裁量 §5 标为 miss。"
+    }
   },
-
   {
-    "version": "eval-case.v1", "annotationStatus": "labeled", "id": "synthetic-e1-m1-heat-first",
-    "questionRef": { "caseId": "zinc-copper", "nodeId": "E1" }, "studentAnswer": "先把热能转化为电能。",
+    "version": "eval-case.v2",
+    "annotationStatus": "labeled",
+    "id": "synthetic-p5-m1-current-electron",
+    "questionRef": {
+      "caseId": "zinc-copper",
+      "nodeId": "P5"
+    },
+    "studentAnswer": "电流方向和电子方向完全一样，现象不重要。",
     "expectedExtraction": {
-      "response": "substantive", "terminology": "model", "syllabus": "within", "contradiction": false, "typo": "none",
-      "errorIds": ["E1-M1"],
+      "response": "substantive",
+      "terminology": "model",
+      "syllabus": "within",
+      "contradiction": false,
+      "typo": "none",
+      "errorIds": [
+        "P5-M1"
+      ],
+      "slots": [],
+      "evidenceQuotes": [
+        "电流方向和电子方向完全一样，现象不重要。"
+      ],
+      "anchors": []
+    },
+    "expectedScore": "miss",
+    "annotator": "codex-synthetic-seed",
+    "rubricVersion": "rubrics.v1.1",
+    "source": "synthetic",
+    "misconceptionIds": [
+      "P5-M1"
+    ],
+    "tags": [
+      "misconception"
+    ],
+    "seriousMisjudgmentOpportunity": true,
+    "evaluationPath": "structured-assessment",
+    "reviewer": "codex-m1c1-independent-relabel",
+    "reviewStatus": "reviewed",
+    "adjudicationVersion": "adjudication-table.v1.1",
+    "expectedDisagreement": false,
+    "metamorphicReview": {
+      "reviewer": "codex-m1c1-independent-relabel",
+      "status": "approved",
+      "variants": {
+        "paraphrase": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        },
+        "noise": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        },
+        "rename-person": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        }
+      }
+    },
+    "rationale": {
+      "rubricRefs": [
+        "p5-miss"
+      ],
+      "adjudicationRefs": [
+        "§1"
+      ],
+      "text": "原作答直接体现诊断 P5-M1；按 p5-miss 与裁量 §1 独立标为 miss。"
+    }
+  },
+  {
+    "version": "eval-case.v2",
+    "annotationStatus": "labeled",
+    "id": "synthetic-p5-m2-mass-reversed",
+    "questionRef": {
+      "caseId": "zinc-copper",
+      "nodeId": "P5"
+    },
+    "studentAnswer": "铜片质量减小，锌片质量增加。",
+    "expectedExtraction": {
+      "response": "substantive",
+      "terminology": "model",
+      "syllabus": "within",
+      "contradiction": false,
+      "typo": "none",
+      "errorIds": [
+        "P5-M2"
+      ],
       "slots": [
-        { "id": "energy-from", "value": "热能", "evidenceQuote": "热能" },
-        { "id": "energy-to", "value": "electric", "evidenceQuote": "电能" }
+        {
+          "id": "mass-loss",
+          "value": "Cu",
+          "evidenceQuote": "铜片"
+        },
+        {
+          "id": "mass-gain",
+          "value": "Zn",
+          "evidenceQuote": "锌片"
+        }
       ],
-      "evidenceQuotes": ["先把热能转化为电能。"]
+      "evidenceQuotes": [
+        "铜片质量减小，锌片质量增加。"
+      ],
+      "anchors": []
     },
-    "expectedScore": "partial", "annotator": "codex-synthetic-seed", "rubricVersion": "rubrics.v1.1", "source": "synthetic",
-    "misconceptionIds": ["E1-M1"], "tags": ["misconception", "partial"], "seriousMisjudgmentOpportunity": false
+    "expectedScore": "miss",
+    "annotator": "codex-synthetic-seed",
+    "rubricVersion": "rubrics.v1.1",
+    "source": "synthetic",
+    "misconceptionIds": [
+      "P5-M2"
+    ],
+    "tags": [
+      "misconception"
+    ],
+    "seriousMisjudgmentOpportunity": true,
+    "evaluationPath": "structured-assessment",
+    "reviewer": "codex-m1c1-independent-relabel",
+    "reviewStatus": "reviewed",
+    "adjudicationVersion": "adjudication-table.v1.1",
+    "expectedDisagreement": false,
+    "metamorphicReview": {
+      "reviewer": "codex-m1c1-independent-relabel",
+      "status": "approved",
+      "variants": {
+        "paraphrase": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        },
+        "noise": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        },
+        "rename-person": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        }
+      }
+    },
+    "rationale": {
+      "rubricRefs": [
+        "p5-miss"
+      ],
+      "adjudicationRefs": [
+        "§1"
+      ],
+      "text": "原作答直接体现诊断 P5-M2；按 p5-miss 与裁量 §1 独立标为 miss。"
+    }
   },
   {
-    "version": "eval-case.v1", "annotationStatus": "labeled", "id": "synthetic-e1-m2-stored-electricity",
-    "questionRef": { "caseId": "zinc-copper", "nodeId": "E1" }, "studentAnswer": "电池里静态存着电能，不是化学反应在释放能量。",
-    "expectedExtraction": {
-      "response": "substantive", "terminology": "model", "syllabus": "within", "contradiction": false, "typo": "none",
-      "errorIds": ["E1-M2"],
-      "slots": [
-        { "id": "energy-from", "value": "electric", "evidenceQuote": "电能" },
-        { "id": "energy-to", "value": "electric", "evidenceQuote": "电能" }
-      ],
-      "evidenceQuotes": ["电池里静态存着电能，不是化学反应在释放能量。"]
+    "version": "eval-case.v2",
+    "annotationStatus": "labeled",
+    "id": "synthetic-p5-correct",
+    "questionRef": {
+      "caseId": "zinc-copper",
+      "nodeId": "P5"
     },
-    "expectedScore": "partial", "annotator": "codex-synthetic-seed", "rubricVersion": "rubrics.v1.1", "source": "synthetic",
-    "misconceptionIds": ["E1-M2"], "tags": ["misconception", "partial"], "seriousMisjudgmentOpportunity": false
-  },
-  {
-    "version": "eval-case.v1", "annotationStatus": "labeled", "id": "synthetic-e1-m3-reversed-energy",
-    "questionRef": { "caseId": "zinc-copper", "nodeId": "E1" }, "studentAnswer": "原电池把电能转化成化学能。",
+    "studentAnswer": "锌片质量减小，铜片质量增加。",
     "expectedExtraction": {
-      "response": "substantive", "terminology": "model", "syllabus": "within", "contradiction": false, "typo": "none",
-      "errorIds": ["E1-M3"],
-      "slots": [
-        { "id": "energy-from", "value": "electric", "evidenceQuote": "电能" },
-        { "id": "energy-to", "value": "chemical", "evidenceQuote": "化学能" }
-      ],
-      "evidenceQuotes": ["原电池把电能转化成化学能。"]
-    },
-    "expectedScore": "miss", "annotator": "codex-synthetic-seed", "rubricVersion": "rubrics.v1.1", "source": "synthetic",
-    "misconceptionIds": ["E1-M3"], "tags": ["misconception"], "seriousMisjudgmentOpportunity": true
-  },
-  {
-    "version": "eval-case.v1", "annotationStatus": "labeled", "id": "synthetic-e1-beyond-correct",
-    "questionRef": { "caseId": "zinc-copper", "nodeId": "E1" }, "studentAnswer": "从吉布斯自由能降低的角度看，本质仍是化学能转化为电能。",
-    "expectedExtraction": {
-      "response": "substantive", "terminology": "model", "syllabus": "beyond", "contradiction": false, "typo": "none",
+      "response": "substantive",
+      "terminology": "model",
+      "syllabus": "within",
+      "contradiction": false,
+      "typo": "none",
       "errorIds": [],
       "slots": [
-        { "id": "energy-from", "value": "chemical", "evidenceQuote": "化学能" },
-        { "id": "energy-to", "value": "electric", "evidenceQuote": "电能" }
+        {
+          "id": "mass-loss",
+          "value": "Zn",
+          "evidenceQuote": "锌片"
+        },
+        {
+          "id": "mass-gain",
+          "value": "Cu",
+          "evidenceQuote": "铜片"
+        }
       ],
-      "evidenceQuotes": ["从吉布斯自由能降低的角度看，本质仍是化学能转化为电能。"]
+      "evidenceQuotes": [
+        "锌片质量减小，铜片质量增加。"
+      ],
+      "anchors": []
     },
-    "expectedScore": "hit", "annotator": "codex-synthetic-seed", "rubricVersion": "rubrics.v1.1", "source": "synthetic",
-    "misconceptionIds": [], "tags": ["beyond-syllabus-correct"], "seriousMisjudgmentOpportunity": false
-  },
-
-  {
-    "version": "eval-case.v1", "annotationStatus": "labeled", "id": "synthetic-e2-m1-no-source",
-    "questionRef": { "caseId": "zinc-copper", "nodeId": "E2" }, "studentAnswer": "电能就是从电池里出来的，说不清具体反应。",
-    "expectedExtraction": {
-      "response": "substantive", "terminology": "colloquial", "syllabus": "within", "contradiction": false, "typo": "none",
-      "errorIds": ["E2-M1"], "slots": [], "evidenceQuotes": ["电能就是从电池里出来的，说不清具体反应。"]
+    "expectedScore": "hit",
+    "annotator": "codex-synthetic-seed",
+    "rubricVersion": "rubrics.v1.1",
+    "source": "synthetic",
+    "misconceptionIds": [],
+    "tags": [
+      "correct"
+    ],
+    "seriousMisjudgmentOpportunity": false,
+    "evaluationPath": "structured-assessment",
+    "reviewer": "codex-m1c1-independent-relabel",
+    "reviewStatus": "reviewed",
+    "adjudicationVersion": "adjudication-table.v1.1",
+    "expectedDisagreement": false,
+    "metamorphicReview": {
+      "reviewer": "codex-m1c1-independent-relabel",
+      "status": "approved",
+      "variants": {
+        "paraphrase": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        },
+        "noise": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        },
+        "rename-person": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        }
+      }
     },
-    "expectedScore": "miss", "annotator": "codex-synthetic-seed", "rubricVersion": "rubrics.v1.1", "source": "synthetic",
-    "misconceptionIds": ["E2-M1"], "tags": ["misconception"], "seriousMisjudgmentOpportunity": true
+    "rationale": {
+      "rubricRefs": [
+        "p5-hit"
+      ],
+      "adjudicationRefs": [
+        "§1"
+      ],
+      "text": "原作答对 P5 的事实覆盖与 p5-hit 一致；按裁量 §1 标为 hit。"
+    }
   },
   {
-    "version": "eval-case.v1", "annotationStatus": "labeled", "id": "synthetic-e2-m2-external-power",
-    "questionRef": { "caseId": "zinc-copper", "nodeId": "E2" }, "studentAnswer": "不自发也没关系，持续电能来自外加电源。",
-    "expectedExtraction": {
-      "response": "substantive", "terminology": "model", "syllabus": "within", "contradiction": false, "typo": "none",
-      "errorIds": ["E2-M2"], "slots": [{ "id": "energy-source-reaction", "value": "外加电源", "evidenceQuote": "外加电源" }],
-      "evidenceQuotes": ["不自发也没关系，持续电能来自外加电源。"]
+    "version": "eval-case.v2",
+    "annotationStatus": "labeled",
+    "id": "synthetic-e1-m1-heat-first",
+    "questionRef": {
+      "caseId": "zinc-copper",
+      "nodeId": "E1"
     },
-    "expectedScore": "miss", "annotator": "codex-synthetic-seed", "rubricVersion": "rubrics.v1.1", "source": "synthetic",
-    "misconceptionIds": ["E2-M2"], "tags": ["misconception"], "seriousMisjudgmentOpportunity": true
-  },
-
-  {
-    "version": "eval-case.v1", "annotationStatus": "labeled", "id": "synthetic-e3-m1-perfect-conversion",
-    "questionRef": { "caseId": "zinc-copper", "nodeId": "E3" }, "studentAnswer": "化学能可以百分之百变成电能。",
+    "studentAnswer": "先把热能转化为电能。",
     "expectedExtraction": {
-      "response": "substantive", "terminology": "model", "syllabus": "within", "contradiction": false, "typo": "none",
-      "errorIds": ["E3-M1"], "slots": [{ "id": "complete-conversion", "value": "true", "evidenceQuote": "可以百分之百" }],
-      "evidenceQuotes": ["化学能可以百分之百变成电能。"]
-    },
-    "expectedScore": "miss", "annotator": "codex-synthetic-seed", "rubricVersion": "rubrics.v1.1", "source": "synthetic",
-    "misconceptionIds": ["E3-M1"], "tags": ["misconception"], "seriousMisjudgmentOpportunity": true
-  },
-  {
-    "version": "eval-case.v1", "annotationStatus": "labeled", "id": "synthetic-e3-m2-no-efficiency-difference",
-    "questionRef": { "caseId": "zinc-copper", "nodeId": "E3" }, "studentAnswer": "转化不能完全，但燃料电池和火力发电效率一样高。",
-    "expectedExtraction": {
-      "response": "substantive", "terminology": "model", "syllabus": "within", "contradiction": false, "typo": "none",
-      "errorIds": ["E3-M2"],
+      "response": "substantive",
+      "terminology": "model",
+      "syllabus": "within",
+      "contradiction": false,
+      "typo": "none",
+      "errorIds": [
+        "E1-M1"
+      ],
       "slots": [
-        { "id": "complete-conversion", "value": "false", "evidenceQuote": "不能完全" },
-        { "id": "comparison", "value": "一样高", "evidenceQuote": "一样高" }
+        {
+          "id": "energy-from",
+          "value": "热能",
+          "evidenceQuote": "热能"
+        },
+        {
+          "id": "energy-to",
+          "value": "electric",
+          "evidenceQuote": "电能"
+        }
       ],
-      "evidenceQuotes": ["转化不能完全，但燃料电池和火力发电效率一样高。"]
+      "evidenceQuotes": [
+        "先把热能转化为电能。"
+      ],
+      "anchors": []
     },
-    "expectedScore": "partial", "annotator": "codex-synthetic-seed", "rubricVersion": "rubrics.v1.1", "source": "synthetic",
-    "misconceptionIds": ["E3-M2"], "tags": ["misconception", "partial"], "seriousMisjudgmentOpportunity": false
+    "expectedScore": "miss",
+    "annotator": "codex-synthetic-seed",
+    "rubricVersion": "rubrics.v1.1",
+    "source": "synthetic",
+    "misconceptionIds": [
+      "E1-M1"
+    ],
+    "tags": [
+      "misconception",
+      "partial"
+    ],
+    "seriousMisjudgmentOpportunity": false,
+    "evaluationPath": "structured-assessment",
+    "reviewer": "codex-m1c1-independent-relabel",
+    "reviewStatus": "reviewed",
+    "adjudicationVersion": "adjudication-table.v1.1",
+    "expectedDisagreement": false,
+    "metamorphicReview": {
+      "reviewer": "codex-m1c1-independent-relabel",
+      "status": "approved",
+      "variants": {
+        "paraphrase": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        },
+        "noise": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        },
+        "rename-person": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        }
+      }
+    },
+    "rationale": {
+      "rubricRefs": [
+        "e1-miss"
+      ],
+      "adjudicationRefs": [
+        "§1"
+      ],
+      "text": "原作答直接体现诊断 E1-M1；按 e1-miss 与裁量 §1 独立标为 miss。"
+    }
   },
   {
-    "version": "eval-case.v1", "annotationStatus": "labeled", "id": "synthetic-e3-correct",
-    "questionRef": { "caseId": "zinc-copper", "nodeId": "E3" }, "studentAnswer": "能量转化不是百分之百，燃料电池转化率较高。",
+    "version": "eval-case.v2",
+    "annotationStatus": "labeled",
+    "id": "synthetic-e1-m2-stored-electricity",
+    "questionRef": {
+      "caseId": "zinc-copper",
+      "nodeId": "E1"
+    },
+    "studentAnswer": "电池里静态存着电能，不是化学反应在释放能量。",
     "expectedExtraction": {
-      "response": "substantive", "terminology": "model", "syllabus": "within", "contradiction": false, "typo": "none",
+      "response": "substantive",
+      "terminology": "model",
+      "syllabus": "within",
+      "contradiction": false,
+      "typo": "none",
+      "errorIds": [
+        "E1-M2"
+      ],
+      "slots": [],
+      "evidenceQuotes": [
+        "电池里静态存着电能，不是化学反应在释放能量。"
+      ],
+      "anchors": []
+    },
+    "expectedScore": "miss",
+    "annotator": "codex-synthetic-seed",
+    "rubricVersion": "rubrics.v1.1",
+    "source": "synthetic",
+    "misconceptionIds": [
+      "E1-M2"
+    ],
+    "tags": [
+      "misconception",
+      "partial"
+    ],
+    "seriousMisjudgmentOpportunity": false,
+    "evaluationPath": "structured-assessment",
+    "reviewer": "codex-m1c1-independent-relabel",
+    "reviewStatus": "reviewed",
+    "adjudicationVersion": "adjudication-table.v1.1",
+    "expectedDisagreement": false,
+    "metamorphicReview": {
+      "reviewer": "codex-m1c1-independent-relabel",
+      "status": "approved",
+      "variants": {
+        "paraphrase": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        },
+        "noise": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        },
+        "rename-person": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        }
+      }
+    },
+    "rationale": {
+      "rubricRefs": [
+        "e1-miss"
+      ],
+      "adjudicationRefs": [
+        "§1"
+      ],
+      "text": "原作答直接体现诊断 E1-M2；按 e1-miss 与裁量 §1 独立标为 miss。"
+    }
+  },
+  {
+    "version": "eval-case.v2",
+    "annotationStatus": "labeled",
+    "id": "synthetic-e1-m3-reversed-energy",
+    "questionRef": {
+      "caseId": "zinc-copper",
+      "nodeId": "E1"
+    },
+    "studentAnswer": "原电池把电能转化成化学能。",
+    "expectedExtraction": {
+      "response": "substantive",
+      "terminology": "model",
+      "syllabus": "within",
+      "contradiction": false,
+      "typo": "none",
+      "errorIds": [
+        "E1-M3"
+      ],
+      "slots": [
+        {
+          "id": "energy-from",
+          "value": "electric",
+          "evidenceQuote": "电能"
+        },
+        {
+          "id": "energy-to",
+          "value": "chemical",
+          "evidenceQuote": "化学能"
+        }
+      ],
+      "evidenceQuotes": [
+        "原电池把电能转化成化学能。"
+      ],
+      "anchors": []
+    },
+    "expectedScore": "miss",
+    "annotator": "codex-synthetic-seed",
+    "rubricVersion": "rubrics.v1.1",
+    "source": "synthetic",
+    "misconceptionIds": [
+      "E1-M3"
+    ],
+    "tags": [
+      "misconception"
+    ],
+    "seriousMisjudgmentOpportunity": true,
+    "evaluationPath": "structured-assessment",
+    "reviewer": "codex-m1c1-independent-relabel",
+    "reviewStatus": "reviewed",
+    "adjudicationVersion": "adjudication-table.v1.1",
+    "expectedDisagreement": false,
+    "metamorphicReview": {
+      "reviewer": "codex-m1c1-independent-relabel",
+      "status": "approved",
+      "variants": {
+        "paraphrase": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        },
+        "noise": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        },
+        "rename-person": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        }
+      }
+    },
+    "rationale": {
+      "rubricRefs": [
+        "e1-miss"
+      ],
+      "adjudicationRefs": [
+        "§1"
+      ],
+      "text": "原作答直接体现诊断 E1-M3；按 e1-miss 与裁量 §1 独立标为 miss。"
+    }
+  },
+  {
+    "version": "eval-case.v2",
+    "annotationStatus": "labeled",
+    "id": "synthetic-e1-beyond-correct",
+    "questionRef": {
+      "caseId": "zinc-copper",
+      "nodeId": "E1"
+    },
+    "studentAnswer": "从吉布斯自由能降低的角度看，本质仍是化学能转化为电能。",
+    "expectedExtraction": {
+      "response": "substantive",
+      "terminology": "model",
+      "syllabus": "beyond",
+      "contradiction": false,
+      "typo": "none",
       "errorIds": [],
       "slots": [
-        { "id": "complete-conversion", "value": "false", "evidenceQuote": "不是百分之百" },
-        { "id": "comparison", "value": "fuel-cell-over-thermal-power", "evidenceQuote": "燃料电池转化率较高" }
+        {
+          "id": "energy-from",
+          "value": "chemical",
+          "evidenceQuote": "化学能"
+        },
+        {
+          "id": "energy-to",
+          "value": "electric",
+          "evidenceQuote": "电能"
+        }
       ],
-      "evidenceQuotes": ["能量转化不是百分之百，燃料电池转化率较高。"]
+      "evidenceQuotes": [
+        "从吉布斯自由能降低的角度看，本质仍是化学能转化为电能。"
+      ],
+      "anchors": []
     },
-    "expectedScore": "hit", "annotator": "codex-synthetic-seed", "rubricVersion": "rubrics.v1.1", "source": "synthetic",
-    "misconceptionIds": [], "tags": ["correct"], "seriousMisjudgmentOpportunity": false
+    "expectedScore": "hit",
+    "annotator": "codex-synthetic-seed",
+    "rubricVersion": "rubrics.v1.1",
+    "source": "synthetic",
+    "misconceptionIds": [],
+    "tags": [
+      "beyond-syllabus-correct"
+    ],
+    "seriousMisjudgmentOpportunity": false,
+    "evaluationPath": "structured-assessment",
+    "reviewer": "codex-m1c1-independent-relabel",
+    "reviewStatus": "reviewed",
+    "adjudicationVersion": "adjudication-table.v1.1",
+    "expectedDisagreement": false,
+    "metamorphicReview": {
+      "reviewer": "codex-m1c1-independent-relabel",
+      "status": "approved",
+      "variants": {
+        "paraphrase": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        },
+        "noise": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        },
+        "rename-person": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        }
+      }
+    },
+    "rationale": {
+      "rubricRefs": [
+        "e1-hit"
+      ],
+      "adjudicationRefs": [
+        "§4"
+      ],
+      "text": "原作答对 E1 的事实覆盖与 e1-hit 一致；按裁量 §4 标为 hit。"
+    }
+  },
+  {
+    "version": "eval-case.v2",
+    "annotationStatus": "labeled",
+    "id": "synthetic-e2-m1-no-source",
+    "questionRef": {
+      "caseId": "zinc-copper",
+      "nodeId": "E2"
+    },
+    "studentAnswer": "电能就是从电池里出来的，说不清具体反应。",
+    "expectedExtraction": {
+      "response": "substantive",
+      "terminology": "colloquial",
+      "syllabus": "within",
+      "contradiction": false,
+      "typo": "none",
+      "errorIds": [
+        "E2-M1"
+      ],
+      "slots": [],
+      "evidenceQuotes": [
+        "电能就是从电池里出来的，说不清具体反应。"
+      ],
+      "anchors": []
+    },
+    "expectedScore": "miss",
+    "annotator": "codex-synthetic-seed",
+    "rubricVersion": "rubrics.v1.1",
+    "source": "synthetic",
+    "misconceptionIds": [
+      "E2-M1"
+    ],
+    "tags": [
+      "misconception"
+    ],
+    "seriousMisjudgmentOpportunity": true,
+    "evaluationPath": "structured-assessment",
+    "reviewer": "codex-m1c1-independent-relabel",
+    "reviewStatus": "reviewed",
+    "adjudicationVersion": "adjudication-table.v1.1",
+    "expectedDisagreement": false,
+    "metamorphicReview": {
+      "reviewer": "codex-m1c1-independent-relabel",
+      "status": "approved",
+      "variants": {
+        "paraphrase": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        },
+        "noise": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        },
+        "rename-person": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        }
+      }
+    },
+    "rationale": {
+      "rubricRefs": [
+        "e2-miss"
+      ],
+      "adjudicationRefs": [
+        "§1"
+      ],
+      "text": "原作答直接体现诊断 E2-M1；按 e2-miss 与裁量 §1 独立标为 miss。"
+    }
+  },
+  {
+    "version": "eval-case.v2",
+    "annotationStatus": "labeled",
+    "id": "synthetic-e2-m2-external-power",
+    "questionRef": {
+      "caseId": "zinc-copper",
+      "nodeId": "E2"
+    },
+    "studentAnswer": "不自发也没关系，持续电能来自外加电源。",
+    "expectedExtraction": {
+      "response": "substantive",
+      "terminology": "model",
+      "syllabus": "within",
+      "contradiction": false,
+      "typo": "none",
+      "errorIds": [
+        "E2-M2"
+      ],
+      "slots": [
+        {
+          "id": "energy-source-reaction",
+          "value": "外加电源",
+          "evidenceQuote": "外加电源"
+        }
+      ],
+      "evidenceQuotes": [
+        "不自发也没关系，持续电能来自外加电源。"
+      ],
+      "anchors": []
+    },
+    "expectedScore": "miss",
+    "annotator": "codex-synthetic-seed",
+    "rubricVersion": "rubrics.v1.1",
+    "source": "synthetic",
+    "misconceptionIds": [
+      "E2-M2"
+    ],
+    "tags": [
+      "misconception"
+    ],
+    "seriousMisjudgmentOpportunity": true,
+    "evaluationPath": "structured-assessment",
+    "reviewer": "codex-m1c1-independent-relabel",
+    "reviewStatus": "reviewed",
+    "adjudicationVersion": "adjudication-table.v1.1",
+    "expectedDisagreement": false,
+    "metamorphicReview": {
+      "reviewer": "codex-m1c1-independent-relabel",
+      "status": "approved",
+      "variants": {
+        "paraphrase": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        },
+        "noise": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        },
+        "rename-person": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        }
+      }
+    },
+    "rationale": {
+      "rubricRefs": [
+        "e2-miss"
+      ],
+      "adjudicationRefs": [
+        "§1"
+      ],
+      "text": "原作答直接体现诊断 E2-M2；按 e2-miss 与裁量 §1 独立标为 miss。"
+    }
+  },
+  {
+    "version": "eval-case.v2",
+    "annotationStatus": "labeled",
+    "id": "synthetic-e3-m1-perfect-conversion",
+    "questionRef": {
+      "caseId": "zinc-copper",
+      "nodeId": "E3"
+    },
+    "studentAnswer": "化学能可以百分之百变成电能。",
+    "expectedExtraction": {
+      "response": "substantive",
+      "terminology": "model",
+      "syllabus": "within",
+      "contradiction": false,
+      "typo": "none",
+      "errorIds": [
+        "E3-M1"
+      ],
+      "slots": [
+        {
+          "id": "complete-conversion",
+          "value": "true",
+          "evidenceQuote": "可以百分之百"
+        }
+      ],
+      "evidenceQuotes": [
+        "化学能可以百分之百变成电能。"
+      ],
+      "anchors": []
+    },
+    "expectedScore": "miss",
+    "annotator": "codex-synthetic-seed",
+    "rubricVersion": "rubrics.v1.1",
+    "source": "synthetic",
+    "misconceptionIds": [
+      "E3-M1"
+    ],
+    "tags": [
+      "misconception"
+    ],
+    "seriousMisjudgmentOpportunity": true,
+    "evaluationPath": "structured-assessment",
+    "reviewer": "codex-m1c1-independent-relabel",
+    "reviewStatus": "reviewed",
+    "adjudicationVersion": "adjudication-table.v1.1",
+    "expectedDisagreement": false,
+    "metamorphicReview": {
+      "reviewer": "codex-m1c1-independent-relabel",
+      "status": "approved",
+      "variants": {
+        "paraphrase": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        },
+        "noise": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        },
+        "rename-person": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        }
+      }
+    },
+    "rationale": {
+      "rubricRefs": [
+        "e3-miss"
+      ],
+      "adjudicationRefs": [
+        "§1"
+      ],
+      "text": "原作答直接体现诊断 E3-M1；按 e3-miss 与裁量 §1 独立标为 miss。"
+    }
+  },
+  {
+    "version": "eval-case.v2",
+    "annotationStatus": "labeled",
+    "id": "synthetic-e3-m2-no-efficiency-difference",
+    "questionRef": {
+      "caseId": "zinc-copper",
+      "nodeId": "E3"
+    },
+    "studentAnswer": "转化不能完全，但燃料电池和火力发电效率一样高。",
+    "expectedExtraction": {
+      "response": "substantive",
+      "terminology": "model",
+      "syllabus": "within",
+      "contradiction": false,
+      "typo": "none",
+      "errorIds": [
+        "E3-M2"
+      ],
+      "slots": [
+        {
+          "id": "complete-conversion",
+          "value": "false",
+          "evidenceQuote": "不能完全"
+        },
+        {
+          "id": "comparison",
+          "value": "一样高",
+          "evidenceQuote": "一样高"
+        }
+      ],
+      "evidenceQuotes": [
+        "转化不能完全，但燃料电池和火力发电效率一样高。"
+      ],
+      "anchors": []
+    },
+    "expectedScore": "partial",
+    "annotator": "codex-synthetic-seed",
+    "rubricVersion": "rubrics.v1.1",
+    "source": "synthetic",
+    "misconceptionIds": [
+      "E3-M2"
+    ],
+    "tags": [
+      "misconception",
+      "partial"
+    ],
+    "seriousMisjudgmentOpportunity": false,
+    "evaluationPath": "structured-assessment",
+    "reviewer": "codex-m1c1-independent-relabel",
+    "reviewStatus": "reviewed",
+    "adjudicationVersion": "adjudication-table.v1.1",
+    "expectedDisagreement": false,
+    "metamorphicReview": {
+      "reviewer": "codex-m1c1-independent-relabel",
+      "status": "approved",
+      "variants": {
+        "paraphrase": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        },
+        "noise": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        },
+        "rename-person": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        }
+      }
+    },
+    "rationale": {
+      "rubricRefs": [
+        "e3-partial"
+      ],
+      "adjudicationRefs": [
+        "§1"
+      ],
+      "text": "原作答直接体现诊断 E3-M2；按 e3-partial 与裁量 §1 独立标为 partial。"
+    }
+  },
+  {
+    "version": "eval-case.v2",
+    "annotationStatus": "labeled",
+    "id": "synthetic-e3-correct",
+    "questionRef": {
+      "caseId": "zinc-copper",
+      "nodeId": "E3"
+    },
+    "studentAnswer": "能量转化不是百分之百，燃料电池转化率较高。",
+    "expectedExtraction": {
+      "response": "substantive",
+      "terminology": "model",
+      "syllabus": "within",
+      "contradiction": false,
+      "typo": "none",
+      "errorIds": [],
+      "slots": [
+        {
+          "id": "complete-conversion",
+          "value": "false",
+          "evidenceQuote": "不是百分之百"
+        },
+        {
+          "id": "comparison",
+          "value": "fuel-cell-over-thermal-power",
+          "evidenceQuote": "燃料电池转化率较高"
+        }
+      ],
+      "evidenceQuotes": [
+        "能量转化不是百分之百，燃料电池转化率较高。"
+      ],
+      "anchors": []
+    },
+    "expectedScore": "hit",
+    "annotator": "codex-synthetic-seed",
+    "rubricVersion": "rubrics.v1.1",
+    "source": "synthetic",
+    "misconceptionIds": [],
+    "tags": [
+      "correct"
+    ],
+    "seriousMisjudgmentOpportunity": false,
+    "evaluationPath": "structured-assessment",
+    "reviewer": "codex-m1c1-independent-relabel",
+    "reviewStatus": "reviewed",
+    "adjudicationVersion": "adjudication-table.v1.1",
+    "expectedDisagreement": false,
+    "metamorphicReview": {
+      "reviewer": "codex-m1c1-independent-relabel",
+      "status": "approved",
+      "variants": {
+        "paraphrase": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        },
+        "noise": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        },
+        "rename-person": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        }
+      }
+    },
+    "rationale": {
+      "rubricRefs": [
+        "e3-hit"
+      ],
+      "adjudicationRefs": [
+        "§1"
+      ],
+      "text": "原作答对 E3 的事实覆盖与 e3-hit 一致；按裁量 §1 标为 hit。"
+    }
+  },
+  {
+    "version": "eval-case.v2",
+    "evaluationPath": "structured-assessment",
+    "annotationStatus": "labeled",
+    "id": "synthetic-p4-following-wrong-polarity",
+    "questionRef": {
+      "caseId": "zinc-copper",
+      "nodeId": "P4"
+    },
+    "studentAnswer": "我判断铜极是负极、锌极是正极；因此电子由铜极流向锌极，阴离子移向铜极，阳离子移向锌极。",
+    "expectedExtraction": {
+      "anchors": [
+        {
+          "anchorId": "case-polarity",
+          "facts": [
+            {
+              "id": "negative",
+              "value": "Cu",
+              "evidenceQuote": "铜极"
+            },
+            {
+              "id": "positive",
+              "value": "Zn",
+              "evidenceQuote": "锌极"
+            }
+          ],
+          "evidenceQuotes": [
+            "铜极是负极、锌极是正极"
+          ]
+        }
+      ],
+      "response": "substantive",
+      "terminology": "model",
+      "syllabus": "within",
+      "contradiction": false,
+      "typo": "none",
+      "errorIds": [
+        "P4-M1",
+        "P4-M3"
+      ],
+      "slots": [
+        {
+          "id": "electron-from",
+          "value": "Cu",
+          "evidenceQuote": "铜极"
+        },
+        {
+          "id": "electron-to",
+          "value": "Zn",
+          "evidenceQuote": "锌极"
+        },
+        {
+          "id": "anion-toward",
+          "value": "Cu",
+          "evidenceQuote": "铜极"
+        },
+        {
+          "id": "cation-toward",
+          "value": "Zn",
+          "evidenceQuote": "锌极"
+        }
+      ],
+      "evidenceQuotes": [
+        "电子由铜极流向锌极，阴离子移向铜极，阳离子移向锌极"
+      ]
+    },
+    "expectedScore": "hit",
+    "annotator": "codex-synthetic-seed",
+    "rubricVersion": "rubrics.v1.1",
+    "source": "synthetic",
+    "misconceptionIds": [
+      "P4-M1",
+      "P4-M3"
+    ],
+    "tags": [
+      "following-error"
+    ],
+    "seriousMisjudgmentOpportunity": false,
+    "reviewer": "codex-m1c1-independent-relabel",
+    "reviewStatus": "reviewed",
+    "adjudicationVersion": "adjudication-table.v1.1",
+    "expectedDisagreement": false,
+    "metamorphicReview": {
+      "reviewer": "codex-m1c1-independent-relabel",
+      "status": "approved",
+      "variants": {
+        "paraphrase": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        },
+        "noise": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        },
+        "rename-person": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        }
+      }
+    },
+    "rationale": {
+      "rubricRefs": [
+        "p4-hit"
+      ],
+      "adjudicationRefs": [
+        "§2"
+      ],
+      "text": "极性锚点判断错误，但 P4 后续推理在该锚点下完整自洽；按裁量 §2 与 p4-hit 给分。"
+    }
+  },
+  {
+    "version": "eval-case.v2",
+    "evaluationPath": "structured-assessment",
+    "annotationStatus": "labeled",
+    "id": "synthetic-p5-following-wrong-polarity",
+    "questionRef": {
+      "caseId": "zinc-copper",
+      "nodeId": "P5"
+    },
+    "studentAnswer": "我判断铜极是负极、锌极是正极；因此铜片质量减小，锌片质量增加。",
+    "expectedExtraction": {
+      "anchors": [
+        {
+          "anchorId": "case-polarity",
+          "facts": [
+            {
+              "id": "negative",
+              "value": "Cu",
+              "evidenceQuote": "铜极"
+            },
+            {
+              "id": "positive",
+              "value": "Zn",
+              "evidenceQuote": "锌极"
+            }
+          ],
+          "evidenceQuotes": [
+            "铜极是负极、锌极是正极"
+          ]
+        }
+      ],
+      "response": "substantive",
+      "terminology": "model",
+      "syllabus": "within",
+      "contradiction": false,
+      "typo": "none",
+      "errorIds": [
+        "P5-M2"
+      ],
+      "slots": [
+        {
+          "id": "mass-loss",
+          "value": "Cu",
+          "evidenceQuote": "铜片"
+        },
+        {
+          "id": "mass-gain",
+          "value": "Zn",
+          "evidenceQuote": "锌片"
+        }
+      ],
+      "evidenceQuotes": [
+        "铜片质量减小，锌片质量增加"
+      ]
+    },
+    "expectedScore": "hit",
+    "annotator": "codex-synthetic-seed",
+    "rubricVersion": "rubrics.v1.1",
+    "source": "synthetic",
+    "misconceptionIds": [
+      "P5-M2"
+    ],
+    "tags": [
+      "following-error"
+    ],
+    "seriousMisjudgmentOpportunity": false,
+    "reviewer": "codex-m1c1-independent-relabel",
+    "reviewStatus": "reviewed",
+    "adjudicationVersion": "adjudication-table.v1.1",
+    "expectedDisagreement": false,
+    "metamorphicReview": {
+      "reviewer": "codex-m1c1-independent-relabel",
+      "status": "approved",
+      "variants": {
+        "paraphrase": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        },
+        "noise": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        },
+        "rename-person": {
+          "status": "approved",
+          "rationale": "变体只改写表述或增加明确无关内容，不改变被评事实与标签。"
+        }
+      }
+    },
+    "rationale": {
+      "rubricRefs": [
+        "p5-hit"
+      ],
+      "adjudicationRefs": [
+        "§2"
+      ],
+      "text": "极性锚点判断错误，但 P5 后续推理在该锚点下完整自洽；按裁量 §2 与 p5-hit 给分。"
+    }
   }
 ]

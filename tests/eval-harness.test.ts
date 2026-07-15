@@ -4,6 +4,7 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { runEvalHarness } from '../eval/harness';
+import { loadEvalCases } from '../eval/load';
 import { renderEvalMarkdownReport } from '../eval/report';
 import {
   evalConfigSchema,
@@ -17,12 +18,13 @@ const answer = '锌是还原剂。';
 
 function partialCase(): LabeledEvalCase {
   return labeledEvalCaseSchema.parse({
-    version: 'eval-case.v1',
+    version: 'eval-case.v2',
     annotationStatus: 'labeled',
     id: 'zc-p2-partial',
     questionRef: { caseId: 'zinc-copper', nodeId: 'P2' },
     studentAnswer: answer,
     expectedExtraction: {
+      anchors: [],
       response: 'substantive',
       terminology: 'model',
       syllabus: 'within',
@@ -34,6 +36,24 @@ function partialCase(): LabeledEvalCase {
     },
     expectedScore: 'partial',
     annotator: 'test-annotator',
+    reviewer: 'test-reviewer',
+    reviewStatus: 'reviewed',
+    adjudicationVersion: 'adjudication-table.v1.1',
+    rationale: {
+      rubricRefs: ['p2-partial'],
+      adjudicationRefs: ['§1'],
+      text: 'Only one reagent role is identified.',
+    },
+    expectedDisagreement: false,
+    metamorphicReview: {
+      reviewer: 'test-reviewer',
+      status: 'approved',
+      variants: {
+        paraphrase: { status: 'approved', rationale: 'Approved paraphrase.' },
+        noise: { status: 'approved', rationale: 'Approved irrelevant suffix.' },
+        'rename-person': { status: 'approved', rationale: 'Approved wrapper rename.' },
+      },
+    },
     rubricVersion: 'rubrics.v1.1',
     source: 'synthetic',
     misconceptionIds: [],
@@ -45,7 +65,7 @@ function partialCase(): LabeledEvalCase {
 function equationCase(): LabeledEvalCase {
   const equation = 'Zn + Cu^2+ -> Zn^2+ + Cu + e^-';
   return labeledEvalCaseSchema.parse({
-    version: 'eval-case.v1',
+    version: 'eval-case.v2',
     annotationStatus: 'labeled',
     evaluationPath: 'equation',
     id: 'zc-p7-electron-remains',
@@ -56,6 +76,7 @@ function equationCase(): LabeledEvalCase {
     },
     studentAnswer: equation,
     expectedExtraction: {
+      anchors: [],
       response: 'substantive',
       terminology: 'model',
       syllabus: 'within',
@@ -67,6 +88,24 @@ function equationCase(): LabeledEvalCase {
     },
     expectedScore: 'miss',
     annotator: 'test-annotator',
+    reviewer: 'test-reviewer',
+    reviewStatus: 'reviewed',
+    adjudicationVersion: 'adjudication-table.v1.1',
+    rationale: {
+      rubricRefs: ['p7-miss'],
+      adjudicationRefs: ['§1', '§9'],
+      text: 'An overall equation cannot retain electrons.',
+    },
+    expectedDisagreement: false,
+    metamorphicReview: {
+      reviewer: 'test-reviewer',
+      status: 'approved',
+      variants: {
+        paraphrase: { status: 'approved', rationale: 'Equivalent arrow style.' },
+        noise: { status: 'not-applicable', rationale: 'Whitespace is a parser no-op.' },
+        'rename-person': { status: 'not-applicable', rationale: 'Equation has no person.' },
+      },
+    },
     rubricVersion: 'rubrics.v1.1',
     source: 'synthetic',
     misconceptionIds: ['P7-M2'],
@@ -75,26 +114,80 @@ function equationCase(): LabeledEvalCase {
   });
 }
 
+function seriousContradictionCase(): LabeledEvalCase {
+  const studentAnswer = '电子由Zn极流向Cu极，但也会由Cu极流回Zn极；阴离子向Zn极，阳离子向Cu极。';
+  return labeledEvalCaseSchema.parse({
+    version: 'eval-case.v2',
+    evaluationPath: 'structured-assessment',
+    annotationStatus: 'labeled',
+    id: 'zc-p4-contradiction-negative-provider',
+    questionRef: { caseId: 'zinc-copper', nodeId: 'P4' },
+    studentAnswer,
+    expectedExtraction: {
+      anchors: [],
+      response: 'substantive',
+      terminology: 'model',
+      syllabus: 'within',
+      contradiction: true,
+      typo: 'none',
+      errorIds: [],
+      slots: [
+        { id: 'electron-from', value: 'Zn', evidenceQuote: 'Zn极' },
+        { id: 'electron-to', value: 'Cu', evidenceQuote: 'Cu极' },
+        { id: 'anion-toward', value: 'Zn', evidenceQuote: 'Zn极' },
+        { id: 'cation-toward', value: 'Cu', evidenceQuote: 'Cu极' },
+      ],
+      evidenceQuotes: [studentAnswer],
+    },
+    expectedScore: 'miss',
+    annotator: 'test-annotator',
+    reviewer: 'test-reviewer',
+    reviewStatus: 'reviewed',
+    adjudicationVersion: 'adjudication-table.v1.1',
+    rationale: {
+      rubricRefs: ['p4-miss'],
+      adjudicationRefs: ['§5'],
+      text: 'The answer contradicts itself and is a ground-truth miss.',
+    },
+    expectedDisagreement: false,
+    metamorphicReview: {
+      reviewer: 'test-reviewer',
+      status: 'approved',
+      variants: {
+        paraphrase: { status: 'approved', rationale: 'Approved paraphrase.' },
+        noise: { status: 'approved', rationale: 'Approved irrelevant suffix.' },
+        'rename-person': { status: 'approved', rationale: 'Approved wrapper rename.' },
+      },
+    },
+    rubricVersion: 'rubrics.v1.1',
+    source: 'synthetic',
+    misconceptionIds: [],
+    tags: ['contradiction'],
+    seriousMisjudgmentOpportunity: true,
+  });
+}
+
 function harnessConfig(defaultRuns = 1) {
   return evalConfigSchema.parse({
-    version: 'eval-config.v1',
+    version: 'eval-config.v2',
     defaultRuns,
-    temperature: 0.1,
     thresholds: {
       nodeMacroAccuracy: 0.9,
       severeFalseMasteryRate: 0.02,
       citationHallucinationRate: 0.02,
       schemaFailureRate: 0.02,
       metamorphicInvariantRate: 0.9,
+      scoreConsistencyRate: 0.95,
     },
-    metamorphic: { enabled: false, variants: ['paraphrase', 'noise', 'rename-person'] },
+    metamorphic: { enabled: true, variants: ['paraphrase', 'noise', 'rename-person'] },
     pricing: { inputUsdPerMillionTokens: 1, outputUsdPerMillionTokens: 2 },
-    coverage: {
-      minimumCases: 1,
-      minimumCasesPerNode: 1,
-      minimumCasesPerMisconception: 1,
+    corpus: { stage: 'seed' },
+    live: {
+      provider: 'fixture',
+      model: 'fixture-v1',
+      pilotCases: 5,
+      minimumClosedSetComplianceRate: 0.95,
     },
-    live: { provider: 'fixture', model: 'fixture-v1' },
   });
 }
 
@@ -143,8 +236,10 @@ describe('eval harness production-path execution', () => {
     expect(result.observations).toHaveLength(3);
     expect(result.observations.every((entry) => entry.predictedScore === 'partial')).toBe(true);
     expect(result.observations.every((entry) => entry.extractionExact)).toBe(true);
-    expect(result.metrics.consistencyRate).toBe(1);
-    expect(result.metrics.passed).toBe(true);
+    expect(result.metrics.scoreConsistency.rate).toBe(1);
+    expect(result.harnessSelfCheck.passed).toBe(true);
+    expect(result.metrics.qualityGateEligible).toBe(false);
+    expect(result.metrics.passed).toBe(false);
   });
 
   it('uses the production equation engine for deterministic P3/P6/P7 golden cases', async () => {
@@ -158,11 +253,33 @@ describe('eval harness production-path execution', () => {
       includeMetamorphic: true,
     });
 
-    expect(result.observations).toHaveLength(5);
+    expect(result.observations).toHaveLength(3);
     expect(result.observations.every((entry) => entry.predictedScore === 'miss')).toBe(true);
     expect(result.observations.every((entry) => entry.source === 'deterministic-engine')).toBe(true);
+    expect(result.observations.every((entry) => entry.errorIdsExact)).toBe(true);
+    expect(result.observations.every((entry) =>
+      entry.predictedErrorIds.includes('P7-M2'))).toBe(true);
     expect(result.metrics.metamorphic.rate).toBe(1);
     expect(result.metrics.tokenUsage.totalTokens).toBe(0);
+  });
+
+  it('compares golden anchors and grants configured following credit for P4/P5', async () => {
+    const cases = (await loadEvalCases({ contentRoot: process.cwd() }))
+      .filter((entry) => entry.tags.includes('following-error'));
+
+    const result = await runEvalHarness({
+      contentRoot: process.cwd(),
+      cases,
+      config: harnessConfig(3),
+      mode: 'mock',
+      providerId: 'eval-mock',
+      model: 'eval-mock-v1',
+      includeMetamorphic: false,
+    });
+
+    expect(cases.map((entry) => entry.questionRef.nodeId).sort()).toEqual(['P4', 'P5']);
+    expect(result.observations.every((entry) => entry.predictedScore === 'hit')).toBe(true);
+    expect(result.observations.every((entry) => entry.extractionExact)).toBe(true);
   });
 
   it('passes the configured low temperature to the provider and records every response for replay', async () => {
@@ -219,6 +336,75 @@ describe('eval harness production-path execution', () => {
     });
   });
 
+  it('fails the quality gates when a deliberately wrong local provider corrupts extraction', async () => {
+    const evalCase = seriousContradictionCase();
+    const wrongStructured = {
+      anchors: [],
+      assessments: [{
+        nodeId: 'P4',
+        errorIds: [],
+        facts: {
+          response: 'substantive',
+          terminology: 'model',
+          syllabus: 'within',
+          contradiction: false,
+          typo: 'none',
+          slots: [
+            { id: 'electron-from', value: 'Zn', evidence: { quote: 'Zn极', start: 3, end: 6 } },
+            { id: 'electron-to', value: 'Cu', evidence: { quote: 'Cu极', start: 8, end: 11 } },
+            { id: 'anion-toward', value: 'Zn', evidence: { quote: 'Zn极', start: 3, end: 6 } },
+            { id: 'cation-toward', value: 'Cu', evidence: { quote: 'Cu极', start: 8, end: 11 } },
+          ],
+        },
+        evidence: [{ quote: evalCase.studentAnswer, start: 0, end: evalCase.studentAnswer.length }],
+        assistance: { kind: 'none', rounds: 0 },
+      }],
+    };
+    const provider: LLMProvider = {
+      id: 'deliberately-wrong',
+      async chat() { throw new Error('not used'); },
+      async vision() { throw new Error('not used'); },
+      async structured() {
+        return {
+          content: JSON.stringify(wrongStructured),
+          structured: wrongStructured,
+          model: 'wrong-v1',
+        };
+      },
+    };
+
+    const golden = await runEvalHarness({
+      contentRoot: process.cwd(),
+      cases: [evalCase],
+      config: harnessConfig(3),
+      mode: 'mock',
+      providerId: 'eval-mock',
+      model: 'eval-mock-v1',
+      includeMetamorphic: false,
+    });
+    const corrupted = await runEvalHarness({
+      contentRoot: process.cwd(),
+      cases: [evalCase],
+      config: harnessConfig(3),
+      mode: 'live',
+      providerId: provider.id,
+      model: 'wrong-v1',
+      provider,
+      includeMetamorphic: false,
+    });
+
+    expect(golden.metrics.nodeMacroAccuracy).toBe(1);
+    expect(corrupted.metrics.nodeMacroAccuracy).toBe(0);
+    expect(corrupted.metrics.extraction.exactRate).toBe(0);
+    expect(golden.metrics.severeFalseMastery.rate).toBe(0);
+    expect(corrupted.metrics.severeFalseMastery.rate).toBe(1);
+    expect(corrupted.metrics.gates.find((entry) => entry.id === 'severe-false-mastery'))
+      .toMatchObject({ passed: false, actual: 1 });
+    expect(corrupted.metrics.gates.find((entry) => entry.id === 'node-macro-accuracy'))
+      .toMatchObject({ passed: false, actual: 0 });
+    expect(corrupted.metrics.passed).toBe(false);
+  });
+
   it('marks final invalid JSON/schema fallbacks as schema failures', async () => {
     const provider: LLMProvider = {
       id: 'invalid',
@@ -265,10 +451,22 @@ describe('eval harness production-path execution', () => {
     });
 
     expect(markdown).toContain('逐节点宏平均命中率');
+    expect(markdown).toContain('自洽性检查,非质量门禁');
+    expect(markdown).not.toContain('Overall: **PASS**');
     expect(markdown).toContain('全错判掌握率');
-    expect(markdown).toContain('denominatorCases');
+    expect(markdown).toContain('ground-truth miss');
+    expect(markdown).toContain('Extraction expected/attempted/exact');
+    expect(markdown).toContain('判分一致率 / 输出一致率');
+    expect(markdown).toContain('未观测 serious case');
     expect(markdown).toContain('| expected \\ predicted | hit | partial | miss | unanswered | needs-review |');
     expect(markdown).toContain('P95');
     expect(markdown).toContain('Token');
+
+    const aggregate = renderEvalMarkdownReport({
+      metrics: result.metrics,
+      metadata: { ...result.metadata, mode: 'holdout', caseVisibility: 'aggregate-only' },
+    });
+    expect(aggregate).not.toContain('## Case Consistency');
+    expect(aggregate).not.toContain(partialCase().id);
   });
 });

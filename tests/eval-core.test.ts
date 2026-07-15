@@ -12,12 +12,13 @@ import {
 
 function labeledCase(overrides: Partial<LabeledEvalCase> = {}): LabeledEvalCase {
   return labeledEvalCaseSchema.parse({
-    version: 'eval-case.v1',
+    version: 'eval-case.v2',
     annotationStatus: 'labeled',
     id: 'zc-p4-reversed',
     questionRef: { caseId: 'zinc-copper', nodeId: 'P4' },
     studentAnswer: '小明认为电子由铜极流向锌极。',
     expectedExtraction: {
+      anchors: [],
       response: 'substantive',
       terminology: 'model',
       syllabus: 'within',
@@ -32,6 +33,24 @@ function labeledCase(overrides: Partial<LabeledEvalCase> = {}): LabeledEvalCase 
     },
     expectedScore: 'miss',
     annotator: 'codex-synthetic-seed',
+    reviewer: 'independent-reviewer',
+    reviewStatus: 'reviewed',
+    adjudicationVersion: 'adjudication-table.v1.1',
+    rationale: {
+      rubricRefs: ['p4-miss'],
+      adjudicationRefs: ['§1'],
+      text: 'P4 direction is reversed under the frozen rubric.',
+    },
+    expectedDisagreement: false,
+    metamorphicReview: {
+      reviewer: 'independent-reviewer',
+      status: 'approved',
+      variants: {
+        paraphrase: { status: 'approved', rationale: 'Semantic paraphrase approved.' },
+        noise: { status: 'approved', rationale: 'Irrelevant suffix approved.' },
+        'rename-person': { status: 'approved', rationale: 'Person rename approved.' },
+      },
+    },
     rubricVersion: 'rubrics.v1.1',
     source: 'synthetic',
     misconceptionIds: ['P4-M1'],
@@ -49,6 +68,10 @@ function observation(input: Partial<EvalObservation> = {}): EvalObservation {
     iteration: 1,
     expectedScore: 'miss',
     predictedScore: 'miss',
+    expectedErrorIds: ['P4-M1'],
+    predictedErrorIds: ['P4-M1'],
+    errorIdsExact: true,
+    extractionAttempted: true,
     extractionExact: true,
     resultSignature: 'miss:fixture',
     source: 'provider',
@@ -58,32 +81,45 @@ function observation(input: Partial<EvalObservation> = {}): EvalObservation {
     estimatedCostUsd: 0.00002,
     citationHallucination: false,
     schemaFailure: false,
+    closedSetFailure: false,
     ...input,
   };
 }
 
 const config = evalConfigSchema.parse({
-  version: 'eval-config.v1',
+  version: 'eval-config.v2',
   defaultRuns: 3,
-  temperature: 0.1,
   thresholds: {
     nodeMacroAccuracy: 0.9,
     severeFalseMasteryRate: 0.02,
     citationHallucinationRate: 0.02,
     schemaFailureRate: 0.02,
     metamorphicInvariantRate: 0.9,
+    scoreConsistencyRate: 0.95,
   },
   metamorphic: { enabled: true, variants: ['paraphrase', 'noise', 'rename-person'] },
   pricing: { inputUsdPerMillionTokens: 1, outputUsdPerMillionTokens: 2 },
-  coverage: {
-    minimumCases: 40,
-    minimumCasesPerNode: 2,
-    minimumCasesPerMisconception: 1,
+  corpus: { stage: 'seed' },
+  live: {
+    provider: 'deepseek',
+    model: 'deepseek-chat',
+    pilotCases: 5,
+    minimumClosedSetComplianceRate: 0.95,
   },
-  live: { provider: 'deepseek', model: 'deepseek-chat' },
 });
 
 describe('eval case and metric contracts', () => {
+  it('keeps the 150/5/3 corpus gate outside configurable eval JSON', () => {
+    expect(evalConfigSchema.safeParse({
+      ...config,
+      coverage: {
+        minimumCases: 1,
+        minimumCasesPerNode: 1,
+        minimumCasesPerMisconception: 1,
+      },
+    }).success).toBe(false);
+  });
+
   it('requires the complete labeled golden-case contract and allows pending imports', () => {
     expect(labeledCase().expectedExtraction.slots[0]).toEqual({
       id: 'electron-from',
@@ -98,7 +134,7 @@ describe('eval case and metric contracts', () => {
     expect(evalCaseSchema.safeParse(invalid).success).toBe(false);
 
     expect(evalCaseSchema.parse({
-      version: 'eval-case.v1',
+      version: 'eval-case.v2',
       annotationStatus: 'pending',
       id: 'candidate-abc',
       questionRef: { caseId: 'zinc-copper', nodeId: 'P4' },
@@ -145,19 +181,109 @@ describe('eval case and metric contracts', () => {
     const metrics = computeEvalMetrics({ cases: [labeledCase(), second], observations, config });
 
     expect(metrics.confusionMatrix.miss).toEqual({
-      hit: 1,
-      partial: 1,
-      miss: 2,
-      unanswered: 1,
+      hit: 0,
+      partial: 0,
+      miss: 1,
+      unanswered: 0,
       'needs-review': 1,
     });
-    expect(metrics.severeFalseMastery).toEqual({ numeratorCases: 1, denominatorCases: 2, rate: 0.5 });
+    expect(metrics.severeFalseMastery).toMatchObject({
+      numeratorCases: 0,
+      denominatorCases: 2,
+      rate: 0,
+    });
     expect(metrics.schemaFailureRate).toBe(0);
     expect(metrics.tokenUsage).toMatchObject({ inputTokens: 60, outputTokens: 30 });
     expect(metrics.gates.find((gate) => gate.id === 'severe-false-mastery')).toMatchObject({
-      passed: false,
-      actual: 0.5,
+      passed: true,
+      actual: 0,
     });
+  });
+
+  it('counts extraction failures as non-exact and reports expected, attempted, and exact side by side', () => {
+    const observations = [
+      observation(),
+      observation({ iteration: 2, extractionExact: false }),
+      observation({
+        iteration: 3,
+        extractionAttempted: false,
+        extractionExact: false,
+        predictedScore: 'needs-review',
+      }),
+    ];
+
+    const metrics = computeEvalMetrics({ cases: [labeledCase()], observations, config });
+
+    expect(metrics.extraction).toEqual({
+      expected: 3,
+      attempted: 2,
+      exact: 1,
+      attemptRate: 2 / 3,
+      exactRate: 1 / 3,
+    });
+  });
+
+  it('gates on all-run score agreement while reporting exact-output agreement separately', () => {
+    const observations = [
+      observation({ resultSignature: 'output-a' }),
+      observation({ iteration: 2, resultSignature: 'output-b' }),
+      observation({ iteration: 3, resultSignature: 'output-c' }),
+    ];
+
+    const metrics = computeEvalMetrics({ cases: [labeledCase()], observations, config });
+
+    expect(metrics.scoreConsistency).toMatchObject({ consistentCases: 1, totalCases: 1, rate: 1 });
+    expect(metrics.outputConsistency).toMatchObject({ consistentCases: 0, totalCases: 1, rate: 0 });
+    expect(metrics.gates.find((entry) => entry.id === 'score-consistency')).toMatchObject({
+      passed: true,
+      actual: 1,
+    });
+  });
+
+  it('fails a formal evaluation when any case has fewer than three base runs', () => {
+    const metrics = computeEvalMetrics({
+      cases: [labeledCase()],
+      observations: [observation()],
+      config,
+      mode: 'live',
+    });
+
+    expect(metrics.gates.find((entry) => entry.id === 'minimum-runs-per-case'))
+      .toMatchObject({ passed: false, actual: 0 });
+    expect(metrics.passed).toBe(false);
+  });
+
+  it('uses one majority vote per case for macro accuracy and serious false mastery', () => {
+    const second = labeledCase({ id: 'zc-p4-second' });
+    const observations = [
+      observation({ predictedScore: 'hit' }),
+      observation({ iteration: 2, predictedScore: 'hit' }),
+      observation({ iteration: 3, predictedScore: 'miss' }),
+      observation({ caseId: second.id, predictedScore: 'miss' }),
+      observation({ caseId: second.id, iteration: 2, predictedScore: 'miss' }),
+      observation({ caseId: second.id, iteration: 3, predictedScore: 'hit' }),
+    ];
+
+    const metrics = computeEvalMetrics({ cases: [labeledCase(), second], observations, config });
+
+    expect(metrics.perNode.P4).toEqual({ correct: 1, total: 2, accuracy: 0.5 });
+    expect(metrics.confusionMatrix.miss.hit).toBe(1);
+    expect(metrics.confusionMatrix.miss.miss).toBe(1);
+    expect(metrics.severeFalseMastery).toMatchObject({
+      numeratorCases: 1,
+      denominatorCases: 2,
+      rate: 0.5,
+    });
+  });
+
+  it('fails every unobserved rate gate instead of treating an empty denominator as 100%', () => {
+    const metrics = computeEvalMetrics({ cases: [labeledCase()], observations: [], config });
+
+    expect(metrics.gates).not.toHaveLength(0);
+    expect(metrics.gates.every((entry) => entry.passed === false)).toBe(true);
+    expect(metrics.scoreConsistency.rate).toBe(0);
+    expect(metrics.outputConsistency.rate).toBe(0);
+    expect(metrics.metamorphic.rate).toBe(0);
   });
 
   it('keeps metamorphic invariance independent from golden accuracy', () => {
@@ -197,6 +323,7 @@ describe('metamorphic case generator', () => {
       id: 'blank',
       studentAnswer: '',
       expectedExtraction: {
+        anchors: [],
         response: 'blank',
         terminology: 'model',
         syllabus: 'within',
@@ -208,11 +335,64 @@ describe('metamorphic case generator', () => {
       },
       expectedScore: 'unanswered',
       seriousMisjudgmentOpportunity: false,
+      metamorphicReview: {
+        reviewer: 'independent-reviewer',
+        status: 'approved',
+        variants: {
+          paraphrase: { status: 'not-applicable', rationale: 'Blank answer has no paraphrase.' },
+          noise: { status: 'not-applicable', rationale: 'Noise changes blank response semantics.' },
+          'rename-person': { status: 'not-applicable', rationale: 'Blank answer has no person.' },
+        },
+      },
     });
 
     const variants = generateMetamorphicVariants(blank);
 
-    expect(variants).toHaveLength(3);
-    expect(variants.every((variant) => variant.case.expectedScore === 'unanswered')).toBe(true);
+    expect(variants).toHaveLength(0);
+  });
+
+  it('skips equation whitespace and person no-ops so they never enter the denominator', () => {
+    const value = 'Zn + Cu^2+ -> Zn^2+ + Cu + e^-';
+    const equation = labeledCase({
+      id: 'equation-noops',
+      evaluationPath: 'equation',
+      questionRef: {
+        caseId: 'zinc-copper',
+        nodeId: 'P7',
+        equationSetId: 'zinc-copper-overall',
+      },
+      studentAnswer: value,
+      expectedExtraction: {
+        anchors: [],
+        response: 'substantive',
+        terminology: 'model',
+        syllabus: 'within',
+        contradiction: false,
+        typo: 'none',
+        errorIds: ['P7-M2'],
+        slots: [{ id: 'equation', value, evidenceQuote: value }],
+        evidenceQuotes: [value],
+      },
+      expectedScore: 'miss',
+      misconceptionIds: ['P7-M2'],
+      rationale: {
+        rubricRefs: ['p7-miss'],
+        adjudicationRefs: ['§1', '§9'],
+        text: 'The total equation retains an electron.',
+      },
+      metamorphicReview: {
+        reviewer: 'independent-reviewer',
+        status: 'approved',
+        variants: {
+          paraphrase: { status: 'approved', rationale: 'Arrow replacement is equivalent.' },
+          noise: { status: 'not-applicable', rationale: 'Whitespace is a parser no-op.' },
+          'rename-person': { status: 'not-applicable', rationale: 'No person occurs in an equation.' },
+        },
+      },
+    });
+
+    const variants = generateMetamorphicVariants(equation);
+    expect(variants.map((entry) => entry.variant)).toEqual(['paraphrase']);
+    expect(variants[0].semanticReview.reviewer).toBe('independent-reviewer');
   });
 });

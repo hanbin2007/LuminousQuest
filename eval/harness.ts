@@ -18,6 +18,7 @@ import type { LLMProvider } from '../server/llm/types';
 import { loadPrompt } from '../server/prompts/loader';
 import { runAssessmentExtraction } from '../server/workflows/assessment-extraction';
 import { computeEvalMetrics } from './metrics';
+import { inspectEvalCoverage } from './load';
 import { generateMetamorphicVariants } from './metamorphic';
 import {
   evalRecordingFile,
@@ -36,7 +37,7 @@ import {
   type LabeledEvalCase,
 } from './schema';
 
-export type EvalMode = 'mock' | 'replay' | 'live';
+export type EvalMode = 'mock' | 'replay' | 'live' | 'holdout';
 
 class MemoryCandidateWriter implements EvalCandidateWriter {
   readonly candidates: ExtractionEvalCandidate[] = [];
@@ -52,6 +53,14 @@ function canonicalExtraction(extraction: StructuredAssessmentResponse | null) {
   const assessment = extraction.assessments[0];
   if (!assessment) return null;
   return {
+    anchors: extraction.anchors
+      .map((anchor) => ({
+        anchorId: anchor.anchorId,
+        facts: anchor.facts
+          .map((fact) => ({ id: fact.id, value: fact.value }))
+          .sort((left, right) => left.id.localeCompare(right.id)),
+      }))
+      .sort((left, right) => left.anchorId.localeCompare(right.anchorId)),
     response: assessment.facts.response,
     terminology: assessment.facts.terminology,
     syllabus: assessment.facts.syllabus,
@@ -66,6 +75,14 @@ function canonicalExtraction(extraction: StructuredAssessmentResponse | null) {
 
 function expectedExtraction(evalCase: LabeledEvalCase) {
   return {
+    anchors: evalCase.expectedExtraction.anchors
+      .map((anchor) => ({
+        anchorId: anchor.anchorId,
+        facts: anchor.facts
+          .map((fact) => ({ id: fact.id, value: fact.value }))
+          .sort((left, right) => left.id.localeCompare(right.id)),
+      }))
+      .sort((left, right) => left.anchorId.localeCompare(right.anchorId)),
     response: evalCase.expectedExtraction.response,
     terminology: evalCase.expectedExtraction.terminology,
     syllabus: evalCase.expectedExtraction.syllabus,
@@ -125,7 +142,7 @@ function providerForRun(input: {
       input.model,
     ));
   }
-  if (input.mode === 'live') {
+  if (input.mode === 'live' || input.mode === 'holdout') {
     if (!input.liveProvider) throw new Error(`Live eval provider ${input.providerId} is not configured`);
     if (input.liveProvider.id !== input.providerId) {
       throw new Error(`Live eval provider id ${input.liveProvider.id} does not match ${input.providerId}`);
@@ -148,6 +165,8 @@ export interface EvalHarnessOptions {
   recordingsRoot?: string;
   runOverride?: number;
   includeMetamorphic?: boolean;
+  evaluationScope?: 'pilot' | 'full';
+  caseVisibility?: 'detailed' | 'aggregate-only';
   now?: () => Date;
 }
 
@@ -192,6 +211,11 @@ export async function runEvalHarness(options: EvalHarnessOptions) {
       });
       const predictedScore = outcomeFromRecorded(recorded.session, evalCase.questionRef.nodeId);
       const equationSlot = evalCase.expectedExtraction.slots.find((slot) => slot.id === 'equation');
+      const nodeDecision = recorded.assessment.nodeDecisions.find((entry) =>
+        entry.nodeId === evalCase.questionRef.nodeId);
+      const expectedErrorIds = [...evalCase.expectedExtraction.errorIds].sort();
+      const predictedErrorIds = [...(nodeDecision?.errorIds ?? [])].sort();
+      const errorIdsExact = JSON.stringify(predictedErrorIds) === JSON.stringify(expectedErrorIds);
       observations.push(evalObservationSchema.parse({
         caseId: evalCase.id,
         nodeId: evalCase.questionRef.nodeId,
@@ -199,8 +223,17 @@ export async function runEvalHarness(options: EvalHarnessOptions) {
         iteration,
         expectedScore: evalCase.expectedScore,
         predictedScore,
-        extractionExact: equationSlot?.value.trim() === evalCase.studentAnswer.trim(),
-        resultSignature: JSON.stringify({ predictedScore, engine: recorded.assessment.ruleId }),
+        expectedErrorIds,
+        predictedErrorIds,
+        errorIdsExact,
+        extractionAttempted: true,
+        extractionExact:
+          equationSlot?.value.trim() === evalCase.studentAnswer.trim() && errorIdsExact,
+        resultSignature: JSON.stringify({
+          predictedScore,
+          predictedErrorIds,
+          engine: recorded.assessment.ruleId,
+        }),
         source: 'deterministic-engine',
         latencyMs: performance.now() - started,
         inputTokens: 0,
@@ -208,6 +241,7 @@ export async function runEvalHarness(options: EvalHarnessOptions) {
         estimatedCostUsd: estimatedCost(0, 0, options.config.pricing),
         citationHallucination: false,
         schemaFailure: false,
+        closedSetFailure: false,
       }));
       return;
     }
@@ -248,7 +282,6 @@ export async function runEvalHarness(options: EvalHarnessOptions) {
       executionMode: 'live',
       provider: tracking.id,
       model: options.model,
-      temperature: options.config.temperature,
       logger: { warn() {} },
     });
     const latencyMs = performance.now() - started;
@@ -296,9 +329,13 @@ export async function runEvalHarness(options: EvalHarnessOptions) {
         });
     const predictedScore = outcomeFromRecorded(recorded.session, evalCase.questionRef.nodeId);
     const actualExtraction = result.status === 'extracted' ? canonicalExtraction(result.extraction) : null;
-    const extractionExact = actualExtraction === null
-      ? null
-      : JSON.stringify(actualExtraction) === JSON.stringify(expectedExtraction(evalCase));
+    const extractionAttempted = actualExtraction !== null;
+    const extractionExact = actualExtraction !== null
+      && JSON.stringify(actualExtraction) === JSON.stringify(expectedExtraction(evalCase));
+    const expectedErrorIds = [...evalCase.expectedExtraction.errorIds].sort();
+    const predictedErrorIds = actualExtraction?.errorIds ?? [];
+    const errorIdsExact = actualExtraction !== null
+      && JSON.stringify(predictedErrorIds) === JSON.stringify(expectedErrorIds);
     const inputTokens = tracking.responses.reduce(
       (sum, response) => sum + (response.usage?.inputTokens ?? 0),
       0,
@@ -315,6 +352,10 @@ export async function runEvalHarness(options: EvalHarnessOptions) {
       iteration,
       expectedScore: evalCase.expectedScore,
       predictedScore,
+      expectedErrorIds,
+      predictedErrorIds,
+      errorIdsExact,
+      extractionAttempted,
       extractionExact,
       resultSignature: JSON.stringify({
         predictedScore,
@@ -331,10 +372,11 @@ export async function runEvalHarness(options: EvalHarnessOptions) {
         candidate.category === 'citation-mismatch'
         || candidate.category === 'normalization-insufficient'),
       schemaFailure: schemaFailure(failureReason),
+      closedSetFailure: failureReason === 'closed-set',
     });
     observations.push(observation);
 
-    if (options.mode === 'live' && recordingFile) {
+    if ((options.mode === 'live' || options.mode === 'holdout') && recordingFile) {
       const saved = await saveEvalRecording({
         file: recordingFile,
         evalCase,
@@ -342,7 +384,7 @@ export async function runEvalHarness(options: EvalHarnessOptions) {
         iteration,
         providerId: options.providerId,
         model: options.model,
-        temperature: options.config.temperature,
+        temperature: productionConfig.scaffoldPolicy.extraction.temperature,
         requests: tracking.requests,
         responses: tracking.responses,
         ...(options.now ? { now: options.now } : {}),
@@ -369,10 +411,42 @@ export async function runEvalHarness(options: EvalHarnessOptions) {
     }
   }
 
-  const metrics = computeEvalMetrics({ cases: options.cases, observations, config: options.config });
+  const evaluationScope = options.evaluationScope ?? 'full';
+  const coverage = inspectEvalCoverage({
+    cases: options.cases,
+    productionConfig,
+  });
+  const metrics = computeEvalMetrics({
+    cases: options.cases,
+    observations,
+    config: options.config,
+    mode: options.mode,
+    evaluationScope,
+    coverage,
+  });
+  const harnessSelfCheck = {
+    passed: observations.filter((entry) => entry.variant === 'base').length > 0
+      && metrics.unobservedCaseIds.length === 0
+      && metrics.unknownObservationCaseIds.length === 0
+      && metrics.schemaFailures === 0
+      && metrics.extraction.expected === metrics.extraction.attempted
+      && metrics.extraction.expected === metrics.extraction.exact
+      && metrics.diagnostics.expected === metrics.diagnostics.exact
+      && metrics.scoreConsistency.rate === 1
+      && metrics.outputConsistency.rate === 1,
+  };
+  const pilotCheck = {
+    passed: evaluationScope === 'pilot'
+      && metrics.closedSetComplianceRate >= options.config.live.minimumClosedSetComplianceRate
+      && metrics.schemaFailureRate <= options.config.thresholds.schemaFailureRate
+      && metrics.runCount > 0,
+  };
   return {
     observations,
     metrics,
+    coverage,
+    harnessSelfCheck,
+    pilotCheck,
     recordingFiles,
     metadata: {
       generatedAt: (options.now?.() ?? new Date()).toISOString(),
@@ -382,7 +456,12 @@ export async function runEvalHarness(options: EvalHarnessOptions) {
       prompt: { id: prompt.id, version: prompt.version },
       configVersion: productionConfig.configVersion,
       rubricVersion: productionConfig.rubrics.version,
-      temperature: options.config.temperature,
+      temperature: productionConfig.scaffoldPolicy.extraction.temperature,
+      corpusStage: options.config.corpus.stage,
+      evaluationScope,
+      caseVisibility: options.caseVisibility ?? 'detailed',
+      harnessSelfCheckPassed: harnessSelfCheck.passed,
+      qualityGateEligible: metrics.qualityGateEligible,
       cases: options.cases.length,
       baseRuns: observations.filter((entry) => entry.variant === 'base').length,
       metamorphicRuns: observations.filter((entry) => entry.variant !== 'base').length,

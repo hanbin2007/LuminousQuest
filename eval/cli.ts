@@ -7,15 +7,32 @@ import { pathToFileURL } from 'node:url';
 import { createProviderRegistry } from '../server/llm/providers';
 import type { LLMProvider } from '../server/llm/types';
 import { runEvalHarness, type EvalMode } from './harness';
-import { loadEvalCases, loadEvalConfig, validateEvalCoverage } from './load';
+import {
+  assertEvalSetIsolation,
+  loadEvalCases,
+  loadEvalConfig,
+  loadHoldoutEvalCases,
+} from './load';
 import { renderEvalMarkdownReport } from './report';
-import { loadAllConfig } from '../server/config/loader';
+import type { LabeledEvalCase } from './schema';
 
 const keyByProvider: Record<string, string> = {
   deepseek: 'DEEPSEEK_API_KEY',
   tongyi: 'TONGYI_API_KEY',
   zhipu: 'ZHIPU_API_KEY',
 };
+
+export function selectEvalCasesForRun(input: {
+  mode: EvalMode;
+  liveStage: 'pilot' | 'full';
+  cases: readonly LabeledEvalCase[];
+  pilotCases: number;
+}) {
+  if (input.mode !== 'live' || input.liveStage !== 'pilot') return [...input.cases];
+  return input.cases
+    .filter((evalCase) => evalCase.evaluationPath === 'structured-assessment')
+    .slice(0, input.pilotCases);
+}
 
 export class WaitingForApiKeyError extends Error {
   constructor(message: string) {
@@ -56,11 +73,17 @@ function parseArguments(argv: readonly string[]) {
     values.set(name, value);
   }
   const mode = values.get('--mode') ?? 'mock';
-  if (!['mock', 'replay', 'live'].includes(mode)) throw new Error(`Unknown eval mode ${mode}`);
+  if (!['mock', 'replay', 'live', 'holdout'].includes(mode)) {
+    throw new Error(`Unknown eval mode ${mode}`);
+  }
   const runsText = values.get('--runs');
   const runs = runsText === undefined ? undefined : Number(runsText);
   if (runs !== undefined && (!Number.isInteger(runs) || runs < 1 || runs > 20)) {
     throw new Error('--runs must be an integer from 1 to 20');
+  }
+  const liveStage = values.get('--live-stage') ?? 'pilot';
+  if (!['pilot', 'full'].includes(liveStage)) {
+    throw new Error('--live-stage must be pilot or full');
   }
   return {
     mode: mode as EvalMode,
@@ -69,6 +92,7 @@ function parseArguments(argv: readonly string[]) {
     report: values.get('--report'),
     recordings: values.get('--recordings'),
     runs,
+    liveStage: liveStage as 'pilot' | 'full',
   };
 }
 
@@ -84,37 +108,71 @@ export async function runEvalCli(input: {
   const output = input.output ?? console;
   try {
     const args = parseArguments(argv);
-    const [cases, evalConfig, productionConfig] = await Promise.all([
+    const [trainCases, holdoutCases, evalConfig] = await Promise.all([
       loadEvalCases({ contentRoot }),
+      loadHoldoutEvalCases({ contentRoot }),
       loadEvalConfig(contentRoot),
-      loadAllConfig(contentRoot),
     ]);
-    validateEvalCoverage({ cases, evalConfig, productionConfig });
+    assertEvalSetIsolation({ train: trainCases, holdout: holdoutCases });
+    const selectedCases = args.mode === 'holdout' ? holdoutCases : trainCases;
+    if (selectedCases.length === 0) {
+      throw new Error(args.mode === 'holdout'
+        ? 'Holdout manifest has no declared cases'
+        : 'Eval corpus has no labeled cases');
+    }
+    const evaluationScope = args.mode === 'live' ? args.liveStage : 'full';
+    const cases = selectEvalCasesForRun({
+      mode: args.mode,
+      liveStage: args.liveStage,
+      cases: selectedCases,
+      pilotCases: evalConfig.live.pilotCases,
+    });
     const providerId = args.provider ?? environment.LQ_EVAL_PROVIDER ?? evalConfig.live.provider;
     const model = args.model ?? environment.LQ_EVAL_MODEL ?? evalConfig.live.model;
-    const live = args.mode === 'live'
+    const usesLiveProvider = args.mode === 'live' || args.mode === 'holdout';
+    const live = usesLiveProvider
       ? resolveLiveEvalProvider({ providerId, model, environment })
       : null;
     const recordingsRoot = args.recordings
       ?? path.join(contentRoot, 'eval', 'recordings');
+    const harnessMode: EvalMode = args.mode === 'holdout' ? 'live' : args.mode;
     const result = await runEvalHarness({
       contentRoot,
       cases,
       config: evalConfig,
-      mode: args.mode,
-      providerId: args.mode === 'mock' ? 'eval-mock' : providerId,
-      model: args.mode === 'mock' ? 'eval-mock-v1' : model,
+      mode: harnessMode,
+      providerId: harnessMode === 'mock' ? 'eval-mock' : providerId,
+      model: harnessMode === 'mock' ? 'eval-mock-v1' : model,
       ...(live ? { provider: live.provider } : {}),
       recordingsRoot,
+      evaluationScope,
+      caseVisibility: args.mode === 'holdout' ? 'aggregate-only' : 'detailed',
       ...(args.runs ? { runOverride: args.runs } : {}),
     });
-    const report = renderEvalMarkdownReport({ metrics: result.metrics, metadata: result.metadata });
+    const report = renderEvalMarkdownReport({
+      metrics: result.metrics,
+      metadata: { ...result.metadata, mode: args.mode },
+    });
     const reportFile = args.report
       ?? path.join(contentRoot, 'eval', 'reports', `latest-${args.mode}.md`);
     await mkdir(path.dirname(reportFile), { recursive: true });
     await writeFile(reportFile, report, 'utf8');
+    if (args.mode === 'mock') {
+      output.log(
+        `M1c eval self-check ${result.harnessSelfCheck.passed ? 'PASS' : 'FAIL'} (not quality gate): `
+        + `${result.metrics.caseCount} cases, report=${reportFile}`,
+      );
+      return result.harnessSelfCheck.passed ? 0 : 1;
+    }
+    if (evaluationScope === 'pilot') {
+      output.log(
+        `M1c eval closed-set pilot ${result.pilotCheck.passed ? 'PASS' : 'FAIL'} (not full quality gate): `
+        + `${result.metrics.caseCount} cases, report=${reportFile}`,
+      );
+      return result.pilotCheck.passed ? 0 : 1;
+    }
     output.log(
-      `M1c eval ${result.metrics.passed ? 'PASS' : 'FAIL'}: `
+      `M1c eval quality gate ${result.metrics.passed ? 'PASS' : 'FAIL'}: `
       + `${result.metrics.caseCount} cases, macro=${(result.metrics.nodeMacroAccuracy * 100).toFixed(2)}%, `
       + `report=${reportFile}`,
     );

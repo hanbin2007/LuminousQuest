@@ -103,7 +103,15 @@ function evidence(answer: string, quote: string) {
 export function goldenResponse(evalCase: LabeledEvalCase, model: string): LLMResponse {
   const expected = evalCase.expectedExtraction;
   const structured = {
-    anchors: [],
+    anchors: expected.anchors.map((anchor) => ({
+      anchorId: anchor.anchorId,
+      facts: anchor.facts.map((fact) => ({
+        id: fact.id,
+        value: fact.value,
+        evidence: evidence(evalCase.studentAnswer, fact.evidenceQuote),
+      })),
+      evidence: anchor.evidenceQuotes.map((quote) => evidence(evalCase.studentAnswer, quote)),
+    })),
     assessments: [{
       nodeId: evalCase.questionRef.nodeId,
       errorIds: expected.errorIds,
@@ -254,4 +262,3 @@ export async function saveEvalRecording(input: {
   }
   return input.file;
 }
-

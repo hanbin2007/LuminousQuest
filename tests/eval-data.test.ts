@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
@@ -6,10 +7,15 @@ import { describe, expect, it } from 'vitest';
 import {
   resolveLiveEvalProvider,
   runEvalCli,
+  selectEvalCasesForRun,
   WaitingForApiKeyError,
 } from '../eval/cli';
 import { importEvalCandidates } from '../eval/import-candidates';
 import {
+  assertEvalSetIsolation,
+  EVAL_COVERAGE_REQUIREMENTS,
+  inspectEvalCoverage,
+  loadHoldoutEvalCases,
   loadEvalConfig,
   loadEvalCases,
   validateEvalCoverage,
@@ -25,18 +31,24 @@ describe('eval golden data', () => {
       loadEvalConfig(process.cwd()),
       loadAllConfig(process.cwd()),
     ]);
-    const coverage = validateEvalCoverage({
+    const coverage = inspectEvalCoverage({
       cases,
-      evalConfig,
       productionConfig,
     });
 
-    expect(cases.length).toBeGreaterThanOrEqual(48);
+    expect(cases.length).toBeGreaterThanOrEqual(50);
     expect(cases.every((evalCase) => evalCase.source === 'synthetic')).toBe(true);
-    expect(coverage.complete).toBe(true);
+    expect(cases.every((evalCase) =>
+      evalCase.reviewStatus === 'reviewed'
+      && evalCase.annotator !== evalCase.reviewer
+      && evalCase.expectedDisagreement === false
+      && evalCase.rationale.rubricRefs.length > 0
+      && evalCase.rationale.adjudicationRefs.length > 0)).toBe(true);
+    expect(evalConfig.corpus.stage).toBe('seed');
+    expect(coverage.complete).toBe(false);
+    expect(coverage.requirements).toEqual(EVAL_COVERAGE_REQUIREMENTS);
+    expect(() => validateEvalCoverage({ cases, productionConfig })).toThrow(/150/);
     expect(coverage.excludedDeterministicNodeIds).toEqual([]);
-    expect(Object.values(coverage.casesPerNode).every((count) => count >= 2)).toBe(true);
-    expect(Object.values(coverage.casesPerMisconception).every((count) => count >= 1)).toBe(true);
     const tags = new Set(cases.flatMap((evalCase) => evalCase.tags));
     for (const boundary of [
       'blank',
@@ -48,6 +60,98 @@ describe('eval golden data', () => {
       'contradiction',
       'beyond-syllabus-correct',
     ]) expect(tags.has(boundary)).toBe(true);
+    expect(cases.find((entry) => entry.id === 'synthetic-e1-m2-stored-electricity'))
+      .toMatchObject({ expectedScore: 'miss', expectedExtraction: { slots: [] } });
+    expect(cases.filter((entry) => entry.tags.includes('following-error'))).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          questionRef: expect.objectContaining({ nodeId: 'P4' }),
+          expectedScore: 'hit',
+          expectedExtraction: expect.objectContaining({ anchors: expect.any(Array) }),
+        }),
+        expect.objectContaining({
+          questionRef: expect.objectContaining({ nodeId: 'P5' }),
+          expectedScore: 'hit',
+          expectedExtraction: expect.objectContaining({ anchors: expect.any(Array) }),
+        }),
+      ]),
+    );
+    expect(cases.filter((entry) => entry.evaluationPath === 'equation').every((entry) =>
+      entry.expectedExtraction.errorIds.length > 0)).toBe(true);
+    expect(selectEvalCasesForRun({
+      mode: 'live',
+      liveStage: 'pilot',
+      cases,
+      pilotCases: evalConfig.live.pilotCases,
+    })).toHaveLength(5);
+    expect(selectEvalCasesForRun({
+      mode: 'live',
+      liveStage: 'full',
+      cases,
+      pilotCases: evalConfig.live.pilotCases,
+    })).toHaveLength(cases.length);
+  });
+
+  it('loads holdout only through its hash manifest and rejects train/holdout duplicates', async () => {
+    const root = await createTemporaryDirectory();
+    const trainDirectory = path.join(root, 'eval', 'cases', 'synthetic');
+    const holdoutDirectory = path.join(root, 'eval', 'holdout');
+    const holdoutCasesDirectory = path.join(holdoutDirectory, 'cases');
+    await Promise.all([
+      mkdir(trainDirectory, { recursive: true }),
+      mkdir(holdoutCasesDirectory, { recursive: true }),
+    ]);
+    const seed = JSON.parse(await readFile(
+      path.join(process.cwd(), 'eval', 'cases', 'synthetic', 'seed.json'),
+      'utf8',
+    )) as Array<Record<string, unknown>>;
+    await writeFile(path.join(trainDirectory, 'train.json'), JSON.stringify(seed[0]));
+    const holdoutSource = `${JSON.stringify(seed[1], null, 2)}\n`;
+    await writeFile(path.join(holdoutCasesDirectory, 'holdout.json'), holdoutSource);
+    await writeFile(path.join(holdoutDirectory, 'manifest.json'), JSON.stringify({
+      version: 'eval-holdout-manifest.v1',
+      files: [{
+        path: 'cases/holdout.json',
+        sha256: createHash('sha256').update(holdoutSource).digest('hex'),
+      }],
+    }));
+
+    const train = await loadEvalCases({ contentRoot: root });
+    const holdout = await loadHoldoutEvalCases({ contentRoot: root });
+    expect(train).toHaveLength(1);
+    expect(holdout).toHaveLength(1);
+    expect(assertEvalSetIsolation({ train, holdout })).toMatchObject({ isolated: true });
+    expect(() => assertEvalSetIsolation({ train, holdout: [train[0]] })).toThrow(/id duplicates/i);
+    expect(() => assertEvalSetIsolation({
+      train,
+      holdout: [{ ...train[0], id: 'different-id' }],
+    })).toThrow(/duplicates training content/i);
+
+    await writeFile(path.join(holdoutCasesDirectory, 'holdout.json'), `${holdoutSource} `);
+    await expect(loadHoldoutEvalCases({ contentRoot: root })).rejects.toThrow(/content hash/i);
+    await expect(loadEvalCases({
+      contentRoot: root,
+      casesDirectory: holdoutCasesDirectory,
+    })).rejects.toThrow(/dedicated holdout loader/i);
+  });
+
+  it('rejects undeclared holdout cases even when the manifest is empty', async () => {
+    const root = await createTemporaryDirectory();
+    const holdoutDirectory = path.join(root, 'eval', 'holdout');
+    const holdoutCasesDirectory = path.join(holdoutDirectory, 'cases');
+    await mkdir(holdoutCasesDirectory, { recursive: true });
+    const seed = JSON.parse(await readFile(
+      path.join(process.cwd(), 'eval', 'cases', 'synthetic', 'seed.json'),
+      'utf8',
+    )) as unknown[];
+    await writeFile(path.join(holdoutCasesDirectory, 'undeclared.json'), JSON.stringify(seed[0]));
+    await writeFile(path.join(holdoutDirectory, 'manifest.json'), JSON.stringify({
+      version: 'eval-holdout-manifest.v1',
+      files: [],
+    }));
+
+    await expect(loadHoldoutEvalCases({ contentRoot: root }))
+      .rejects.toThrow(/absent from the hash manifest/i);
   });
 
   it('loads object or array files recursively and rejects duplicate ids', async () => {
