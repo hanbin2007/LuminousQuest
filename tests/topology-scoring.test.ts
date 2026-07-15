@@ -103,6 +103,23 @@ describe('builder topology scoring', () => {
     expect(result.nodeDecisions.find((decision) => decision.nodeId === 'D5')?.status).toBe('partial');
   });
 
+  it('recognizes both Latin and Chinese concrete material labels', async () => {
+    const graph = completeGraph();
+    graph.components = graph.components.map((component) =>
+      component.instanceId === 'negative' ? { ...component, label: '锌电极' } : component,
+    );
+
+    expect(assessBuilderTopology(graph, await builderConfig()).checks.abstraction.status)
+      .toBe('partial');
+  });
+
+  it('allows non-functional layout components without assigning a knowledge role', async () => {
+    const graph = completeGraph();
+    graph.components.push({ instanceId: 'beaker', componentId: 'container' });
+
+    expect(assessBuilderTopology(graph, await builderConfig()).overall).toBe('hit');
+  });
+
   it('marks duplicate functional roles as ambiguous instead of silently choosing one', async () => {
     const graph = completeGraph();
     graph.components.push({ instanceId: 'negative-2', componentId: 'site-a' });
@@ -175,5 +192,46 @@ describe('builder topology scoring', () => {
 
     const config = await builderConfig();
     expect(() => assessBuilderTopology(graph, config)).toThrow(/missing-instance/);
+  });
+
+  it('rejects duplicate or unknown graph components and duplicate connections', async () => {
+    const config = await builderConfig();
+    const duplicateInstance = completeGraph();
+    duplicateInstance.components.push({ instanceId: 'negative', componentId: 'site-b' });
+    expect(() => assessBuilderTopology(duplicateInstance, config)).toThrow(/Duplicate builder instance/);
+
+    const unknownComponent = completeGraph();
+    unknownComponent.components[0] = { instanceId: 'negative', componentId: 'unknown-component' };
+    expect(() => assessBuilderTopology(unknownComponent, config)).toThrow(/Unknown builder component/);
+
+    const duplicateConnection = completeGraph();
+    duplicateConnection.connections.push({
+      id: 'e1',
+      from: 'negative',
+      to: 'positive',
+      kind: 'electron-path',
+      carrier: 'electron',
+    });
+    expect(() => assessBuilderTopology(duplicateConnection, config)).toThrow(/Duplicate builder connection/);
+  });
+
+  it('rejects carrier labels placed on the wrong path kind', async () => {
+    const config = await builderConfig();
+    const electronOnIonPath = completeGraph();
+    electronOnIonPath.connections[0] = {
+      ...electronOnIonPath.connections[0],
+      kind: 'ion-path',
+    };
+    expect(() => assessBuilderTopology(electronOnIonPath, config)).toThrow(/must use electron-path/);
+
+    for (const carrier of ['cation', 'anion'] as const) {
+      const ionOnElectronPath = completeGraph();
+      ionOnElectronPath.connections[2] = {
+        ...ionOnElectronPath.connections[2],
+        kind: 'electron-path',
+        carrier,
+      };
+      expect(() => assessBuilderTopology(ionOnElectronPath, config)).toThrow(/must use ion-path/);
+    }
   });
 });

@@ -33,6 +33,14 @@ describe('electrode equation grammar and scoring', () => {
     expect(tokens.every((token) => token.end > token.start)).toBe(true);
   });
 
+  it('normalizes positive and negative superscript charge forms and rejects unknown tokens', () => {
+    expect(parseEquation('SO4²⁻ + 2H⁺ -> H2SO4').reactants).toMatchObject([
+      { formula: 'SO4', charge: -2 },
+      { formula: 'H', charge: 1 },
+    ]);
+    expect(() => tokenizeEquation('Zn @ Cu')).toThrow(/Unsupported token/);
+  });
+
   it('parses nested groups, implicit monatomic charges, polyatomic +1 charges, and optional states', () => {
     const aluminum = parseEquation('Al + 4OH^- -> [Al(OH)4]^- + 3e^-');
     const ammonium = parseEquation('NH4+ -> NH3 + H+');
@@ -56,6 +64,30 @@ describe('electrode equation grammar and scoring', () => {
     }
   });
 
+  it.each([
+    ['Zn Zn^2+', /requires one arrow/],
+    ['Zn -> Zn^2+ -> Zn', /multiple arrows/],
+    ['Zn) -> Zn', /Unexpected closing group/],
+    ['(Zn -> Zn', /Unclosed formula group/],
+    ['0Zn -> Zn', /Coefficient must be positive/],
+    ['H0 -> H', /Subscript must be positive/],
+    ['(OH)0 -> OH^-', /Subscript must be positive/],
+    ['Zn^0+ -> Zn', /Charge magnitude must be positive/],
+    ['^+ -> H^+', /Species formula is missing/],
+  ])('fails explicitly for malformed grammar %s', (source, message) => {
+    expect(() => parseEquation(source)).toThrow(message);
+  });
+
+  it('parses compact separators, repeated charge-plus syntax, and optional electron states', () => {
+    expect(parseEquation('Zn+Cu^2+->Zn^2++Cu').reactants).toHaveLength(2);
+    expect(() => parseEquation('H++ + e^- -> H')).toThrow(/Missing species/);
+    expect(parseEquation('e^-(aq) -> e^-').reactants[0]).toMatchObject({
+      electron: true,
+      state: 'aq',
+    });
+    expect(parseEquation('Cl- -> Cl + e^-').reactants[0].charge).toBe(-1);
+  });
+
   it('canonicalizes order, whole-equation multiples, arrow style, Unicode, and states equally', () => {
     const expected = canonicalizeEquation('Cu^2+ + 2e^- -> Cu');
     const variants = [
@@ -68,6 +100,13 @@ describe('electrode equation grammar and scoring', () => {
       expect(canonicalizeEquation(variant)).toBe(expected);
     }
     expect(canonicalizeEquation('Cu -> Cu^2+ + 2e^-')).not.toBe(expected);
+  });
+
+  it('uses carbon-first formula ordering and cancels identical species on both sides', () => {
+    expect(canonicalizeEquation('CH4 + O2 -> CO2 + H2O')).toContain('C:1,H:4');
+    expect(canonicalizeEquation('CO2 -> CO2')).toBe(' -> ');
+    expect(canonicalizeEquation('Zn + H2O -> Zn^2+ + H2O + 2e^-'))
+      .toBe(canonicalizeEquation('Zn -> Zn^2+ + 2e^-'));
   });
 
   it('checks atom, charge, and expected electron-side conservation independently', () => {
@@ -117,6 +156,23 @@ describe('electrode equation grammar and scoring', () => {
       medium: { matches: false, forbiddenSpecies: ['H^+'] },
       valid: false,
     });
+  });
+
+  it('rejects alkaline and aqueous balancing species in acidic and molten media', () => {
+    const acidic = analyzeEquation('O2 + 2H2O + 4e^- -> 4OH^-', {
+      kind: 'half',
+      medium: 'acidic',
+      expectedElectronSide: 'reactant',
+    });
+    const molten = analyzeEquation('H^+ + OH^- -> H2O', {
+      kind: 'overall',
+      medium: 'molten',
+      expectedElectronSide: 'none',
+    });
+
+    expect(acidic.status === 'parsed' && acidic.medium.forbiddenSpecies).toEqual(['OH^-']);
+    expect(molten.status === 'parsed' && molten.medium.forbiddenSpecies)
+      .toEqual(['H^+', 'H2O', 'OH^-']);
   });
 
   it('accepts both frozen alkaline aluminum-air negative-electrode forms', async () => {
@@ -183,6 +239,27 @@ describe('electrode equation grammar and scoring', () => {
     expect(invalid.status === 'parsed' && invalid.conservation.electrons.balanced).toBe(false);
   });
 
+  it('scores a configured total equation against P7 and recognizes electrons on both sides', () => {
+    const total = scoreEquation('Zn + Cu^2+ -> Zn^2+ + Cu', {
+      id: 'zinc-total',
+      electrode: 'overall',
+      medium: 'neutral',
+      expectedElectronSide: 'none',
+      accepted: ['Zn + Cu^2+ -> Zn^2+ + Cu'],
+    });
+    const both = analyzeEquation('e^- + Zn -> Zn^2+ + 3e^-', {
+      kind: 'half',
+      medium: 'neutral',
+      expectedElectronSide: 'product',
+    });
+
+    expect(total).toMatchObject({
+      outcome: 'hit',
+      nodeDecisions: expect.arrayContaining([expect.objectContaining({ nodeId: 'P7' })]),
+    });
+    expect(both.status === 'parsed' && both.conservation.electrons.actualSide).toBe('both');
+  });
+
   it('validates paired electron counts and reports the least multipliers needed', () => {
     const zincCopper = validateHalfReactionPair(
       'Zn -> Zn^2+ + 2e^-',
@@ -198,6 +275,18 @@ describe('electrode equation grammar and scoring', () => {
       balanced: false,
       electronCount: 4,
       multipliers: [2, 1],
+    });
+  });
+
+  it('fails paired half reactions on either parse error and returns zero without electrons', () => {
+    expect(() => validateHalfReactionPair('Zn + -> Zn^2+', 'Cu^2+ + 2e^- -> Cu'))
+      .toThrow(EquationParseError);
+    expect(() => validateHalfReactionPair('Zn -> Zn^2+ + 2e^-', 'Cu^2+ + -> Cu'))
+      .toThrow(EquationParseError);
+    expect(validateHalfReactionPair('Zn -> Zn^2+', 'Cu^2+ -> Cu')).toEqual({
+      balanced: false,
+      electronCount: 0,
+      multipliers: [0, 0],
     });
   });
 

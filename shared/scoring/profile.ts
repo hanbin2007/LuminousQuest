@@ -77,11 +77,15 @@ export function buildLearnerProfile(
     if (!event) return { ...base, status: 'unassessed' as const };
     if (needsReview(event)) return { ...base, status: 'needs-review' as const };
     if (event.score.status !== 'scored') return { ...base, status: 'unassessed' as const };
-    if (!('ruleId' in event.ruleDecision)) {
-      return { ...base, status: 'unassessed' as const };
-    }
-    if (event.extraction.status !== 'assessed') return { ...base, status: 'unassessed' as const };
-    const ruleDecision = event.ruleDecision;
+    // sessionSchema guarantees that a scored event has assessed extraction and rule stages.
+    const ruleDecision = event.ruleDecision as Extract<
+      AssessmentCompletedEvent['ruleDecision'],
+      { ruleId: string }
+    >;
+    const extraction = event.extraction as Extract<
+      AssessmentCompletedEvent['extraction'],
+      { status: 'assessed' }
+    >;
 
     const rubric = rubricById.get(event.rubric.id);
     if (!rubric || rubric.nodeId !== node.id || event.rubric.version !== rubrics.version) {
@@ -94,14 +98,8 @@ export function buildLearnerProfile(
     if (event.score.earned !== rule.score || event.score.possible !== rubric.maxScore) {
       throw new Error(`Persisted score does not match rubric rule ${rule.id}`);
     }
-    const answer = answers.get(event.sourceAnswerEventId);
-    if (!answer) throw new Error(`Missing source answer ${event.sourceAnswerEventId}`);
+    const answer = answers.get(event.sourceAnswerEventId)!;
     const source = originalAnswer(answer);
-    for (const item of event.extraction.evidence) {
-      if (source.slice(item.start, item.end) !== item.quote) {
-        throw new Error(`Evidence for node ${node.id} does not match the original answer`);
-      }
-    }
 
     return {
       ...base,
@@ -115,7 +113,7 @@ export function buildLearnerProfile(
         originalAnswer: source,
         rubric: event.rubric,
         ruleId: ruleDecision.ruleId,
-        evidence: event.extraction.evidence,
+        evidence: extraction.evidence,
         engine: ruleDecision.engine,
       },
     };

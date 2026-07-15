@@ -18,5 +18,19 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['tests/**/*.test.ts'],
+    coverage: {
+      provider: 'v8',
+      include: [
+        'shared/chemistry/equation.ts',
+        'shared/scoring/**/*.ts',
+        'shared/workflows/**/*.ts',
+      ],
+      thresholds: {
+        branches: 90,
+        functions: 90,
+        lines: 90,
+        statements: 90,
+      },
+    },
   },
 });

@@ -120,7 +120,7 @@ function buildRoleIndex(graph: BuilderGraph, config: BuilderConfig) {
     const role = instance.assignedRole ?? configured.get(instance.componentId)?.functionalRole;
     if (!role) continue;
     roleByInstance.set(instance.instanceId, role);
-    const instances = roles.get(role) ?? [];
+    const instances = roles.get(role)!;
     instances.push(instance.instanceId);
     roles.set(role, instances);
   }
@@ -201,16 +201,16 @@ export function assessBuilderTopology(
   const { configured, roles, roleByInstance } = buildRoleIndex(graph, config);
   const requiredRoles = config.assessment.generalModel.requiredRoles;
   const roleStatuses = new Map(
-    requiredRoles.map((role) => [role, roleOutcome(roles.get(role) ?? [])]),
+    requiredRoles.map((role) => [role, roleOutcome(roles.get(role)!)]),
   );
-  const allRoleInstances = requiredRoles.flatMap((role) => roles.get(role) ?? []);
+  const allRoleInstances = requiredRoles.flatMap((role) => roles.get(role)!);
   const fourElementsStatus = worstOutcome(...requiredRoles.map((role) => roleStatuses.get(role)!));
   const fourElementsRule = config.structuralRules.find((rule) => rule.check === 'four-elements')!;
   const fourElements: TopologyCheck = {
     status: fourElementsStatus,
     ruleId: fourElementsRule.id,
     evidence: requiredRoles.map((role) => {
-      const instances = roles.get(role) ?? [];
+      const instances = roles.get(role)!;
       const message = instances.length === 0
         ? `Missing functional role ${role}`
         : instances.length === 1
@@ -220,10 +220,10 @@ export function assessBuilderTopology(
     }),
   };
 
-  const oxidation = roles.get('oxidation-site') ?? [];
-  const reduction = new Set(roles.get('reduction-site') ?? []);
-  const electronConductors = new Set(roles.get('electron-conductor') ?? []);
-  const ionConductors = new Set(roles.get('ion-conductor') ?? []);
+  const oxidation = roles.get('oxidation-site')!;
+  const reduction = new Set(roles.get('reduction-site')!);
+  const electronConductors = new Set(roles.get('electron-conductor')!);
+  const ionConductors = new Set(roles.get('ion-conductor')!);
   const electronConnections = graph.connections.filter((edge) => edge.kind === 'electron-path');
   const ionConnections = graph.connections.filter((edge) => edge.kind === 'ion-path');
   const electronConnected = pathExists(

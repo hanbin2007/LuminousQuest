@@ -8,6 +8,7 @@ import type { LLMRequest } from '../server/llm/types';
 import {
   recordStructuredTextAssessment,
   structuredAssessmentResponseJsonSchema,
+  structuredAssessmentResponseSchema,
 } from '../shared/workflows/assessment';
 import { LocalSessionStore, createSession } from '../shared/session';
 import { createTemporaryDirectory } from './helpers/content-fixture';
@@ -151,5 +152,55 @@ describe('zinc-copper M1a vertical slice', () => {
       degraded: false,
       response: { structured: extracted },
     });
+  });
+
+  it('rejects duplicate or unconfigured node assessments before persisting them', async () => {
+    const assessment = {
+      nodeId: 'P2',
+      logicalOutcome: 'hit' as const,
+      objectiveOutcome: 'hit' as const,
+      evidence: [{ quote: 'Zn', start: 0, end: 2 }],
+      assistance: 'none' as const,
+    };
+    expect(structuredAssessmentResponseSchema.safeParse({
+      assessments: [assessment, assessment],
+    }).success).toBe(false);
+
+    const config = await loadAllConfig(process.cwd());
+    const session = createSession({
+      id: 'session-invalid-extraction',
+      anonymousStudentId: 'anon-A1B2C3D4',
+      now: '2026-07-15T12:00:00.000Z',
+      configVersions: {
+        knowledgeModel: config.knowledgeModel.version,
+        rubrics: config.rubrics.version,
+        pretest: config.pretest.version,
+        scaffoldPolicy: config.scaffoldPolicy.version,
+      },
+    });
+    expect(() => recordStructuredTextAssessment({
+      session,
+      config,
+      answer: {
+        id: 'answer-invalid',
+        occurredAt: '2026-07-15T12:01:00.000Z',
+        caseId: 'zinc-copper',
+        stageId: 'analysis',
+        attemptId: 'attempt-invalid',
+        questionId: 'zinc-analysis',
+        value: 'Zn',
+      },
+      extraction: {
+        assessments: [{ ...assessment, nodeId: 'UNKNOWN' }],
+      },
+      provenance: {
+        promptId: 'assessment',
+        promptVersion: 'prompt.v1',
+        cacheKey: 'cache-key',
+        model: 'mock-v1',
+      },
+      assessmentEventIdPrefix: 'invalid',
+      assessedAt: '2026-07-15T12:01:01.000Z',
+    })).toThrow(/No rubric configured/);
   });
 });
