@@ -1,0 +1,41 @@
+{
+  "version": "knowledge-model.v1",
+  "dimensions": [
+    { "id": "device", "label": "装置", "axis": "x" },
+    { "id": "principle", "label": "原理", "axis": "y" },
+    { "id": "energy", "label": "能量", "axis": "z" }
+  ],
+  "nodes": [
+    {
+      "id": "D1",
+      "dimensionId": "device",
+      "statement": "失电子场所是氧化半反应发生的场所,材料须导电。",
+      "misconceptions": ["认为失电子场所必须是参与反应的金属"],
+      "weight": 2,
+      "position": { "x": -1, "y": 0, "z": 0 },
+      "dependsOn": []
+    },
+    {
+      "id": "P1",
+      "dimensionId": "principle",
+      "statement": "原电池以自发氧化还原反应为前提,两个半反应分处两个场所。",
+      "misconceptions": ["认为任意反应均可构成原电池"],
+      "weight": 2,
+      "position": { "x": 0, "y": 1, "z": 0 },
+      "dependsOn": []
+    },
+    {
+      "id": "E1",
+      "dimensionId": "energy",
+      "statement": "原电池将化学能直接转化为电能。",
+      "misconceptions": ["认为原电池先把化学能转为热能"],
+      "weight": 2,
+      "position": { "x": 0, "y": 0, "z": 1 },
+      "dependsOn": ["P1"]
+    }
+  ],
+  "edges": [
+    { "id": "P1-E1", "from": "P1", "to": "E1", "kind": "dependency" }
+  ]
+}
+

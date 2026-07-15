@@ -1,0 +1,37 @@
+{
+  "version": "rubrics.v1",
+  "rubrics": [
+    {
+      "id": "rubric-d1",
+      "nodeId": "D1",
+      "maxScore": 2,
+      "evidenceRequirements": ["指出氧化反应发生的场所与材料导电性"],
+      "rules": [
+        { "id": "d1-hit", "outcome": "hit", "score": 2, "description": "正确说明失电子场所" },
+        { "id": "d1-partial", "outcome": "partial", "score": 1, "description": "方向正确但表述不完整" },
+        { "id": "d1-miss", "outcome": "miss", "score": 0, "description": "未建立氧化与场所的对应" }
+      ]
+    },
+    {
+      "id": "rubric-p1",
+      "nodeId": "P1",
+      "maxScore": 2,
+      "evidenceRequirements": ["指出自发氧化还原反应与半反应空间分离"],
+      "rules": [
+        { "id": "p1-hit", "outcome": "hit", "score": 2, "description": "完整说明反应前提" },
+        { "id": "p1-miss", "outcome": "miss", "score": 0, "description": "未说明反应前提" }
+      ]
+    },
+    {
+      "id": "rubric-e1",
+      "nodeId": "E1",
+      "maxScore": 2,
+      "evidenceRequirements": ["指出化学能直接转化为电能"],
+      "rules": [
+        { "id": "e1-hit", "outcome": "hit", "score": 2, "description": "能量方向正确" },
+        { "id": "e1-miss", "outcome": "miss", "score": 0, "description": "能量方向错误" }
+      ]
+    }
+  ]
+}
+

@@ -1,0 +1,12 @@
+{
+  "version": "scaffold-policy.v1",
+  "levels": [
+    { "level": 1, "label": "完整引导", "promptCount": 4 },
+    { "level": 2, "label": "部分引导", "promptCount": 2 },
+    { "level": 3, "label": "独立作答", "promptCount": 0 }
+  ],
+  "promotion": { "consecutiveHits": 2 },
+  "demotion": { "consecutiveMisses": 1 },
+  "selection": { "weakNodeThreshold": 0.6, "recentCaseWindow": 3 }
+}
+

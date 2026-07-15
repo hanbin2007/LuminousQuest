@@ -1,0 +1,11 @@
+{
+  "version": "demo-script.v1",
+  "steps": [
+    {
+      "id": "m0-health-check",
+      "recording": "demo/m0-health-check.json",
+      "resourceRefs": []
+    }
+  ]
+}
+

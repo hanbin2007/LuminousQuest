@@ -1,0 +1,24 @@
+{
+  "version": "pretest.v1",
+  "builder": {
+    "components": [
+      { "id": "oxidation-site", "label": "失电子场所", "kind": "electrode" },
+      { "id": "electron-conductor", "label": "电子导体", "kind": "wire" },
+      { "id": "ion-conductor", "label": "离子导体", "kind": "ion-conductor" },
+      { "id": "reduction-site", "label": "得电子场所", "kind": "electrode" }
+    ],
+    "structuralRules": [
+      {
+        "id": "four-functional-elements",
+        "description": "通用模型包含四个功能要素",
+        "requiredComponentIds": ["oxidation-site", "electron-conductor", "ion-conductor", "reduction-site"]
+      }
+    ]
+  },
+  "questions": [
+    { "id": "pretest-builder", "type": "builder", "prompt": "搭建原电池通用模型。", "rubricIds": ["rubric-d1"] },
+    { "id": "pretest-principle", "type": "text", "prompt": "说明原电池反应成立的前提。", "rubricIds": ["rubric-p1"] },
+    { "id": "pretest-energy", "type": "text", "prompt": "说明原电池中的能量转化。", "rubricIds": ["rubric-e1"] }
+  ]
+}
+

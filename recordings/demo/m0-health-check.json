@@ -1,0 +1,13 @@
+{
+  "version": "llm-recording.v1",
+  "recordedAt": "2026-07-15T00:00:00.000Z",
+  "request": {
+    "redacted": true,
+    "stepId": "m0-health-check"
+  },
+  "response": {
+    "content": "M0 演示回放已就绪。",
+    "model": "recorded-mock.v1"
+  }
+}
+

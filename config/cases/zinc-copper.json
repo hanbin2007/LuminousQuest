@@ -1,0 +1,21 @@
+{
+  "version": "case.v1",
+  "id": "zinc-copper",
+  "title": "锌铜原电池",
+  "type": "analysis",
+  "materialRefs": [],
+  "scaffold": [
+    {
+      "level": 1,
+      "questions": [
+        "该电极的材料(场所)是什么?",
+        "它参与反应吗?",
+        "真正的反应物是谁?",
+        "反应物从哪里来?"
+      ],
+      "answerPoints": ["锌为失电子场所且参与氧化反应", "铜为得电子场所,反应物为铜离子"]
+    }
+  ],
+  "targetNodeIds": ["D1", "P1"]
+}
+
