@@ -1,17 +1,21 @@
 import { describe, expect, it } from 'vitest';
 
 import { loadAllConfig } from '../server/config/loader';
-import { MockProvider } from '../server/llm/providers/mock';
-import { RecordingStore } from '../server/llm/recording-store';
-import { LLMService } from '../server/llm/service';
-import type { LLMRequest } from '../server/llm/types';
+import { buildLearnerProfile } from '../shared/scoring/profile';
 import {
   recordStructuredTextAssessment,
-  structuredAssessmentResponseJsonSchema,
   structuredAssessmentResponseSchema,
 } from '../shared/workflows/assessment';
-import { LocalSessionStore, createSession, sessionConfigVersions } from '../shared/session';
-import { createTemporaryDirectory } from './helpers/content-fixture';
+import {
+  recordBuilderAssessment,
+  recordEquationAssessment,
+} from '../shared/workflows/engine-assessment';
+import {
+  LocalSessionStore,
+  createSession,
+  sessionConfigVersions,
+  type StudentSession,
+} from '../shared/session';
 
 class MemoryStorage implements Pick<Storage, 'getItem' | 'setItem' | 'removeItem'> {
   private readonly values = new Map<string, string>();
@@ -29,174 +33,219 @@ class MemoryStorage implements Pick<Storage, 'getItem' | 'setItem' | 'removeItem
   }
 }
 
-describe('zinc-copper M1a vertical slice', () => {
-  it('runs answer -> score -> evidence -> radar -> save -> restore -> offline replay', async () => {
-    const config = await loadAllConfig(process.cwd());
-    const root = await createTemporaryDirectory();
-    const answer =
-      '锌是负极，铜是正极。电子由锌极经导线流向铜极；盐桥阴离子移向锌侧，阳离子移向铜侧。Zn 被氧化，Cu^2+ 被还原。化学能直接转化为电能。';
-    const quoted = (quote: string) => ({
-      quote,
-      start: answer.indexOf(quote),
-      end: answer.indexOf(quote) + quote.length,
-    });
-    config.cases.find((entry) => entry.id === 'zinc-copper')!.evidencePaths
-      .find((entry) => entry.nodeId === 'P2')!.factRequirements = [
-        { id: 'reducing-agent', acceptedValues: ['Zn'] },
-        { id: 'oxidizing-agent', acceptedValues: ['Cu^2+'] },
-      ];
-    config.cases.find((entry) => entry.id === 'zinc-copper')!.evidencePaths
-      .find((entry) => entry.nodeId === 'E1')!.factRequirements = [
-        { id: 'energy-from', acceptedValues: ['chemical'] },
-        { id: 'energy-to', acceptedValues: ['electric'] },
-      ];
-    const extracted = {
-      anchors: [{
-        anchorId: 'case-polarity',
-        facts: [
-          { id: 'negative', value: 'Zn' },
-          { id: 'positive', value: 'Cu' },
-        ],
-        evidence: [quoted('锌是负极，铜是正极')],
-      }],
-      assessments: [
-        {
-          nodeId: 'P2',
-          errorIds: [],
-          facts: {
-            response: 'substantive',
-            terminology: 'model',
-            syllabus: 'within',
-            contradiction: false,
-            typo: 'none',
-            slots: [
-              { id: 'reducing-agent', value: 'Zn' },
-              { id: 'oxidizing-agent', value: 'Cu^2+' },
-            ],
-          },
-          evidence: [quoted('Zn 被氧化，Cu^2+ 被还原。')],
-          assistance: { kind: 'none', rounds: 0 },
-        },
-        {
-          nodeId: 'P4',
-          errorIds: [],
-          facts: {
-            response: 'substantive',
-            terminology: 'model',
-            syllabus: 'within',
-            contradiction: false,
-            typo: 'none',
-            slots: [
-              { id: 'electron-from', value: 'Zn' },
-              { id: 'electron-to', value: 'Cu' },
-              { id: 'anion-toward', value: 'Zn' },
-              { id: 'cation-toward', value: 'Cu' },
-            ],
-          },
-          evidence: [quoted('电子由锌极经导线流向铜极；盐桥阴离子移向锌侧，阳离子移向铜侧。')],
-          assistance: { kind: 'none', rounds: 0 },
-        },
-        {
-          nodeId: 'E1',
-          errorIds: [],
-          facts: {
-            response: 'substantive',
-            terminology: 'model',
-            syllabus: 'within',
-            contradiction: false,
-            typo: 'none',
-            slots: [
-              { id: 'energy-from', value: 'chemical' },
-              { id: 'energy-to', value: 'electric' },
-            ],
-          },
-          evidence: [quoted('化学能直接转化为电能。')],
-          assistance: { kind: 'none', rounds: 0 },
-        },
+type LoadedConfig = Awaited<ReturnType<typeof loadAllConfig>>;
+type BuilderAnswer = Parameters<typeof recordBuilderAssessment>[0]['answer']['value'];
+
+interface SliceAnswers {
+  builder: BuilderAnswer;
+  negative: string;
+  positive: string;
+  overall: string;
+}
+
+function rawSliceAnswers(): SliceAnswers {
+  return {
+    builder: {
+      components: [
+        { instanceId: 'negative', componentId: 'site-a', x: 0, y: 0 },
+        { instanceId: 'wire', componentId: 'electron-link', x: 1, y: 0 },
+        { instanceId: 'ions', componentId: 'ion-medium', x: 1, y: 1 },
+        { instanceId: 'positive', componentId: 'site-b', x: 2, y: 0 },
+        { instanceId: 'electron-arrow', componentId: 'electron-arrow', x: 1, y: -1 },
+        { instanceId: 'cation-arrow', componentId: 'cation-arrow', x: 2, y: 1 },
+        { instanceId: 'anion-arrow', componentId: 'anion-arrow', x: 0, y: 1 },
       ],
-    };
-    const request: LLMRequest = {
-      executionMode: 'development',
-      capability: 'structured',
-      provider: 'mock',
-      model: 'mock-v1',
-      prompt: {
-        id: 'zinc-copper-assessment',
-        version: 'prompt.v1',
-        text: 'Extract closed-set facts and exact evidence spans without scoring.',
-      },
-      schemaVersion: 'structured-assessment.v2',
-      configVersion: config.configVersion,
-      input: { answer, mockStructuredResponse: extracted },
-      images: [],
-      schema: structuredAssessmentResponseJsonSchema,
-    };
-    const recordings = new RecordingStore(root);
-    const online = new LLMService({
-      providers: new Map([['mock', new MockProvider()]]),
-      recordings,
-    });
+      connections: [
+        { id: '', from: 'negative', to: 'wire', kind: 'electron-path', carrier: 'electron' },
+        { id: '', from: 'wire', to: 'positive', kind: 'electron-path', carrier: 'electron' },
+        { id: '', from: 'ions', to: 'positive', kind: 'ion-path', carrier: 'cation' },
+        { id: '', from: 'ions', to: 'negative', kind: 'ion-path', carrier: 'anion' },
+      ],
+    },
+    negative: 'Zn - 2e⁻ = Zn²⁺',
+    positive: 'Cu²⁺ + 2e⁻ = Cu',
+    overall: 'Zn + Cu²⁺ = Zn²⁺ + Cu',
+  };
+}
 
-    const providerResult = await online.execute(request);
-    expect(providerResult).toMatchObject({ source: 'provider', degraded: false });
+function runDeterministicSlice(
+  session: StudentSession,
+  config: LoadedConfig,
+  answers: SliceAnswers,
+) {
+  const builder = recordBuilderAssessment({
+    session,
+    config,
+    answer: {
+      id: 'answer-builder',
+      occurredAt: '2026-07-15T12:01:00.000Z',
+      caseId: 'zinc-copper',
+      stageId: 'builder',
+      attemptId: 'attempt-builder',
+      questionId: 'generic-cell',
+      value: answers.builder,
+    },
+    assistance: { kind: 'none', rounds: 0 },
+    assessmentEventIdPrefix: 'builder-score',
+    assessedAt: '2026-07-15T12:01:01.000Z',
+  });
+  const negative = recordEquationAssessment({
+    session: builder.session,
+    config,
+    equationSetId: 'zinc-negative',
+    answer: {
+      id: 'answer-negative',
+      occurredAt: '2026-07-15T12:02:00.000Z',
+      caseId: 'zinc-copper',
+      stageId: 'equations',
+      attemptId: 'attempt-negative',
+      questionId: 'negative-half-reaction',
+      value: answers.negative,
+    },
+    assistance: { kind: 'none', rounds: 0 },
+    assessmentEventIdPrefix: 'negative-score',
+    assessedAt: '2026-07-15T12:02:01.000Z',
+  });
+  const positive = recordEquationAssessment({
+    session: negative.session,
+    config,
+    equationSetId: 'copper-positive',
+    answer: {
+      id: 'answer-positive',
+      occurredAt: '2026-07-15T12:03:00.000Z',
+      caseId: 'zinc-copper',
+      stageId: 'equations',
+      attemptId: 'attempt-positive',
+      questionId: 'positive-half-reaction',
+      value: answers.positive,
+    },
+    assistance: { kind: 'none', rounds: 0 },
+    assessmentEventIdPrefix: 'positive-score',
+    assessedAt: '2026-07-15T12:03:01.000Z',
+  });
+  const overall = recordEquationAssessment({
+    session: positive.session,
+    config,
+    equationSetId: 'zinc-copper-overall',
+    answer: {
+      id: 'answer-overall',
+      occurredAt: '2026-07-15T12:04:00.000Z',
+      caseId: 'zinc-copper',
+      stageId: 'equations',
+      attemptId: 'attempt-overall',
+      questionId: 'overall-reaction',
+      value: answers.overall,
+    },
+    assistance: { kind: 'none', rounds: 0 },
+    assessmentEventIdPrefix: 'overall-score',
+    assessedAt: '2026-07-15T12:04:01.000Z',
+  });
+  return { builder, negative, positive, overall };
+}
 
+function persistedAnswers(session: StudentSession): SliceAnswers {
+  const byQuestionId = new Map(session.events.flatMap((event) =>
+    event.kind === 'answer.submitted' ? [[event.questionId, event.answer] as const] : []));
+  const builder = byQuestionId.get('generic-cell');
+  const negative = byQuestionId.get('negative-half-reaction');
+  const positive = byQuestionId.get('positive-half-reaction');
+  const overall = byQuestionId.get('overall-reaction');
+  if (
+    builder?.format !== 'builder'
+    || negative?.format !== 'text'
+    || positive?.format !== 'text'
+    || overall?.format !== 'text'
+  ) {
+    throw new Error('Persisted deterministic slice answers are incomplete');
+  }
+  return {
+    builder: {
+      components: builder.value.components,
+      connections: builder.value.connections.map((connection) => ({
+        ...connection,
+        id: connection.id ?? '',
+      })),
+    },
+    negative: negative.value,
+    positive: positive.value,
+    overall: overall.value,
+  };
+}
+
+describe('zinc-copper M1a vertical slice', () => {
+  it('runs real topology and three equation answers through save, process restore, and offline replay', async () => {
+    const config = await loadAllConfig(process.cwd());
     const initial = createSession({
       id: 'session-zinc-slice',
       anonymousStudentId: 'anon-A1B2C3D4',
       now: '2026-07-15T12:00:00.000Z',
       configVersions: sessionConfigVersions(config),
     });
-    const assessed = recordStructuredTextAssessment({
-      session: initial,
-      config,
-      answer: {
-        id: 'answer-zinc-1',
-        occurredAt: '2026-07-15T12:01:00.000Z',
-        caseId: 'zinc-copper',
-        stageId: 'analysis',
-        attemptId: 'attempt-1',
-        questionId: 'zinc-copper-analysis',
-        value: answer,
-      },
-      extraction: providerResult.response.structured,
-      provenance: {
-        promptId: request.prompt.id,
-        promptVersion: request.prompt.version,
-        cacheKey: providerResult.cacheKey,
-        model: providerResult.response.model,
-      },
-      assessmentEventIdPrefix: 'zinc-score',
-      assessedAt: '2026-07-15T12:01:01.000Z',
-    });
+    const firstRun = runDeterministicSlice(initial, config, rawSliceAnswers());
 
-    expect(assessed.session.events).toHaveLength(5);
-    expect(assessed.profile.nodes.find((node) => node.nodeId === 'P4')).toMatchObject({
-      outcome: 'hit',
-      earned: 2,
-      trace: {
-        originalAnswer: answer,
-        evidence: extracted.assessments[1].evidence,
+    expect(firstRun.builder.assessment).toMatchObject({
+      overall: 'hit',
+      checks: {
+        fourElements: { status: 'hit' },
+        closedCircuit: {
+          status: 'hit',
+          witness: {
+            oxidationSiteId: 'negative',
+            reductionSiteId: 'positive',
+          },
+        },
+        directionConsistency: { status: 'hit' },
+        abstraction: { status: 'hit' },
       },
     });
-    expect(assessed.profile.dimensions.find((entry) => entry.dimensionId === 'principle'))
-      .toMatchObject({ earned: 4, possible: 4, ratio: 1, assessedNodeIds: ['P2', 'P4'] });
-    expect(assessed.profile.dimensions.find((entry) => entry.dimensionId === 'energy'))
-      .toMatchObject({ earned: 2, possible: 2, ratio: 1, assessedNodeIds: ['E1'] });
+    expect(firstRun.negative.assessment.outcome).toBe('hit');
+    expect(firstRun.positive.assessment.outcome).toBe('hit');
+    expect(firstRun.overall.assessment.outcome).toBe('hit');
 
-    const localStore = new LocalSessionStore(new MemoryStorage());
-    localStore.save(assessed.session);
-    const restored = localStore.restoreLatest();
-    expect(restored).toEqual(assessed.session);
-    expect(restored?.events.filter((event) => event.kind === 'assessment.completed'))
-      .toHaveLength(3);
+    const finalSession = firstRun.overall.session;
+    const builderAnswerEvent = finalSession.events.find((event) =>
+      event.kind === 'answer.submitted' && event.questionId === 'generic-cell');
+    expect(builderAnswerEvent?.kind === 'answer.submitted' && builderAnswerEvent.answer.format === 'builder'
+      ? builderAnswerEvent.answer.value.connections.map((connection) => connection.id)
+      : []).toEqual(['connection-1', 'connection-2', 'connection-3', 'connection-4']);
+    const scores = finalSession.events.filter((event) =>
+      event.kind === 'assessment.completed' && event.score.status === 'scored');
+    expect(scores).toHaveLength(12);
+    expect(scores.every((event) =>
+      event.kind === 'assessment.completed'
+      && event.score.status === 'scored'
+      && 'ruleId' in event.ruleDecision
+      && event.ruleDecision.engine.sourceRuleId !== undefined)).toBe(true);
+    for (const nodeId of ['D1', 'D2', 'D3', 'D4', 'D5', 'P3', 'P4', 'P6', 'P7']) {
+      expect(firstRun.overall.profile.nodes.find((node) => node.nodeId === nodeId)?.outcome,
+        nodeId).toBe('hit');
+    }
 
-    const offline = new LLMService({ providers: new Map(), recordings });
-    const replay = await offline.execute(request);
-    expect(replay).toMatchObject({
-      source: 'development-cache',
-      degraded: false,
-      response: { structured: extracted },
+    const storage = new MemoryStorage();
+    new LocalSessionStore(storage).save(finalSession);
+
+    // A fresh config/store pair models a new process with no model provider or network dependency.
+    const reloadedConfig = await loadAllConfig(process.cwd());
+    const restored = new LocalSessionStore(storage).restoreLatest(
+      sessionConfigVersions(reloadedConfig),
+    );
+    expect(restored).toEqual(finalSession);
+    if (!restored) throw new Error('Expected the saved session to restore');
+    expect(buildLearnerProfile(restored, reloadedConfig)).toEqual(firstRun.overall.profile);
+
+    const replayInitial = createSession({
+      id: restored.id,
+      anonymousStudentId: restored.anonymousStudentId,
+      now: restored.startedAt,
+      configVersions: sessionConfigVersions(reloadedConfig),
     });
+    const replay = runDeterministicSlice(
+      replayInitial,
+      reloadedConfig,
+      persistedAnswers(restored),
+    );
+    expect(replay.overall.session).toEqual(restored);
+    expect(replay.overall.profile).toEqual(firstRun.overall.profile);
   });
 
   it('rejects duplicate or unconfigured node assessments before persisting them', async () => {

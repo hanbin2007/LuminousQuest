@@ -11,7 +11,10 @@ import {
   recordBuilderAssessment,
   recordEquationAssessment,
 } from '../shared/workflows/engine-assessment';
-import { recordStructuredTextAssessment } from '../shared/workflows/assessment';
+import {
+  recordStructuredTextAssessment,
+  structuredAssessmentResponseSchema,
+} from '../shared/workflows/assessment';
 
 class MemoryStorage implements Pick<Storage, 'getItem' | 'setItem' | 'removeItem'> {
   private readonly values = new Map<string, string>();
@@ -33,6 +36,41 @@ async function fixture() {
 }
 
 describe('deterministic workflow and persistence contracts', () => {
+  it('rejects inconsistent assistance metadata and duplicate anchor ids at extraction', () => {
+    const assessment = {
+      nodeId: 'P2',
+      errorIds: [],
+      facts: {
+        response: 'substantive' as const,
+        terminology: 'model' as const,
+        syllabus: 'within' as const,
+        contradiction: false,
+        typo: 'none' as const,
+        slots: [{ id: 'reducing-agent', value: 'Zn' }],
+      },
+      evidence: [{ quote: 'Zn', start: 0, end: 2 }],
+      assistance: { kind: 'none' as const, rounds: 0 },
+    };
+    const anchor = {
+      anchorId: 'case-polarity',
+      facts: [{ id: 'negative', value: 'Zn' }],
+      evidence: [{ quote: 'Zn', start: 0, end: 2 }],
+    };
+
+    expect(structuredAssessmentResponseSchema.safeParse({
+      anchors: [],
+      assessments: [{ ...assessment, assistance: { kind: 'none', rounds: 1 } }],
+    }).success).toBe(false);
+    expect(structuredAssessmentResponseSchema.safeParse({
+      anchors: [],
+      assessments: [{ ...assessment, assistance: { kind: 'hint', rounds: 0 } }],
+    }).success).toBe(false);
+    expect(structuredAssessmentResponseSchema.safeParse({
+      anchors: [anchor, anchor],
+      assessments: [assessment],
+    }).success).toBe(false);
+  });
+
   it('records polarity as an independent event and computes following from facts', async () => {
     const { config, session } = await fixture();
     const answer = '铜是负极，锌是正极；电子从铜流向锌。';
@@ -224,6 +262,63 @@ describe('deterministic workflow and persistence contracts', () => {
     expect(result.profile.nodes.find((node) => node.nodeId === 'P4')).toMatchObject({
       status: 'unassessed',
       latestAttempt: { status: 'unanswered' },
+    });
+  });
+
+  it('persists an ambiguous extraction as needs-review without running scoring', async () => {
+    const { config, session } = await fixture();
+    const answer = 'Zn 被氧化，Cu^2+ 被还原。';
+    const result = recordStructuredTextAssessment({
+      session,
+      config,
+      answer: {
+        id: 'answer-ambiguous',
+        occurredAt: '2026-07-15T12:01:00.000Z',
+        caseId: 'zinc-copper',
+        stageId: 'analysis',
+        attemptId: 'attempt-ambiguous',
+        questionId: 'reactants',
+        value: answer,
+      },
+      extraction: {
+        anchors: [],
+        assessments: [{
+          nodeId: 'P2',
+          errorIds: [],
+          facts: {
+            response: 'substantive',
+            terminology: 'model',
+            syllabus: 'within',
+            contradiction: false,
+            typo: 'ambiguous',
+            slots: [
+              { id: 'reducing-agent', value: 'Zn' },
+              { id: 'oxidizing-agent', value: 'Cu^2+' },
+            ],
+          },
+          evidence: [{ quote: answer, start: 0, end: answer.length }],
+          assistance: { kind: 'none', rounds: 0 },
+        }],
+      },
+      provenance: {
+        promptId: 'structured-assessment',
+        promptVersion: 'prompt.v2',
+        cacheKey: 'cache-ambiguous',
+        model: 'mock-v2',
+      },
+      assessmentEventIdPrefix: 'ambiguous-assessment',
+      assessedAt: '2026-07-15T12:01:01.000Z',
+    });
+
+    expect(result.session.events.at(-1)).toMatchObject({
+      pipelineStage: 'extraction',
+      extraction: { status: 'needs-review' },
+      ruleDecision: { status: 'unassessed' },
+      score: { status: 'unassessed' },
+    });
+    expect(result.profile.nodes.find((node) => node.nodeId === 'P2')).toMatchObject({
+      status: 'needs-review',
+      latestAttempt: { status: 'needs-review' },
     });
   });
 

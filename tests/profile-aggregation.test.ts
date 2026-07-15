@@ -82,6 +82,70 @@ async function scoredFixture() {
 }
 
 describe('traceable rubric scoring and learner profile aggregation', () => {
+  it.each([
+    {
+      name: 'case versions',
+      mutate(session: ReturnType<typeof createSession>) {
+        session.configVersions.cases['zinc-copper'] = 'case.v999';
+      },
+      error: /case versions/i,
+    },
+    {
+      name: 'grammar version',
+      mutate(session: ReturnType<typeof createSession>) {
+        session.configVersions.grammar = 'equation-grammar.v999';
+      },
+      error: /grammar version/i,
+    },
+    {
+      name: 'engine versions',
+      mutate(session: ReturnType<typeof createSession>) {
+        session.configVersions.engines.equation = 'equation-scoring.v999';
+      },
+      error: /engine versions/i,
+    },
+    {
+      name: 'pretest version',
+      mutate(session: ReturnType<typeof createSession>) {
+        session.configVersions.pretest = 'pretest.v999';
+      },
+      error: /pretest version/i,
+    },
+    {
+      name: 'scaffold version',
+      mutate(session: ReturnType<typeof createSession>) {
+        session.configVersions.scaffoldPolicy = 'scaffold-policy.v999';
+      },
+      error: /scaffold policy version/i,
+    },
+    {
+      name: 'knowledge model version',
+      mutate(session: ReturnType<typeof createSession>) {
+        session.configVersions.knowledgeModel = 'knowledge-model.v999';
+      },
+      error: /knowledge model version/i,
+    },
+    {
+      name: 'rubric version',
+      mutate(session: ReturnType<typeof createSession>) {
+        session.configVersions.rubrics = 'rubrics.v999';
+      },
+      error: /rubric version/i,
+    },
+  ])('rejects persisted $name drift before profile aggregation', async ({ mutate, error }) => {
+    const { config, session } = await fixture();
+    const drifted = structuredClone(session);
+    mutate(drifted);
+
+    expect(() => buildLearnerProfile(drifted, config)).toThrow(error);
+  });
+
+  it('requires rubric configuration for the legacy profile call shape', async () => {
+    const { config, session } = await fixture();
+
+    expect(() => buildLearnerProfile(session, config.knowledgeModel)).toThrow(/rubric configuration/i);
+  });
+
   it('scores a following error by the coherent logical chain and persists the annotation', async () => {
     const { config } = await fixture();
     const decision = resolveRubricDecision({
