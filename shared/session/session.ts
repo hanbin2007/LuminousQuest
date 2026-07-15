@@ -85,24 +85,40 @@ export interface ScoreSummary {
   assessedNodeIds: string[];
   unassessedNodeIds: string[];
   needsReviewNodeIds: string[];
+  unansweredNodeIds: string[];
+  latestAttemptStatusByNode: Record<
+    string,
+    'scored' | 'unanswered' | 'unassessed' | 'needs-review'
+  >;
 }
 
 export function summarizeAssessedScores(session: unknown): ScoreSummary {
   const parsedSession = sessionSchema.parse(session);
   const latestByNode = new Map<string, AssessmentCompletedEvent>();
+  const latestScoredByNode = new Map<string, AssessmentCompletedEvent & {
+    score: { status: 'scored'; earned: number; possible: number };
+  }>();
   for (const event of parsedSession.events) {
-    if (event.kind === 'assessment.completed') latestByNode.set(event.nodeId, event);
+    if (event.kind !== 'assessment.completed') continue;
+    latestByNode.set(event.nodeId, event);
+    if (event.score.status === 'scored') latestScoredByNode.set(event.nodeId, event as typeof event & {
+      score: { status: 'scored'; earned: number; possible: number };
+    });
   }
   const latest = [...latestByNode.values()].sort((left, right) => left.sequence - right.sequence);
-  const assessed = latest.filter(
-    (event): event is AssessmentCompletedEvent & { score: { status: 'scored'; earned: number; possible: number } } =>
-      event.score.status === 'scored',
+  const assessed = [...latestScoredByNode.values()].sort(
+    (left, right) => left.sequence - right.sequence,
   );
-  const needsReview = latest.filter((event) =>
-    [event.extraction.status, event.ruleDecision.status, event.following.status, event.score.status]
-      .includes('needs-review'),
+  const latestStatus = (event: AssessmentCompletedEvent) => {
+    if ([event.extraction.status, event.ruleDecision.status, event.following.status, event.score.status]
+      .includes('needs-review')) return 'needs-review' as const;
+    if (event.score.status === 'unanswered') return 'unanswered' as const;
+    if (event.score.status === 'scored') return 'scored' as const;
+    return 'unassessed' as const;
+  };
+  const latestAttemptStatusByNode = Object.fromEntries(
+    latest.map((event) => [event.nodeId, latestStatus(event)]),
   );
-  const needsReviewIds = new Set(needsReview.map((event) => event.nodeId));
   const earned = assessed.reduce((sum, event) => sum + event.score.earned, 0);
   const possible = assessed.reduce((sum, event) => sum + event.score.possible, 0);
 
@@ -112,8 +128,14 @@ export function summarizeAssessedScores(session: unknown): ScoreSummary {
     ratio: possible === 0 ? null : earned / possible,
     assessedNodeIds: assessed.map((event) => event.nodeId),
     unassessedNodeIds: latest
-      .filter((event) => event.score.status !== 'scored' && !needsReviewIds.has(event.nodeId))
+      .filter((event) => latestStatus(event) === 'unassessed' && !latestScoredByNode.has(event.nodeId))
       .map((event) => event.nodeId),
-    needsReviewNodeIds: needsReview.map((event) => event.nodeId),
+    needsReviewNodeIds: latest
+      .filter((event) => latestStatus(event) === 'needs-review')
+      .map((event) => event.nodeId),
+    unansweredNodeIds: latest
+      .filter((event) => latestStatus(event) === 'unanswered')
+      .map((event) => event.nodeId),
+    latestAttemptStatusByNode,
   };
 }

@@ -217,7 +217,7 @@ describe('traceable rubric scoring and learner profile aggregation', () => {
       trace: {
         sourceAnswerEventId: 'answer-1',
         originalAnswer: answer,
-        rubric: { id: 'rubric-p4', version: 'rubrics.v1' },
+        rubric: { id: 'rubric-p4', version: 'rubrics.v1.1' },
         ruleId: 'p4-hit',
         evidence: [{ quote, start: 0, end: quote.length }],
       },
@@ -232,7 +232,7 @@ describe('traceable rubric scoring and learner profile aggregation', () => {
     expect(profile.nodes.filter((node) => node.status === 'unassessed')).toHaveLength(14);
   });
 
-  it('uses the latest node score and excludes a later unassessed snapshot from the radar denominator', async () => {
+  it('keeps latest completed mastery separate from a later unassessed attempt', async () => {
     const { config, session } = await fixture();
     const answer = '电子从锌极经导线流向铜极。';
     let current = appendSessionEvent(session, answerEvent('answer-1', 'attempt-1', answer));
@@ -290,8 +290,62 @@ describe('traceable rubric scoring and learner profile aggregation', () => {
     const profile = buildLearnerProfile(current, config.knowledgeModel, config.rubrics);
     const principle = profile.dimensions.find((dimension) => dimension.dimensionId === 'principle');
 
-    expect(profile.nodes.find((node) => node.nodeId === 'P4')?.status).toBe('unassessed');
-    expect(principle).toMatchObject({ earned: 0, possible: 0, ratio: null });
+    expect(profile.nodes.find((node) => node.nodeId === 'P4')).toMatchObject({
+      status: 'scored',
+      outcome: 'hit',
+      latestAttempt: { status: 'unassessed', eventId: 'assessment-2' },
+    });
+    expect(principle).toMatchObject({ earned: 2, possible: 2, ratio: 1 });
+  });
+
+  it('changes completed mastery selection when repeated-answer policy changes', async () => {
+    const { config, session } = await fixture();
+    let current = session;
+    const appendAttempt = (suffix: string, outcome: 'hit' | 'miss') => {
+      const answerId = `answer-${suffix}`;
+      const attemptId = `attempt-${suffix}`;
+      const answer = outcome === 'hit' ? '电子从锌流向铜。' : '电子从铜流向锌。';
+      current = appendSessionEvent(current, answerEvent(answerId, attemptId, answer));
+      const decision = resolveRubricDecision({
+        rubrics: config.rubrics,
+        scaffoldPolicy: config.scaffoldPolicy,
+        nodeId: 'P4',
+        objectiveOutcome: outcome,
+        assistance: { kind: 'none', rounds: 0 },
+      });
+      current = appendSessionEvent(current, {
+        id: `assessment-${suffix}`,
+        occurredAt: `2026-07-15T12:0${suffix === 'first' ? '1' : '2'}:01.000Z`,
+        kind: 'assessment.completed',
+        pipelineStage: 'score',
+        caseId: 'zinc-copper',
+        stageId: 'analysis',
+        attemptId,
+        sourceAnswerEventId: answerId,
+        nodeId: 'P4',
+        rubric: { id: 'rubric-p4', version: config.rubrics.version },
+        extraction: {
+          status: 'assessed',
+          evidence: [{ quote: answer, start: 0, end: answer.length }],
+          model: 'fact-policy',
+          provenance: provenance(),
+        },
+        ...decision,
+      });
+    };
+    appendAttempt('first', 'miss');
+    appendAttempt('second', 'hit');
+
+    expect(buildLearnerProfile(current, config).nodes.find((node) => node.nodeId === 'P4')?.outcome)
+      .toBe('hit');
+    const worst = structuredClone(config);
+    worst.rubrics.policy.repeatedAnswers.strategy = 'worst';
+    expect(buildLearnerProfile(current, worst).nodes.find((node) => node.nodeId === 'P4')?.outcome)
+      .toBe('miss');
+    const best = structuredClone(config);
+    best.rubrics.policy.repeatedAnswers.strategy = 'best';
+    expect(buildLearnerProfile(current, best).nodes.find((node) => node.nodeId === 'P4')?.outcome)
+      .toBe('hit');
   });
 
   it('rejects a score event whose evidence quote cannot be traced to the original answer', async () => {

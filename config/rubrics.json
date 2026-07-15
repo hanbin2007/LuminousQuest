@@ -1,5 +1,5 @@
 {
-  "version": "rubrics.v1",
+  "version": "rubrics.v1.1",
   "followingAnchors": [
     {
       "id": "case-polarity",
@@ -143,10 +143,10 @@
       "nodeId": "D4",
       "maxScore": 2,
       "evidenceRequirements": [
-        { "id": "D4-E1", "description": "指出得电子场所发生还原反应，并区分场所材料与被还原微粒。", "sources": ["builder", "text", "case-analysis"] }
+        { "id": "D4-E1", "description": "指出得电子场所发生还原反应；场所材料可为惰性电极或不参与反应的普通导体，并须与被还原微粒区分。", "sources": ["builder", "text", "case-analysis"] }
       ],
       "rules": [
-        { "id": "d4-hit", "outcome": "hit", "score": 2, "description": "完整建立得电子场所、还原反应与导电材料的对应。" },
+        { "id": "d4-hit", "outcome": "hit", "score": 2, "description": "完整建立得电子场所、还原反应与惰性电极或不参与反应的普通导体之间的对应。" },
         { "id": "d4-partial", "outcome": "partial", "score": 1, "description": "能指出正极或还原反应，但场所与反应物区分不完整。" },
         { "id": "d4-miss", "outcome": "miss", "score": 0, "description": "未建立得电子场所与还原反应的对应。" }
       ]

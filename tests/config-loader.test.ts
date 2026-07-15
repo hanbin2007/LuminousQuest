@@ -14,7 +14,7 @@ describe('configuration loading', () => {
 
     const loaded = await loadAllConfig(root);
 
-    expect(loaded.knowledgeModel.version).toBe('knowledge-model.v1');
+    expect(loaded.knowledgeModel.version).toBe('knowledge-model.v1.1');
     expect(loaded.pretest.questions).toHaveLength(3);
     expect(loaded.cases).toHaveLength(1);
     expect(loaded.configVersion).toMatch(/^sha256:[a-f0-9]{64}$/);
@@ -191,6 +191,73 @@ describe('configuration loading', () => {
       file: 'config/cases/zinc-copper.json',
       field: 'equationSets.0.accepted.0',
       reason: expect.stringContaining('equation-parse-miss'),
+    });
+  });
+
+  it('requires exactly one negative, positive, and overall equation group', async () => {
+    const root = await createTemporaryDirectory();
+    await writeValidContentTree(root);
+    const caseFile = path.join(root, 'config', 'cases', 'zinc-copper.json');
+    const trainingCase = JSON.parse(await readFile(caseFile, 'utf8'));
+    trainingCase.equationSets[2].electrode = 'positive';
+    await writeFile(caseFile, JSON.stringify(trainingCase));
+
+    await expect(loadAllConfig(root)).rejects.toMatchObject({
+      file: 'config/cases/zinc-copper.json',
+      field: expect.stringContaining('equationSets'),
+      reason: expect.stringContaining('exactly one'),
+    });
+  });
+
+  it('requires configured half reactions to merge into an accepted overall equation', async () => {
+    const root = await createTemporaryDirectory();
+    await writeValidContentTree(root);
+    const caseFile = path.join(root, 'config', 'cases', 'zinc-copper.json');
+    const trainingCase = JSON.parse(await readFile(caseFile, 'utf8'));
+    const overall = trainingCase.equationSets.find((entry: { electrode: string }) =>
+      entry.electrode === 'overall');
+    overall.accepted = ['2H2 + O2 -> 2H2O'];
+    await writeFile(caseFile, JSON.stringify(trainingCase));
+
+    await expect(loadAllConfig(root)).rejects.toMatchObject({
+      file: 'config/cases/zinc-copper.json',
+      field: 'equationSets',
+      reason: expect.stringContaining('do not match'),
+    });
+  });
+
+  it('requires every case target to have deterministic evidence', async () => {
+    const root = await createTemporaryDirectory();
+    await writeValidContentTree(root);
+    const caseFile = path.join(root, 'config', 'cases', 'zinc-copper.json');
+    const trainingCase = JSON.parse(await readFile(caseFile, 'utf8'));
+    trainingCase.evidencePaths = trainingCase.evidencePaths.filter(
+      (entry: { nodeId: string }) => entry.nodeId !== 'E3',
+    );
+    await writeFile(caseFile, JSON.stringify(trainingCase));
+
+    await expect(loadAllConfig(root)).rejects.toMatchObject({
+      file: 'config/cases/zinc-copper.json',
+      field: expect.stringContaining('targetNodeIds'),
+      reason: expect.stringContaining('no evidence path'),
+    });
+  });
+
+  it('rejects answer evidence that has no policy-readable fact requirements', async () => {
+    const root = await createTemporaryDirectory();
+    await writeValidContentTree(root);
+    const caseFile = path.join(root, 'config', 'cases', 'zinc-copper.json');
+    const trainingCase = JSON.parse(await readFile(caseFile, 'utf8'));
+    const answerEvidence = trainingCase.evidencePaths.find(
+      (entry: { source: string }) => entry.source === 'answer',
+    );
+    answerEvidence.factRequirements = [];
+    await writeFile(caseFile, JSON.stringify(trainingCase));
+
+    await expect(loadAllConfig(root)).rejects.toMatchObject({
+      file: 'config/cases/zinc-copper.json',
+      field: expect.stringContaining('factRequirements'),
+      reason: expect.stringContaining('deterministic'),
     });
   });
 

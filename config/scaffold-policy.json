@@ -1,5 +1,5 @@
 {
-  "version": "scaffold-policy.v1",
+  "version": "scaffold-policy.v1.1",
   "levels": [
     { "level": 1, "label": "完整引导", "promptCount": 8 },
     { "level": 2, "label": "三维度标题", "promptCount": 3 },

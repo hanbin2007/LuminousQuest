@@ -15,6 +15,8 @@ import {
 } from '../../shared/config/schemas';
 import {
   analyzeEquation,
+  canonicalizeEquation,
+  combineHalfReactionsCanonical,
   equationGrammarVersion,
   equationScoringEngineVersion,
   scoreEquation,
@@ -365,6 +367,26 @@ export async function validateReferences(
         });
       });
     });
+    const negative = trainingCase.equationSets.find((entry) => entry.electrode === 'negative')!;
+    const positive = trainingCase.equationSets.find((entry) => entry.electrode === 'positive')!;
+    const overall = trainingCase.equationSets.find((entry) => entry.electrode === 'overall')!;
+    const overallCanonical = new Set(overall.accepted.map(canonicalizeEquation));
+    for (const oxidation of negative.accepted) {
+      for (const reduction of positive.accepted) {
+        const combined = combineHalfReactionsCanonical(
+          oxidation,
+          reduction,
+          trainingCase.medium,
+        );
+        if (!overallCanonical.has(combined.canonical)) {
+          throw new ConfigValidationError(
+            relativeCaseFile,
+            'equationSets',
+            `combined half reactions do not match an accepted overall equation: ${oxidation} + ${reduction}`,
+          );
+        }
+      }
+    }
   });
 
   const referencedCases = new Map<string, Set<string>>();

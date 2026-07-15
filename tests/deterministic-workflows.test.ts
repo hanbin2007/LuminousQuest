@@ -167,6 +167,110 @@ describe('deterministic workflow and persistence contracts', () => {
     expect(equation.profile.nodes.find((node) => node.nodeId === 'P6')?.outcome).toBe('hit');
   });
 
+  it('persists a blank structured response as unanswered without scoring it', async () => {
+    const { config, session } = await fixture();
+    const result = recordStructuredTextAssessment({
+      session,
+      config,
+      answer: {
+        id: 'answer-blank',
+        occurredAt: '2026-07-15T12:01:00.000Z',
+        caseId: 'zinc-copper',
+        stageId: 'analysis',
+        attemptId: 'attempt-blank',
+        questionId: 'process',
+        value: '',
+      },
+      extraction: {
+        anchors: [],
+        assessments: [{
+          nodeId: 'P4',
+          errorIds: [],
+          facts: {
+            response: 'blank',
+            terminology: 'model',
+            syllabus: 'within',
+            contradiction: false,
+            typo: 'none',
+            slots: [],
+          },
+          evidence: [],
+          assistance: { kind: 'none', rounds: 0 },
+        }],
+      },
+      provenance: {
+        promptId: 'structured-assessment',
+        promptVersion: 'prompt.v2',
+        cacheKey: 'cache-blank',
+        model: 'mock-v2',
+      },
+      assessmentEventIdPrefix: 'blank-assessment',
+      assessedAt: '2026-07-15T12:01:01.000Z',
+    });
+
+    expect(result.session.events.at(-1)).toMatchObject({
+      kind: 'assessment.completed',
+      ruleDecision: {
+        status: 'unanswered',
+        promptRetry: config.rubrics.policy.nonResponse.promptRetry,
+        includeInDiagnosis: config.rubrics.policy.nonResponse.includeInDiagnosis,
+      },
+      score: {
+        status: 'unanswered',
+        promptRetry: config.rubrics.policy.nonResponse.promptRetry,
+        includeInDiagnosis: config.rubrics.policy.nonResponse.includeInDiagnosis,
+      },
+    });
+    expect(result.profile.nodes.find((node) => node.nodeId === 'P4')).toMatchObject({
+      status: 'unassessed',
+      latestAttempt: { status: 'unanswered' },
+    });
+  });
+
+  it('keeps a valid equation mastery score when the latest equation attempt is unanswered', async () => {
+    const { config, session } = await fixture();
+    const first = recordEquationAssessment({
+      session,
+      config,
+      equationSetId: 'zinc-negative',
+      answer: {
+        id: 'answer-equation-hit',
+        occurredAt: '2026-07-15T12:01:00.000Z',
+        caseId: 'zinc-copper',
+        stageId: 'equation',
+        attemptId: 'attempt-equation-hit',
+        questionId: 'negative-half-reaction',
+        value: 'Zn - 2e^- = Zn^2+',
+      },
+      assistance: { kind: 'none', rounds: 0 },
+      assessmentEventIdPrefix: 'equation-hit',
+      assessedAt: '2026-07-15T12:01:01.000Z',
+    });
+    const second = recordEquationAssessment({
+      session: first.session,
+      config,
+      equationSetId: 'zinc-negative',
+      answer: {
+        id: 'answer-equation-blank',
+        occurredAt: '2026-07-15T12:02:00.000Z',
+        caseId: 'zinc-copper',
+        stageId: 'equation',
+        attemptId: 'attempt-equation-blank',
+        questionId: 'negative-half-reaction',
+        value: '不会',
+      },
+      assistance: { kind: 'none', rounds: 0 },
+      assessmentEventIdPrefix: 'equation-blank',
+      assessedAt: '2026-07-15T12:02:01.000Z',
+    });
+
+    expect(second.profile.nodes.find((node) => node.nodeId === 'P6')).toMatchObject({
+      status: 'scored',
+      outcome: 'hit',
+      latestAttempt: { status: 'unanswered' },
+    });
+  });
+
   it('persists the loader digest plus case, grammar, and engine versions and rejects drift', async () => {
     const { config, session } = await fixture();
     expect(session.configVersions).toMatchObject({

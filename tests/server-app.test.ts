@@ -32,7 +32,7 @@ describe('Hono server responsibilities', () => {
       knowledgeModel: { version: string };
       configVersion: string;
     };
-    expect(firstConfig.knowledgeModel.version).toBe('knowledge-model.v1');
+    expect(firstConfig.knowledgeModel.version).toBe('knowledge-model.v1.1');
     expect(secondConfig.knowledgeModel.version).toBe('knowledge-model.v2');
     expect(secondConfig.configVersion).toMatch(/^sha256:[a-f0-9]{64}$/);
   });

@@ -884,3 +884,47 @@ export function validateHalfReactionPair(
     multipliers: [leastCommonMultiple / leftCount, leastCommonMultiple / rightCount],
   };
 }
+
+export function combineHalfReactionsCanonical(
+  oxidation: string,
+  reduction: string,
+  medium: EquationMedium,
+) {
+  const pair = validateHalfReactionPair(oxidation, reduction, medium);
+  if (pair.electronCount === 0) {
+    throw new Error('Half reactions must contain electrons on opposite sides');
+  }
+  const left = analyzeEquation(oxidation, {
+    kind: 'half',
+    medium,
+    expectedElectronSide: 'product',
+  });
+  const right = analyzeEquation(reduction, {
+    kind: 'half',
+    medium,
+    expectedElectronSide: 'reactant',
+  });
+  if (left.status !== 'parsed' || right.status !== 'parsed' || !left.valid || !right.valid) {
+    throw new Error(`Half reactions must both be valid in ${medium} medium`);
+  }
+  const scale = (species: readonly ParsedSpecies[], multiplier: number) =>
+    species.map((entry) => ({ ...entry, coefficient: entry.coefficient * multiplier }));
+  const combined: ParsedEquation = {
+    source: `${oxidation} + ${reduction}`,
+    normalizedSource: `${left.parsed.normalizedSource} + ${right.parsed.normalizedSource}`,
+    arrow: '->',
+    reactants: [
+      ...scale(left.parsed.reactants, pair.multipliers[0]),
+      ...scale(right.parsed.reactants, pair.multipliers[1]),
+    ],
+    products: [
+      ...scale(left.parsed.products, pair.multipliers[0]),
+      ...scale(right.parsed.products, pair.multipliers[1]),
+    ],
+  };
+  return {
+    canonical: canonicalizeParsedEquation(combined),
+    multipliers: pair.multipliers,
+    electronCount: pair.electronCount,
+  };
+}

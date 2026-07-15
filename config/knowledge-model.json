@@ -1,5 +1,5 @@
 {
-  "version": "knowledge-model.v1",
+  "version": "knowledge-model.v1.1",
   "dimensions": [
     { "id": "device", "label": "装置", "axis": "x" },
     { "id": "principle", "label": "原理", "axis": "y" },
@@ -37,7 +37,8 @@
       "misconceptions": [
         { "id": "D3-M1", "statement": "认为溶液或盐桥传导电子。" },
         { "id": "D3-M2", "statement": "选用酒精、蔗糖水等非电解质作为离子导体。" },
-        { "id": "D3-M3", "statement": "认为双液原电池可以省略盐桥而回路仍然闭合。" }
+        { "id": "D3-M3", "statement": "认为双液原电池可以省略盐桥而回路仍然闭合。" },
+        { "id": "D3-M4", "statement": "只关注电极和导线，遗漏离子导体与内电路。" }
       ],
       "weight": 2,
       "position": { "x": 1, "y": 0, "z": 0 },
@@ -46,7 +47,7 @@
     {
       "id": "D4",
       "dimensionId": "device",
-      "statement": "正极（电解池中为阴极）材料是还原半反应发生的场所；材料通常不参与反应，常为惰性电极。",
+      "statement": "正极（电解池中为阴极）材料是还原半反应发生的场所；材料一般不参与电极反应，可为惰性电极（Pt、碳）或不参与反应的普通导体（如锌铜电池中的 Cu）。",
       "misconceptions": [
         { "id": "D4-M1", "statement": "认为正极材料自身必然被还原或溶解。" },
         { "id": "D4-M2", "statement": "不能把正极与得电子、还原对应起来。" }
@@ -183,7 +184,7 @@
     {
       "id": "E3",
       "dimensionId": "energy",
-      "statement": "能量转化并非 100%，部分以热等形式损耗；燃料电池效率高于直接燃烧发电。",
+      "statement": "能量转化并非 100%，部分以热等形式损耗；燃料电池效率通常高于火力发电。",
       "misconceptions": [
         { "id": "E3-M1", "statement": "认为原电池可以把化学能完全转化为电能。" },
         { "id": "E3-M2", "statement": "忽略燃料电池与火力发电在能量转化环节和效率上的差异。" }

@@ -1,5 +1,5 @@
 {
-  "version": "pretest.v1",
+  "version": "pretest.v1.1",
   "builder": {
     "prompt": "不用具体金属名称，搭建一个能持续工作的原电池通用模型，并标出电子、阳离子和阴离子的运动方向。",
     "components": [
@@ -11,16 +11,6 @@
       { "id": "electron-arrow", "label": "电子方向箭头", "kind": "direction-marker", "abstract": true },
       { "id": "cation-arrow", "label": "阳离子方向箭头", "kind": "direction-marker", "abstract": true },
       { "id": "anion-arrow", "label": "阴离子方向箭头", "kind": "direction-marker", "abstract": true },
-      {
-        "id": "same-material-pair",
-        "label": "同种材料电极一对",
-        "kind": "distractor",
-        "abstract": false,
-        "distractor": {
-          "misconceptionIds": ["D5-M1", "P1-M1"],
-          "reason": "用具体且相同的材料替代两个功能不同的反应场所，不能表达通用模型。"
-        }
-      },
       {
         "id": "sucrose-solution",
         "label": "蔗糖水",
@@ -98,8 +88,8 @@
       "type": "choice",
       "prompt": "关于锌铜原电池，下列说法哪一项同时正确区分了反应场所与反应物？",
       "dimensionId": "principle",
-      "rubricIds": ["rubric-p1", "rubric-p2", "rubric-d5"],
-      "targetNodeIds": ["P1", "P2", "D5"],
+      "rubricIds": ["rubric-p2", "rubric-d5"],
+      "targetNodeIds": ["P2", "D5"],
       "evidencePath": "选择项 -> 氧化还原前提、两极反应物与场所/反应物区分",
       "options": [
         {
@@ -118,13 +108,13 @@
           "id": "C",
           "text": "只要有两根不同金属和导线，任何反应都能持续发电。",
           "correct": false,
-          "misconceptionIds": ["P1-M1", "D3-M3"]
+          "misconceptionIds": ["P1-M1", "D3-M4"]
         },
         {
           "id": "D",
           "text": "电子由 Cu²⁺ 经盐桥移动到 Zn。",
           "correct": false,
-          "misconceptionIds": ["D3-M1", "P4-M2"]
+          "misconceptionIds": ["D3-M1", "P4-M1", "P4-M2"]
         }
       ]
     },
@@ -145,7 +135,8 @@
       ],
       "referenceEquations": [
         { "caseId": "zinc-copper", "equationSetId": "zinc-negative", "equation": "Zn - 2e⁻ = Zn²⁺" },
-        { "caseId": "zinc-copper", "equationSetId": "copper-positive", "equation": "Cu²⁺ + 2e⁻ = Cu" }
+        { "caseId": "zinc-copper", "equationSetId": "copper-positive", "equation": "Cu²⁺ + 2e⁻ = Cu" },
+        { "caseId": "zinc-copper", "equationSetId": "zinc-copper-overall", "equation": "Zn + Cu²⁺ = Zn²⁺ + Cu" }
       ]
     },
     {

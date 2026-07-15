@@ -1,7 +1,10 @@
 import { z } from 'zod';
 
 const idSchema = z.string().trim().min(1);
-const versionSchema = z.string().trim().regex(/\.v\d+$/, 'must end with a numeric .v version');
+const versionSchema = z.string().trim().regex(
+  /\.v\d+(?:\.\d+)*$/,
+  'must end with a numeric .v version',
+);
 const outcomeSchema = z.enum(['hit', 'partial', 'miss']);
 const dimensionIdSchema = z.enum(['device', 'principle', 'energy']);
 
@@ -637,12 +640,13 @@ export const caseSchema = z
           .object({
             level: z.number().int().min(1).max(3),
             questions: z.array(z.string().trim().min(1)).min(1),
+            // Each entry is one semantic answer unit; related clauses stay grouped.
             answerPoints: z.array(z.string().trim().min(1)).min(1),
           })
           .strict(),
       )
       .length(3),
-    equationSets: z.array(equationSetSchema).min(2),
+    equationSets: z.array(equationSetSchema).length(3),
     evidencePaths: z
       .array(
         z
@@ -674,6 +678,43 @@ export const caseSchema = z
     reportDuplicateIds(value.equationSets, ['equationSets'], context);
     reportDuplicateIds(value.evidencePaths, ['evidencePaths'], context);
     reportDuplicateStrings(value.targetNodeIds, ['targetNodeIds'], context);
+    const electrodeCounts = new Map<'negative' | 'positive' | 'overall', number>([
+      ['negative', 0],
+      ['positive', 0],
+      ['overall', 0],
+    ]);
+    value.equationSets.forEach((entry) => {
+      electrodeCounts.set(entry.electrode, electrodeCounts.get(entry.electrode)! + 1);
+    });
+    electrodeCounts.forEach((count, electrode) => {
+      if (count !== 1) {
+        context.addIssue({
+          code: 'custom',
+          path: ['equationSets'],
+          message: `case must contain exactly one ${electrode} equation set`,
+        });
+      }
+    });
+    const evidenceNodeIds = new Set(value.evidencePaths.map((entry) => entry.nodeId));
+    value.targetNodeIds.forEach((nodeId, index) => {
+      if (!evidenceNodeIds.has(nodeId)) {
+        context.addIssue({
+          code: 'custom',
+          path: ['targetNodeIds', index],
+          message: `target node ${nodeId} has no evidence path`,
+        });
+      }
+    });
+    value.evidencePaths.forEach((entry, index) => {
+      reportDuplicateIds(entry.factRequirements, ['evidencePaths', index, 'factRequirements'], context);
+      if (entry.source === 'answer' && entry.factRequirements.length === 0) {
+        context.addIssue({
+          code: 'custom',
+          path: ['evidencePaths', index, 'factRequirements'],
+          message: 'answer evidence requires deterministic fact requirements',
+        });
+      }
+    });
     const levels = new Set<number>();
     value.scaffold.forEach((entry, index) => {
       if (levels.has(entry.level)) {

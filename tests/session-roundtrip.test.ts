@@ -233,7 +233,7 @@ describe('session persistence and staged assessment state', () => {
     ).toThrow(/progress/i);
   });
 
-  it('uses only the latest assessment per node and never reports a node in conflicting buckets', () => {
+  it('keeps the latest completed score separate from a later unassessed attempt', () => {
     let session = appendSessionEvent(startedSession(), answerEvent('answer-1', 'attempt-1'));
     session = appendSessionEvent(
       session,
@@ -271,14 +271,15 @@ describe('session persistence and staged assessment state', () => {
     const summary = summarizeAssessedScores(session);
 
     expect(summary).toEqual({
-      earned: 0,
-      possible: 0,
-      ratio: null,
-      assessedNodeIds: [],
-      unassessedNodeIds: ['D1'],
+      earned: 2,
+      possible: 2,
+      ratio: 1,
+      assessedNodeIds: ['D1'],
+      unassessedNodeIds: [],
       needsReviewNodeIds: [],
+      unansweredNodeIds: [],
+      latestAttemptStatusByNode: { D1: 'unassessed' },
     });
-    expect(summary.assessedNodeIds).not.toContain('D1');
   });
 
   it('reports the latest needs-review node separately from unassessed nodes', () => {
@@ -293,8 +294,12 @@ describe('session persistence and staged assessment state', () => {
       }),
     );
 
-    expect(summarizeAssessedScores(session).needsReviewNodeIds).toEqual(['P4']);
-    expect(summarizeAssessedScores(session).unassessedNodeIds).toEqual([]);
+    expect(summarizeAssessedScores(session)).toMatchObject({
+      needsReviewNodeIds: ['P4'],
+      unassessedNodeIds: [],
+      unansweredNodeIds: [],
+      latestAttemptStatusByNode: { P4: 'needs-review' },
+    });
   });
 
   it('requires a completely valid session before radar aggregation', () => {

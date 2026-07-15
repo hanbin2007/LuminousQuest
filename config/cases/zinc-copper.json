@@ -1,5 +1,5 @@
 {
-  "version": "case.v1",
+  "version": "case.v1.1",
   "id": "zinc-copper",
   "title": "锌铜原电池",
   "type": "analysis",
@@ -70,24 +70,31 @@
       "medium": "neutral",
       "expectedElectronSide": "reactant",
       "accepted": ["Cu^2+ + 2e^- -> Cu"]
+    },
+    {
+      "id": "zinc-copper-overall",
+      "electrode": "overall",
+      "medium": "neutral",
+      "expectedElectronSide": "none",
+      "accepted": ["Zn + Cu^2+ -> Zn^2+ + Cu"]
     }
   ],
   "evidencePaths": [
-    { "id": "zc-d1", "nodeId": "D1", "description": "指出 Zn 是发生氧化反应的失电子场所。", "source": "answer" },
-    { "id": "zc-d2", "nodeId": "D2", "description": "指出导线传导电子并连接两极。", "source": "answer" },
-    { "id": "zc-d3", "nodeId": "D3", "description": "指出盐桥与电解质通过离子迁移构成内电路。", "source": "answer" },
-    { "id": "zc-d4", "nodeId": "D4", "description": "指出 Cu 是还原半反应发生的得电子场所。", "source": "answer" },
-    { "id": "zc-d5", "nodeId": "D5", "description": "区分 Cu 电极场所与 Cu^2+ 反应物。", "source": "answer" },
-    { "id": "zc-p1", "nodeId": "P1", "description": "指出总反应能自发进行且两个半反应分处两极。", "source": "answer" },
-    { "id": "zc-p2", "nodeId": "P2", "description": "确定 Zn 为还原剂、Cu^2+ 为氧化剂。", "source": "answer" },
+    { "id": "zc-d1", "nodeId": "D1", "description": "指出 Zn 是发生氧化反应的失电子场所。", "source": "answer", "factRequirements": [{ "id": "oxidation-site", "acceptedValues": ["Zn"] }] },
+    { "id": "zc-d2", "nodeId": "D2", "description": "指出导线传导电子并连接两极。", "source": "answer", "factRequirements": [{ "id": "external-carrier", "acceptedValues": ["electron"] }] },
+    { "id": "zc-d3", "nodeId": "D3", "description": "指出盐桥与电解质通过离子迁移构成内电路。", "source": "answer", "factRequirements": [{ "id": "internal-carrier", "acceptedValues": ["ion"] }, { "id": "ion-path", "acceptedValues": ["salt-bridge"] }] },
+    { "id": "zc-d4", "nodeId": "D4", "description": "指出 Cu 是还原半反应发生的得电子场所。", "source": "answer", "factRequirements": [{ "id": "reduction-site", "acceptedValues": ["Cu"] }] },
+    { "id": "zc-d5", "nodeId": "D5", "description": "区分 Cu 电极场所与 Cu^2+ 反应物。", "source": "answer", "factRequirements": [{ "id": "positive-site", "acceptedValues": ["Cu"] }, { "id": "positive-reactant", "acceptedValues": ["Cu^2+"] }] },
+    { "id": "zc-p1", "nodeId": "P1", "description": "指出总反应能自发进行且两个半反应分处两极。", "source": "answer", "factRequirements": [{ "id": "spontaneous", "acceptedValues": ["true"] }, { "id": "half-reactions-separated", "acceptedValues": ["true"] }] },
+    { "id": "zc-p2", "nodeId": "P2", "description": "确定 Zn 为还原剂、Cu^2+ 为氧化剂。", "source": "answer", "factRequirements": [{ "id": "reducing-agent", "acceptedValues": ["Zn"] }, { "id": "oxidizing-agent", "acceptedValues": ["Cu^2+"] }] },
     { "id": "zc-p3", "nodeId": "P3", "description": "确定 Zn^2+ 与 Cu 为案例条件下的产物。", "source": "equation" },
-    { "id": "zc-p4", "nodeId": "P4", "description": "说明电子与盐桥离子方向。", "source": "answer" },
-    { "id": "zc-p5", "nodeId": "P5", "description": "由过程推出锌片溶解与铜片增重。", "source": "answer" },
+    { "id": "zc-p4", "nodeId": "P4", "description": "说明电子与盐桥离子方向。", "source": "answer", "factRequirements": [{ "id": "electron-from", "acceptedValues": ["Zn"] }, { "id": "electron-to", "acceptedValues": ["Cu"] }, { "id": "anion-toward", "acceptedValues": ["Zn"] }, { "id": "cation-toward", "acceptedValues": ["Cu"] }] },
+    { "id": "zc-p5", "nodeId": "P5", "description": "由过程推出锌片溶解与铜片增重。", "source": "answer", "factRequirements": [{ "id": "mass-loss", "acceptedValues": ["Zn"] }, { "id": "mass-gain", "acceptedValues": ["Cu"] }] },
     { "id": "zc-p6", "nodeId": "P6", "description": "两条电极反应式通过守恒与等价式校验。", "source": "equation" },
     { "id": "zc-p7", "nodeId": "P7", "description": "按电子数合并两式并得到不含电子的案例总反应。", "source": "equation" },
-    { "id": "zc-e1", "nodeId": "E1", "description": "指出化学能直接转化为电能。", "source": "answer" },
-    { "id": "zc-e2", "nodeId": "E2", "description": "把电能来源追溯到 Zn 与 Cu^2+ 的自发反应。", "source": "answer" },
-    { "id": "zc-e3", "nodeId": "E3", "description": "指出能量转化存在热等损耗。", "source": "answer" }
+    { "id": "zc-e1", "nodeId": "E1", "description": "指出化学能直接转化为电能。", "source": "answer", "factRequirements": [{ "id": "energy-from", "acceptedValues": ["chemical"] }, { "id": "energy-to", "acceptedValues": ["electric"] }] },
+    { "id": "zc-e2", "nodeId": "E2", "description": "把电能来源追溯到 Zn 与 Cu^2+ 的自发反应。", "source": "answer", "factRequirements": [{ "id": "energy-source-reaction", "acceptedValues": ["Zn+Cu^2+"] }] },
+    { "id": "zc-e3", "nodeId": "E3", "description": "指出能量转化存在热等损耗。", "source": "answer", "factRequirements": [{ "id": "complete-conversion", "acceptedValues": ["false"] }, { "id": "comparison", "acceptedValues": ["fuel-cell-over-thermal-power"] }] }
   ],
   "targetNodeIds": ["D1", "D2", "D3", "D4", "D5", "P1", "P2", "P3", "P4", "P5", "P6", "P7", "E1", "E2", "E3"]
 }

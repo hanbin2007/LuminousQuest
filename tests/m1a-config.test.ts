@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import { loadAllConfig } from '../server/config/loader';
+import {
+  canonicalizeEquation,
+  combineHalfReactionsCanonical,
+} from '../shared/chemistry/equation';
 
 const expectedNodeIds = [
   'D1', 'D2', 'D3', 'D4', 'D5',
@@ -66,7 +70,7 @@ describe('M1a external teaching configuration', () => {
 
       expect(decision).toMatchObject({ id, configField, status });
       expect(readConfigField(config, configField)).toEqual(expectedDefault);
-      expect(status === 'teacher-confirmed' ? decision?.reviewDueAt : decision?.reviewDueAt).toBe(
+      expect(decision?.reviewDueAt).toBe(
         status === 'teacher-confirmed' ? null : '2026-07-17T23:59:59+08:00',
       );
     },
@@ -113,5 +117,80 @@ describe('M1a external teaching configuration', () => {
 
     expect(mappedIds.length).toBeGreaterThan(0);
     expect(mappedIds.every((id: string) => misconceptionIds.has(id))).toBe(true);
+  });
+
+  it('transcribes the v1.1 D4/E3 rulings and removes the contradictory same-material distractor', async () => {
+    const config = await loadAllConfig(process.cwd());
+
+    expect(config.knowledgeModel.version).toBe('knowledge-model.v1.1');
+    expect(config.rubrics.version).toBe('rubrics.v1.1');
+    expect(config.pretest.version).toBe('pretest.v1.1');
+    expect(config.scaffoldPolicy.version).toBe('scaffold-policy.v1.1');
+    expect(config.cases.every((entry) => entry.version === 'case.v1.1')).toBe(true);
+    expect(config.knowledgeModel.nodes.find((node) => node.id === 'D4')?.statement)
+      .toContain('惰性电极');
+    expect(config.knowledgeModel.nodes.find((node) => node.id === 'D4')?.statement)
+      .toContain('普通导体');
+    expect(config.knowledgeModel.nodes.find((node) => node.id === 'E3')?.statement)
+      .toContain('火力发电');
+    expect(config.pretest.builder.components.some((entry) => entry.id === 'same-material-pair'))
+      .toBe(false);
+  });
+
+  it('uses the adjudicated pretest option-to-node and misconception mappings', async () => {
+    const config = await loadAllConfig(process.cwd());
+    const question = config.pretest.questions.find((entry) => entry.id === 'pretest-principle-reactants');
+    if (!question || question.type !== 'choice') throw new Error('missing choice pretest');
+
+    expect(question.targetNodeIds).toEqual(['P2', 'D5']);
+    expect(question.rubricIds).toEqual(['rubric-p2', 'rubric-d5']);
+    expect(question.options.find((entry) => entry.id === 'C')?.misconceptionIds).toContain('D3-M4');
+    expect(question.options.find((entry) => entry.id === 'D')?.misconceptionIds)
+      .toEqual(expect.arrayContaining(['P4-M1', 'P4-M2']));
+  });
+
+  it('states the complete alkaline aluminum-air OH- process and drops unsupported E3 targeting', async () => {
+    const config = await loadAllConfig(process.cwd());
+    const aluminum = config.cases.find((entry) => entry.id === 'aluminum-air')!;
+    const answer = aluminum.scaffold.find((entry) => entry.level === 1)!.answerPoints.join(' ');
+
+    expect(answer).toContain('OH^- 在正极生成');
+    expect(answer).toContain('向负极迁移');
+    expect(answer).toContain('在负极消耗');
+    expect(answer).toContain('隔膜只允许离子通过');
+    expect(aluminum.targetNodeIds).not.toContain('E3');
+  });
+
+  it('defines exactly negative, positive, and overall equation groups whose half reactions merge to the overall corpus', async () => {
+    const config = await loadAllConfig(process.cwd());
+
+    for (const trainingCase of config.cases) {
+      expect(trainingCase.equationSets.map((entry) => entry.electrode).sort())
+        .toEqual(['negative', 'overall', 'positive']);
+      const negative = trainingCase.equationSets.find((entry) => entry.electrode === 'negative')!;
+      const positive = trainingCase.equationSets.find((entry) => entry.electrode === 'positive')!;
+      const overall = trainingCase.equationSets.find((entry) => entry.electrode === 'overall')!;
+      const acceptedOverall = new Set(overall.accepted.map(canonicalizeEquation));
+      for (const oxidation of negative.accepted) {
+        for (const reduction of positive.accepted) {
+          expect(acceptedOverall.has(combineHalfReactionsCanonical(
+            oxidation,
+            reduction,
+            trainingCase.medium,
+          ).canonical), `${trainingCase.id}: ${oxidation} + ${reduction}`).toBe(true);
+        }
+      }
+    }
+  });
+
+  it('keeps case targets evidence-backed and answer evidence policy-evaluable', async () => {
+    const config = await loadAllConfig(process.cwd());
+    for (const trainingCase of config.cases) {
+      const evidenceNodes = new Set(trainingCase.evidencePaths.map((entry) => entry.nodeId));
+      expect(trainingCase.targetNodeIds.every((nodeId) => evidenceNodes.has(nodeId))).toBe(true);
+      expect(trainingCase.evidencePaths
+        .filter((entry) => entry.source === 'answer')
+        .every((entry) => entry.factRequirements.length > 0)).toBe(true);
+    }
   });
 });

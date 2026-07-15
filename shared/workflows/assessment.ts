@@ -133,7 +133,6 @@ export const structuredAssessmentResponseJsonSchema = {
           },
           evidence: {
             type: 'array',
-            minItems: 1,
             items: {
               type: 'object',
               additionalProperties: false,
@@ -348,6 +347,72 @@ export function recordStructuredTextAssessment(input: RecordStructuredTextAssess
       requirements,
       policy: input.config.rubrics.policy,
     });
+    const eventBase = {
+      id: `${input.assessmentEventIdPrefix}-${index + 1}`,
+      occurredAt: input.assessedAt,
+      kind: 'assessment.completed' as const,
+      caseId: input.answer.caseId,
+      stageId: input.answer.stageId,
+      attemptId: input.answer.attemptId,
+      sourceAnswerEventId: input.answer.id,
+      nodeId: assessment.nodeId,
+      rubric: { id: rubric.id, version: input.config.rubrics.version },
+      assistance: assessment.assistance,
+    };
+    if (evaluation.status === 'unanswered') {
+      session = appendSessionEvent(session, {
+        ...eventBase,
+        pipelineStage: 'score',
+        extraction: {
+          status: 'assessed',
+          evidence: assessment.evidence,
+          model: input.provenance.model,
+          provenance: {
+            promptId: input.provenance.promptId,
+            promptVersion: input.provenance.promptVersion,
+            cacheKey: input.provenance.cacheKey,
+          },
+        },
+        ruleDecision: {
+          status: 'unanswered',
+          reason: 'Response was blank or did not attempt the question',
+          promptRetry: evaluation.promptRetry,
+          includeInDiagnosis: evaluation.includeInDiagnosis,
+        },
+        following: {
+          status: 'not-followed',
+          anchorNodeId: null,
+          anchorOutcome: null,
+          policy: input.config.rubrics.policy.followingError.strategy,
+        },
+        score: {
+          status: 'unanswered',
+          promptRetry: evaluation.promptRetry,
+          includeInDiagnosis: evaluation.includeInDiagnosis,
+        },
+      });
+      return;
+    }
+    if (evaluation.status === 'needs-review') {
+      session = appendSessionEvent(session, {
+        ...eventBase,
+        pipelineStage: 'extraction',
+        extraction: {
+          status: 'needs-review',
+          reason: 'Extracted facts require review under the configured ambiguity policy',
+          model: input.provenance.model,
+          provenance: {
+            promptId: input.provenance.promptId,
+            promptVersion: input.provenance.promptVersion,
+            cacheKey: input.provenance.cacheKey,
+          },
+        },
+        ruleDecision: { status: 'unassessed', reason: 'awaiting extraction review' },
+        following: { status: 'unassessed' },
+        score: { status: 'unassessed' },
+      });
+      return;
+    }
     if (
       evaluation.status !== 'hit'
       && evaluation.status !== 'partial'
@@ -395,16 +460,8 @@ export function recordStructuredTextAssessment(input: RecordStructuredTextAssess
     });
 
     session = appendSessionEvent(session, {
-      id: `${input.assessmentEventIdPrefix}-${index + 1}`,
-      occurredAt: input.assessedAt,
-      kind: 'assessment.completed',
+      ...eventBase,
       pipelineStage: 'score',
-      caseId: input.answer.caseId,
-      stageId: input.answer.stageId,
-      attemptId: input.answer.attemptId,
-      sourceAnswerEventId: input.answer.id,
-      nodeId: assessment.nodeId,
-      rubric: { id: rubric.id, version: input.config.rubrics.version },
       extraction: {
         status: 'assessed',
         evidence: assessment.evidence,

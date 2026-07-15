@@ -1,5 +1,5 @@
 {
-  "version": "case.v1",
+  "version": "case.v1.1",
   "id": "aluminum-air",
   "title": "碱性铝-空气电池",
   "type": "analysis",
@@ -28,7 +28,7 @@
         "负极场所为 Al，Al 同时是还原剂；正极场所为多孔碳，真正的氧化剂 O2 来自空气。",
         "基线负极式可写为 Al + 4OH^- -> AlO2^- + 2H2O + 3e^-，也接受以 [Al(OH)4]^- 表示铝酸根存在形式的守恒等价式。",
         "正极反应为 O2 + 2H2O + 4e^- -> 4OH^-，不得在碱性最终式中保留游离 H^+。",
-        "电子由 Al 极经外电路流向空气极；离子在碱性电解质中迁移以维持电中性。",
+        "电子由 Al 极经外电路流向空气极；OH^- 在正极生成，经可透过离子的电解质与隔膜向负极迁移，并在负极消耗；隔膜只允许离子通过，不允许电子通过。",
         "铝与氧气总反应释放的化学能直接转化为电能，转化不可能百分之百。"
       ]
     },
@@ -76,20 +76,32 @@
       "crossMediumAccepted": [
         { "medium": "acidic", "accepted": ["O2 + 4H^+ + 4e^- -> 2H2O"] }
       ]
+    },
+    {
+      "id": "aluminum-air-overall",
+      "electrode": "overall",
+      "medium": "alkaline",
+      "expectedElectronSide": "none",
+      "accepted": [
+        "4Al + 3O2 + 4OH^- -> 4AlO2^- + 2H2O",
+        "4Al + 3O2 + 6H2O + 4OH^- -> 4[Al(OH)4]^-"
+      ]
     }
   ],
   "evidencePaths": [
-    { "id": "aa-d1", "nodeId": "D1", "description": "指出 Al 是氧化反应场所且能导电。", "source": "answer" },
-    { "id": "aa-d4", "nodeId": "D4", "description": "指出多孔碳是氧还原发生的场所。", "source": "answer" },
-    { "id": "aa-d5", "nodeId": "D5", "description": "区分多孔碳场所与来自空气的 O2 反应物。", "source": "answer" },
-    { "id": "aa-p2", "nodeId": "P2", "description": "确定 Al 为还原剂、O2 为氧化剂。", "source": "answer" },
+    { "id": "aa-d1", "nodeId": "D1", "description": "指出 Al 是氧化反应场所且能导电。", "source": "answer", "factRequirements": [{ "id": "oxidation-site", "acceptedValues": ["Al"] }] },
+    { "id": "aa-d3", "nodeId": "D3", "description": "指出碱性电解质与可透过离子的隔膜构成内电路。", "source": "answer", "factRequirements": [{ "id": "internal-carrier", "acceptedValues": ["ion"] }, { "id": "ion-path", "acceptedValues": ["alkaline-electrolyte+membrane"] }] },
+    { "id": "aa-d4", "nodeId": "D4", "description": "指出多孔碳是氧还原发生的场所。", "source": "answer", "factRequirements": [{ "id": "reduction-site", "acceptedValues": ["porous-carbon"] }] },
+    { "id": "aa-d5", "nodeId": "D5", "description": "区分多孔碳场所与来自空气的 O2 反应物。", "source": "answer", "factRequirements": [{ "id": "positive-site", "acceptedValues": ["porous-carbon"] }, { "id": "positive-reactant", "acceptedValues": ["O2"] }] },
+    { "id": "aa-p1", "nodeId": "P1", "description": "指出 Al 与 O2 的自发反应分处两极进行。", "source": "answer", "factRequirements": [{ "id": "spontaneous", "acceptedValues": ["true"] }, { "id": "half-reactions-separated", "acceptedValues": ["true"] }] },
+    { "id": "aa-p2", "nodeId": "P2", "description": "确定 Al 为还原剂、O2 为氧化剂。", "source": "answer", "factRequirements": [{ "id": "reducing-agent", "acceptedValues": ["Al"] }, { "id": "oxidizing-agent", "acceptedValues": ["O2"] }] },
     { "id": "aa-p3", "nodeId": "P3", "description": "根据碱性介质确定铝酸根与 OH^- 相关产物。", "source": "equation" },
-    { "id": "aa-p4", "nodeId": "P4", "description": "说明电子与碱性电解质中离子过程。", "source": "answer" },
-    { "id": "aa-p5", "nodeId": "P5", "description": "由反应过程解释铝消耗等现象。", "source": "answer" },
+    { "id": "aa-p4", "nodeId": "P4", "description": "说明电子与碱性电解质中离子过程。", "source": "answer", "factRequirements": [{ "id": "electron-from", "acceptedValues": ["Al"] }, { "id": "electron-to", "acceptedValues": ["porous-carbon"] }, { "id": "OH-generated-at", "acceptedValues": ["porous-carbon"] }, { "id": "OH-toward", "acceptedValues": ["Al"] }, { "id": "OH-consumed-at", "acceptedValues": ["Al"] }, { "id": "membrane-permits", "acceptedValues": ["ion-only"] }] },
+    { "id": "aa-p5", "nodeId": "P5", "description": "由反应过程解释铝消耗等现象。", "source": "answer", "factRequirements": [{ "id": "consumed", "acceptedValues": ["Al"] }] },
     { "id": "aa-p6", "nodeId": "P6", "description": "碱性两极反应式通过守恒、介质与等价式校验。", "source": "equation" },
     { "id": "aa-p7", "nodeId": "P7", "description": "按最小公倍数配合两极电子并合成总反应。", "source": "equation" },
-    { "id": "aa-e1", "nodeId": "E1", "description": "指出化学能直接转化为电能。", "source": "answer" },
-    { "id": "aa-e2", "nodeId": "E2", "description": "把电能来源追溯到 Al 与 O2 的自发反应。", "source": "answer" }
+    { "id": "aa-e1", "nodeId": "E1", "description": "指出化学能直接转化为电能。", "source": "answer", "factRequirements": [{ "id": "energy-from", "acceptedValues": ["chemical"] }, { "id": "energy-to", "acceptedValues": ["electric"] }] },
+    { "id": "aa-e2", "nodeId": "E2", "description": "把电能来源追溯到 Al 与 O2 的自发反应。", "source": "answer", "factRequirements": [{ "id": "energy-source-reaction", "acceptedValues": ["Al+O2"] }] }
   ],
-  "targetNodeIds": ["D1", "D3", "D4", "D5", "P1", "P2", "P3", "P4", "P5", "P6", "P7", "E1", "E2", "E3"]
+  "targetNodeIds": ["D1", "D3", "D4", "D5", "P1", "P2", "P3", "P4", "P5", "P6", "P7", "E1", "E2"]
 }
