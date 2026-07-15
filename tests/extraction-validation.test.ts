@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { loadAllConfig } from '../server/config/loader';
 import {
   ExtractionValidationError,
+  quoteExpressesFactValue,
   validateAssessmentExtraction,
 } from '../shared/workflows/extraction-validation';
 
@@ -76,6 +77,15 @@ function groundedExtraction(input: {
 }
 
 describe('closed-set extraction validation', () => {
+  it('uses the canonical fact value when no extra aliases are configured', () => {
+    expect(quoteExpressesFactValue({
+      quote: '电子由 Zn 极流出',
+      value: 'Zn',
+      aliases: {},
+      commonTypos: {},
+    })).toBe(true);
+  });
+
   it('repairs citations after full-width, whitespace, and configured typo normalization', async () => {
     const config = await fixture();
     const answer = '  电子由负级流向正极，Ｚｎ被氧化。';

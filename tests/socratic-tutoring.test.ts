@@ -35,6 +35,18 @@ describe('Socratic overlap leakage', () => {
       sharedBigrams: 0,
       matchedPointIndex: null,
     });
+    expect(answerLeakage('', ['答案要点'], 0.5, {}, 2)).toEqual({
+      leaked: false,
+      overlap: 0,
+      sharedBigrams: 0,
+      matchedPointIndex: null,
+    });
+    expect(answerLeakage('答案要点', [''], 0.5, {}, 2)).toEqual({
+      leaked: false,
+      overlap: 0,
+      sharedBigrams: 0,
+      matchedPointIndex: null,
+    });
     expect(answerLeakage('A', ['Ａ'], 0.5, {}, 2)).toEqual({
       leaked: false,
       overlap: 1,
