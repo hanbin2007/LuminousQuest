@@ -308,32 +308,39 @@ describe('runtime adjudication policy contracts', () => {
       .toBe(false);
   });
 
-  it('§15: changing assistance.correctOutcome changes hinted mastery', async () => {
+  it('§15: preset hints read assistance.correctOutcome, not the distinct Socratic value', async () => {
     const config = await loadAllConfig(process.cwd());
+    const distinct = structuredClone(config.scaffoldPolicy);
+    distinct.assistance.correctOutcome = 'hit';
+    distinct.socratic.correctedOutcome = 'hit-with-help';
     const base = {
       rubrics: config.rubrics,
       nodeId: 'P4',
       objectiveOutcome: 'hit' as const,
       assistance: { kind: 'hint' as const, rounds: 1 },
     };
-    expect(resolveRubricDecision({ ...base, scaffoldPolicy: config.scaffoldPolicy }).ruleDecision.status)
-      .toBe('hit-with-help');
-    const changed = structuredClone(config.scaffoldPolicy);
-    changed.assistance.correctOutcome = 'hit';
-    expect(resolveRubricDecision({ ...base, scaffoldPolicy: changed }).ruleDecision.status).toBe('hit');
+    expect(resolveRubricDecision({ ...base, scaffoldPolicy: distinct }).ruleDecision.status).toBe('hit');
+    expect(resolveRubricDecision({
+      ...base,
+      assistance: { kind: 'socratic', rounds: 1 },
+      scaffoldPolicy: distinct,
+    }).ruleDecision.status).toBe('hit-with-help');
   });
 
-  it('§16: changing socratic.correctedOutcome changes corrected mastery', async () => {
+  it('§16: Socratic correction reads correctedOutcome, not the distinct preset-hint value', async () => {
     const config = await loadAllConfig(process.cwd());
+    const distinct = structuredClone(config.scaffoldPolicy);
+    distinct.assistance.correctOutcome = 'hit';
+    distinct.socratic.correctedOutcome = 'hit-with-help';
     const base = {
       rubrics: config.rubrics,
       nodeId: 'P4',
       objectiveOutcome: 'hit' as const,
       assistance: { kind: 'socratic' as const, rounds: 2 },
     };
-    expect(resolveRubricDecision({ ...base, scaffoldPolicy: config.scaffoldPolicy }).ruleDecision.status)
+    expect(resolveRubricDecision({ ...base, scaffoldPolicy: distinct }).ruleDecision.status)
       .toBe('hit-with-help');
-    const changed = structuredClone(config.scaffoldPolicy);
+    const changed = structuredClone(distinct);
     changed.socratic.correctedOutcome = 'hit';
     expect(resolveRubricDecision({ ...base, scaffoldPolicy: changed }).ruleDecision.status).toBe('hit');
   });

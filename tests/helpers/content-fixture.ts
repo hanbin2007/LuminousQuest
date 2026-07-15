@@ -30,6 +30,14 @@ export async function writeValidContentTree(root: string) {
       path.join('config', 'cases', 'zinc-copper.json'),
       path.join(casesRoot, 'zinc-copper.json'),
     ),
+    copyRepositoryFile(
+      path.join('prompts', 'structured-assessment.md'),
+      path.join(promptsRoot, 'structured-assessment.md'),
+    ),
+    copyRepositoryFile(
+      path.join('prompts', 'socratic-tutoring.md'),
+      path.join(promptsRoot, 'socratic-tutoring.md'),
+    ),
   ]);
   await writeFile(path.join(promptsRoot, 'test.md'), 'Server-owned prompt v1');
 }

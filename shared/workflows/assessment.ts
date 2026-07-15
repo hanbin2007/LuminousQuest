@@ -7,7 +7,11 @@ import {
   factsMatchRequirements,
   normalizeFactValue,
 } from '../scoring/policy';
-import { resolveRubricDecision, rubricPolicyEngineVersion } from '../scoring/rubric';
+import {
+  type AssistanceMetadata,
+  resolveRubricDecision,
+  rubricPolicyEngineVersion,
+} from '../scoring/rubric';
 import { appendSessionEvent } from '../session/session';
 import type { StudentSession } from '../session/schema';
 
@@ -264,6 +268,64 @@ export interface RecordStructuredTextAssessmentInput {
   };
   assessmentEventIdPrefix: string;
   assessedAt: string;
+}
+
+export interface RecordNeedsReviewTextAssessmentInput {
+  session: StudentSession;
+  config: LoadedConfig;
+  answer: RecordStructuredTextAssessmentInput['answer'];
+  nodeId: string;
+  assistance: AssistanceMetadata;
+  reason: string;
+  provenance: RecordStructuredTextAssessmentInput['provenance'];
+  assessmentEventId: string;
+  assessedAt: string;
+}
+
+export function recordNeedsReviewTextAssessment(input: RecordNeedsReviewTextAssessmentInput) {
+  const rubric = input.config.rubrics.rubrics.find((entry) => entry.nodeId === input.nodeId);
+  if (!rubric) throw new Error(`No rubric configured for node ${input.nodeId}`);
+  let session = appendSessionEvent(input.session, {
+    id: input.answer.id,
+    occurredAt: input.answer.occurredAt,
+    kind: 'answer.submitted',
+    pipelineStage: 'answer',
+    caseId: input.answer.caseId,
+    stageId: input.answer.stageId,
+    attemptId: input.answer.attemptId,
+    questionId: input.answer.questionId,
+    answer: { format: 'text', value: input.answer.value },
+  });
+  session = appendSessionEvent(session, {
+    id: input.assessmentEventId,
+    occurredAt: input.assessedAt,
+    kind: 'assessment.completed',
+    pipelineStage: 'extraction',
+    caseId: input.answer.caseId,
+    stageId: input.answer.stageId,
+    attemptId: input.answer.attemptId,
+    sourceAnswerEventId: input.answer.id,
+    nodeId: input.nodeId,
+    rubric: { id: rubric.id, version: input.config.rubrics.version },
+    assistance: input.assistance,
+    extraction: {
+      status: 'needs-review',
+      reason: input.reason,
+      model: input.provenance.model,
+      provenance: {
+        promptId: input.provenance.promptId,
+        promptVersion: input.provenance.promptVersion,
+        cacheKey: input.provenance.cacheKey,
+      },
+    },
+    ruleDecision: { status: 'unassessed', reason: 'awaiting extraction review' },
+    following: { status: 'unassessed' },
+    score: { status: 'unassessed' },
+  });
+  return {
+    session,
+    profile: buildLearnerProfile(session, input.config),
+  };
 }
 
 function parseAnchorValue(value: string) {

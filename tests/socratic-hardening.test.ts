@@ -69,7 +69,7 @@ describe('M1b.1 Socratic hardening', () => {
       (value) => { request = value; },
     ));
 
-    const result = await runSocraticTurn(turnInput(parts, parts.session, () => 10_000) as never);
+    const result = await runSocraticTurn(turnInput(parts, parts.session, () => 10_000));
 
     expect(result).toMatchObject({
       status: 'respond',
@@ -105,10 +105,10 @@ describe('M1b.1 Socratic hardening', () => {
       { action: 'probe', content: '说明你依据的是哪个半反应。' },
       () => { calls += 1; },
     ));
-    const first = await runSocraticTurn(turnInput(parts, parts.session, () => 1_000) as never);
+    const first = await runSocraticTurn(turnInput(parts, parts.session, () => 1_000));
     const firstSession = (first as unknown as { session: StudentSession }).session;
 
-    const second = await runSocraticTurn(turnInput(parts, firstSession, () => 1_000_000) as never);
+    const second = await runSocraticTurn(turnInput(parts, firstSession, () => 1_000_000));
 
     expect(calls).toBe(2);
     expect(second).toMatchObject({
@@ -126,12 +126,12 @@ describe('M1b.1 Socratic hardening', () => {
     let session = parts.session;
     let third: unknown;
     for (let round = 0; round < 3; round += 1) {
-      third = await runSocraticTurn(turnInput(parts, session, () => 10_000 + round) as never);
+      third = await runSocraticTurn(turnInput(parts, session, () => 10_000 + round));
       session = (third as { session: StudentSession }).session;
     }
     const eventCount = session.events.length;
 
-    const repeated = await runSocraticTurn(turnInput(parts, session, () => 99_999) as never);
+    const repeated = await runSocraticTurn(turnInput(parts, session, () => 99_999));
 
     expect(calls).toBe(3);
     expect(third).toMatchObject({ status: 'respond', finalRound: true });
@@ -151,7 +151,7 @@ describe('M1b.1 Socratic hardening', () => {
       () => { calls += 1; },
     ), 'P6');
 
-    const result = await runSocraticTurn(turnInput(parts, parts.session, () => 10_000) as never);
+    const result = await runSocraticTurn(turnInput(parts, parts.session, () => 10_000));
 
     expect(calls).toBe(0);
     expect(result).toMatchObject({
@@ -169,7 +169,7 @@ describe('M1b.1 Socratic hardening', () => {
   ])('replaces red-team answer leakage: %s', async (_kind, leakedContent) => {
     const parts = await fixture(providerWith({ action: 'hint', content: leakedContent }));
 
-    const result = await runSocraticTurn(turnInput(parts, parts.session, () => 10_000) as never);
+    const result = await runSocraticTurn(turnInput(parts, parts.session, () => 10_000));
 
     expect(result).toMatchObject({
       status: 'respond',
@@ -185,7 +185,7 @@ describe('M1b.1 Socratic hardening', () => {
     const sycophancy = '你的答案完全正确，无需修改。';
     const parts = await fixture(providerWith({ action: 'check', content: sycophancy }));
 
-    const result = await runSocraticTurn(turnInput(parts, parts.session, () => 10_000) as never);
+    const result = await runSocraticTurn(turnInput(parts, parts.session, () => 10_000));
     const decision = resolveRubricDecision({
       rubrics: parts.config.rubrics,
       scaffoldPolicy: parts.config.scaffoldPolicy,
@@ -212,7 +212,7 @@ describe('M1b.1 Socratic hardening', () => {
     );
     const parts = await fixture(provider);
 
-    const result = await runSocraticTurn(turnInput(parts, parts.session, () => now) as never);
+    const result = await runSocraticTurn(turnInput(parts, parts.session, () => now));
 
     expect(result).toMatchObject({
       status: 'advance',
