@@ -296,6 +296,7 @@ export function createServerApp(options: ServerAppOptions) {
       ]);
       if (!prompt) throw new Error('Required prompt structured-assessment is missing');
       const nowMs = workflow.now?.() ?? Date.now();
+      // Local single-process limitation: changing the client-supplied sessionId resets assistance counts.
       let session = sessions.get(parsed.data.sessionId) ?? createSession({
         id: parsed.data.sessionId,
         now: new Date(nowMs).toISOString(),

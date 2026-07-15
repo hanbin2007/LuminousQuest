@@ -76,6 +76,26 @@ function groundedExtraction(input: {
   return value;
 }
 
+function booleanFactExtraction(input: {
+  answer: string;
+  nodeId: string;
+  slotId: string;
+  slotValue: 'true' | 'false';
+  quote: string;
+}) {
+  const value = extraction(input.answer, 0, input.answer.length);
+  const start = input.answer.indexOf(input.quote);
+  if (start < 0) throw new Error(`Quote ${input.quote} is not present in the test answer`);
+  value.assessments[0].nodeId = input.nodeId;
+  value.assessments[0].errorIds = [];
+  value.assessments[0].facts.slots = [{
+    id: input.slotId,
+    value: input.slotValue,
+    evidence: { quote: input.quote, start, end: start + input.quote.length },
+  }];
+  return value;
+}
+
 describe('closed-set extraction validation', () => {
   it('uses the canonical fact value when no extra aliases are configured', () => {
     expect(quoteExpressesFactValue({
@@ -281,6 +301,82 @@ describe('closed-set extraction validation', () => {
       expect.objectContaining({ id: 'electron-from', value: 'Zn', evidence: { quote: '锌片', start: 3, end: 5 } }),
       expect.objectContaining({ id: 'electron-to', value: 'Cu', evidence: { quote: '铜电极', start: 7, end: 10 } }),
     ]);
+  });
+
+  it.each([
+    ['spontaneous', 'zinc-copper', 'P1', 'spontaneous', '反应不能自发进行', '自发'],
+    ['half-reactions-separated', 'zinc-copper', 'P1', 'half-reactions-separated', '两个半反应不分处两极', '分处'],
+    ['complete-conversion', 'zinc-copper', 'E3', 'complete-conversion', '能量转化未发生', '发生'],
+    ['site-consumed', 'hydrogen-oxygen', 'D1', 'site-consumed', 'Pt不会消耗', '会'],
+  ])('routes a negated %s=true declaration to fact-grounding review', async (
+    _kind,
+    caseId,
+    nodeId,
+    slotId,
+    answer,
+    quote,
+  ) => {
+    const config = await fixture();
+
+    expect(() => validateAssessmentExtraction({
+      extraction: booleanFactExtraction({ answer, nodeId, slotId, slotValue: 'true', quote }),
+      answer,
+      caseId,
+      targetNodeIds: [nodeId],
+      config,
+    })).toThrow(expect.objectContaining({
+      category: 'fact-grounding',
+      retryable: false,
+      detail: expect.objectContaining({ slotId, slotValue: 'true' }),
+    }));
+  });
+
+  it.each([
+    ['spontaneous', 'zinc-copper', 'P1', 'spontaneous', '反应可以自发进行', '自发'],
+    ['half-reactions-separated', 'zinc-copper', 'P1', 'half-reactions-separated', '两个半反应分处两极', '分处'],
+    ['complete-conversion', 'zinc-copper', 'E3', 'complete-conversion', '能量会完全转化', '会'],
+    ['site-consumed', 'hydrogen-oxygen', 'D1', 'site-consumed', 'Pt会消耗', '会'],
+  ])('accepts an affirmative %s=true declaration', async (
+    _kind,
+    caseId,
+    nodeId,
+    slotId,
+    answer,
+    quote,
+  ) => {
+    const config = await fixture();
+
+    expect(validateAssessmentExtraction({
+      extraction: booleanFactExtraction({ answer, nodeId, slotId, slotValue: 'true', quote }),
+      answer,
+      caseId,
+      targetNodeIds: [nodeId],
+      config,
+    }).assessments[0].facts.slots[0]).toMatchObject({ id: slotId, value: 'true' });
+  });
+
+  it.each([
+    ['spontaneous', 'zinc-copper', 'P1', 'spontaneous', '反应不能自发进行', '不能自发'],
+    ['half-reactions-separated', 'zinc-copper', 'P1', 'half-reactions-separated', '两个半反应不分处两极', '不分处'],
+    ['complete-conversion', 'zinc-copper', 'E3', 'complete-conversion', '能量转化未发生', '未发生'],
+    ['site-consumed', 'hydrogen-oxygen', 'D1', 'site-consumed', 'Pt不会消耗', '不会消耗'],
+  ])('accepts a negated %s=false declaration', async (
+    _kind,
+    caseId,
+    nodeId,
+    slotId,
+    answer,
+    quote,
+  ) => {
+    const config = await fixture();
+
+    expect(validateAssessmentExtraction({
+      extraction: booleanFactExtraction({ answer, nodeId, slotId, slotValue: 'false', quote }),
+      answer,
+      caseId,
+      targetNodeIds: [nodeId],
+      config,
+    }).assessments[0].facts.slots[0]).toMatchObject({ id: slotId, value: 'false' });
   });
 
   it('rejects a correct slot value whose bound quote does not express that value', async () => {

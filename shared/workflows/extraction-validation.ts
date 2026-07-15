@@ -97,6 +97,36 @@ function containsNormalizedAlias(text: string, alias: string) {
   return false;
 }
 
+const booleanNegationTokens = [
+  '并非',
+  '并不',
+  '无法',
+  '不能',
+  '不会',
+  '不可',
+  '不得',
+  '没有',
+  '未',
+  '没',
+  '非',
+  '不',
+] as const;
+
+function containsBooleanNegation(value: string, commonTypos: Record<string, string>) {
+  const normalized = normalizeComparisonText(value, commonTypos);
+  return booleanNegationTokens.some((token) => normalized.includes(token));
+}
+
+function quoteGroundingContext(
+  answer: string,
+  evidence: { start: number; end: number },
+) {
+  const adjacentCharacters = 4;
+  const before = [...answer.slice(0, evidence.start)].slice(-adjacentCharacters).join('');
+  const after = [...answer.slice(evidence.end)].slice(0, adjacentCharacters).join('');
+  return `${before}${answer.slice(evidence.start, evidence.end)}${after}`;
+}
+
 export function factValueAliases(
   value: string,
   aliases: Record<string, string[]>,
@@ -113,8 +143,15 @@ export function quoteExpressesFactValue(input: {
   value: string;
   aliases: Record<string, string[]>;
   commonTypos: Record<string, string>;
+  groundingContext?: string;
 }) {
   const quote = normalizeComparisonText(input.quote, input.commonTypos);
+  if (
+    normalizeComparisonText(input.value, input.commonTypos) === 'true'
+    && containsBooleanNegation(input.groundingContext ?? input.quote, input.commonTypos)
+  ) {
+    return false;
+  }
   return factValueAliases(input.value, input.aliases, input.commonTypos)
     .some((alias) => containsNormalizedAlias(quote, alias));
 }
@@ -214,14 +251,14 @@ function validateEvidence(
     policy.commonTypos,
     policy.normalizationCandidateMaxEditDistanceRatio,
   );
-  if (match && match.ratio <= policy.maxEditDistanceRatio) {
-    if (match.ratio === 0) {
-      return {
-        quote: answer.slice(match.start, match.end),
-        start: match.start,
-        end: match.end,
-      };
-    }
+  // Unlisted edits are never admitted: ratio === 0 is the only success path.
+  // maxEditDistanceRatio is retained only as diagnostic detail for rejected candidates.
+  if (match?.ratio === 0) {
+    return {
+      quote: answer.slice(match.start, match.end),
+      start: match.start,
+      end: match.end,
+    };
   }
   if (match && match.ratio <= policy.normalizationCandidateMaxEditDistanceRatio) {
     const actualQuote = answer.slice(match.start, match.end);
@@ -327,6 +364,7 @@ export function validateAssessmentExtraction(input: {
         value: fact.value,
         aliases: input.config.scaffoldPolicy.extraction.factValueAliases,
         commonTypos: input.config.scaffoldPolicy.extraction.citation.commonTypos,
+        groundingContext: quoteGroundingContext(input.answer, fact.evidence),
       })) {
         throw new ExtractionValidationError(
           'fact-grounding',
@@ -375,6 +413,7 @@ export function validateAssessmentExtraction(input: {
         value: slot.value,
         aliases: input.config.scaffoldPolicy.extraction.factValueAliases,
         commonTypos: input.config.scaffoldPolicy.extraction.citation.commonTypos,
+        groundingContext: quoteGroundingContext(input.answer, slot.evidence),
       })) {
         throw new ExtractionValidationError(
           'fact-grounding',
