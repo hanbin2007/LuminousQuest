@@ -176,6 +176,15 @@ const unassessedRuleDecisionSchema = z
   })
   .strict();
 
+const unansweredRuleDecisionSchema = z
+  .object({
+    status: z.literal('unanswered'),
+    reason: z.string().trim().min(1),
+    promptRetry: z.boolean(),
+    includeInDiagnosis: z.boolean(),
+  })
+  .strict();
+
 const assessedFollowingSchema = z
   .object({
     status: z.enum(['followed', 'not-followed']),
@@ -218,6 +227,13 @@ const needsReviewScoreSchema = z
   .strict();
 
 const unassessedScoreSchema = z.object({ status: z.literal('unassessed') }).strict();
+const unansweredScoreSchema = z
+  .object({
+    status: z.literal('unanswered'),
+    promptRetry: z.boolean(),
+    includeInDiagnosis: z.boolean(),
+  })
+  .strict();
 
 const assessmentPipelineStageSchema = z.enum(['extraction', 'rule', 'following', 'score']);
 
@@ -239,13 +255,19 @@ export const assessmentCompletedEventSchema = z
       assessedRuleDecisionSchema,
       needsReviewRuleDecisionSchema,
       unassessedRuleDecisionSchema,
+      unansweredRuleDecisionSchema,
     ]),
     following: z.union([
       assessedFollowingSchema,
       needsReviewFollowingSchema,
       unassessedFollowingSchema,
     ]),
-    score: z.union([scoredSchema, needsReviewScoreSchema, unassessedScoreSchema]),
+    score: z.union([
+      scoredSchema,
+      needsReviewScoreSchema,
+      unassessedScoreSchema,
+      unansweredScoreSchema,
+    ]),
   })
   .strict()
   .superRefine((event, context) => {
@@ -253,7 +275,8 @@ export const assessmentCompletedEventSchema = z
       context.addIssue({ code: 'custom', path: [field, 'status'], message });
     };
     const extractionAssessed = event.extraction.status === 'assessed';
-    const ruleAssessed = ['hit', 'hit-with-help', 'partial', 'miss'].includes(event.ruleDecision.status);
+    const ruleAssessed = ['hit', 'hit-with-help', 'partial', 'miss', 'unanswered']
+      .includes(event.ruleDecision.status);
     const followingAssessed = ['followed', 'not-followed'].includes(event.following.status);
 
     if (event.pipelineStage === 'extraction') {

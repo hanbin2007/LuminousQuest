@@ -484,6 +484,17 @@ const textQuestionSchema = z
     ...questionBaseShape,
     type: z.literal('text'),
     answerGuidance: z.array(z.string().trim().min(1)).min(1),
+    referenceEquations: z
+      .array(
+        z
+          .object({
+            caseId: idSchema,
+            equationSetId: idSchema,
+            equation: z.string().trim().min(1),
+          })
+          .strict(),
+      )
+      .min(1),
   })
   .strict();
 
@@ -588,6 +599,16 @@ const equationSetSchema = z
     medium: z.enum(['acidic', 'alkaline', 'neutral', 'molten']),
     expectedElectronSide: z.enum(['reactant', 'product', 'none']),
     accepted: z.array(z.string().trim().min(1)).min(1),
+    crossMediumAccepted: z
+      .array(
+        z
+          .object({
+            medium: z.enum(['acidic', 'alkaline', 'neutral', 'molten']),
+            accepted: z.array(z.string().trim().min(1)).min(1),
+          })
+          .strict(),
+      )
+      .default([]),
   })
   .strict();
 

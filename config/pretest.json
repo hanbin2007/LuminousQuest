@@ -142,6 +142,10 @@
         "盐桥中阴离子移向负极侧，阳离子移向正极侧。",
         "锌片逐渐溶解，铜片上有铜析出、质量增加。",
         "合并两式得到 Zn + Cu^2+ = Zn^2+ + Cu，总反应中不保留电子。"
+      ],
+      "referenceEquations": [
+        { "caseId": "zinc-copper", "equationSetId": "zinc-negative", "equation": "Zn - 2e⁻ = Zn²⁺" },
+        { "caseId": "zinc-copper", "equationSetId": "copper-positive", "equation": "Cu²⁺ + 2e⁻ = Cu" }
       ]
     },
     {

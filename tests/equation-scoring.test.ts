@@ -9,6 +9,7 @@ import {
   scoreEquation,
   tokenizeEquation,
   validateHalfReactionPair,
+  knownIonIdentities,
 } from '../shared/chemistry/equation';
 
 async function equationSet(caseId: string, equationId: string) {
@@ -195,6 +196,32 @@ describe('electrode equation grammar and scoring', () => {
     }
   });
 
+  it('normalizes the textbook electron-subtraction notation used by the official answer', async () => {
+    const expected = await equationSet('zinc-copper', 'zinc-negative');
+
+    expect(canonicalizeEquation('Zn - 2e⁻ = Zn²⁺'))
+      .toBe(canonicalizeEquation('Zn -> Zn^2+ + 2e^-'));
+    expect(scoreEquation('Zn - 2e⁻ = Zn²⁺', expected)).toMatchObject({
+      outcome: 'hit',
+      ruleId: 'equation-hit',
+    });
+  });
+
+  it('keeps every official pretest equation and configured zinc equation set in a bidirectional contract', async () => {
+    const config = await loadAllConfig(process.cwd());
+    const question = config.pretest.questions.find((entry) => entry.id === 'pretest-principle-process');
+    expect(question?.type).toBe('text');
+    if (!question || question.type !== 'text') throw new Error('missing process question');
+    const zinc = config.cases.find((entry) => entry.id === 'zinc-copper')!;
+
+    expect(new Set(question.referenceEquations.map((entry) => entry.equationSetId)))
+      .toEqual(new Set(zinc.equationSets.map((entry) => entry.id)));
+    for (const reference of question.referenceEquations) {
+      const expected = zinc.equationSets.find((entry) => entry.id === reference.equationSetId)!;
+      expect(scoreEquation(reference.equation, expected), reference.equation).toMatchObject({ outcome: 'hit' });
+    }
+  });
+
   it('scores a conserved wrong-medium equation partial and traces it to P3', async () => {
     const expected = await equationSet('aluminum-air', 'oxygen-positive');
     const result = scoreEquation('O2 + 4H^+ + 4e^- -> 2H2O', expected);
@@ -206,6 +233,85 @@ describe('electrode equation grammar and scoring', () => {
         expect.objectContaining({ nodeId: 'P3', outcome: 'partial' }),
       ]),
     });
+  });
+
+  it('requires a configured cross-medium equivalent before granting medium partial credit', async () => {
+    const expected = await equationSet('aluminum-air', 'oxygen-positive');
+    const related = scoreEquation('O2 + 4H^+ + 4e^- -> 2H2O', expected);
+    const unrelated = scoreEquation('2H^+ + 2e^- -> H2', expected);
+
+    expect(related.nodeDecisions).toEqual(expect.arrayContaining([
+      expect.objectContaining({ nodeId: 'P3', outcome: 'partial' }),
+      expect.objectContaining({ nodeId: 'P6', outcome: 'hit' }),
+    ]));
+    expect(unrelated).toMatchObject({ outcome: 'miss' });
+    expect(unrelated.nodeDecisions).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ nodeId: 'P6', outcome: 'hit' }),
+    ]));
+  });
+
+  it('combines independent P3 species/medium and P6 conservation decisions', async () => {
+    const expected = await equationSet('zinc-copper', 'copper-positive');
+    const near = scoreEquation('Cu^2+ + e^- -> Cu', expected);
+    const unrelated = scoreEquation('Zn -> Zn^2+ + 2e^-', expected);
+
+    expect(near.nodeDecisions).toEqual(expect.arrayContaining([
+      expect.objectContaining({ nodeId: 'P3', outcome: 'hit' }),
+      expect.objectContaining({ nodeId: 'P6', outcome: 'partial' }),
+    ]));
+    expect(unrelated.nodeDecisions).toEqual(expect.arrayContaining([
+      expect.objectContaining({ nodeId: 'P3', outcome: 'miss' }),
+      expect.objectContaining({ nodeId: 'P6', outcome: 'miss' }),
+    ]));
+  });
+
+  it.each(['', '   ', '不会', '不知道', '不会写'])('classifies %j as unanswered', async (source) => {
+    const expected = await equationSet('zinc-copper', 'zinc-negative');
+    expect(scoreEquation(source, expected)).toMatchObject({
+      outcome: 'unanswered',
+      ruleId: 'equation-unanswered',
+      analysis: { status: 'unanswered' },
+    });
+  });
+
+  it('preserves known ion identity instead of collapsing every species by composition and charge', () => {
+    expect(knownIonIdentities).toMatchObject({
+      'NH4|1': 'ammonium',
+      'CO3|-2': 'carbonate',
+      'OH|-1': 'hydroxide',
+    });
+    expect(canonicalizeEquation('NH4^+ -> NH3 + H^+'))
+      .not.toBe(canonicalizeEquation('H4N^+ -> NH3 + H^+'));
+    expect(canonicalizeEquation('CO3^2- -> CO2 + O^2-'))
+      .not.toBe(canonicalizeEquation('O3C^2- -> CO2 + O^2-'));
+  });
+
+  it.each([
+    '999999999999999999999Zn -> Zn',
+    'H999999999999999999999 -> H2',
+    'Zn^999999999999999999999+ -> Zn',
+    `${'('.repeat(10)}H${')'.repeat(10)} -> H`,
+    `${'H'.repeat(3000)} -> H`,
+  ])('rejects unsafe numeric or structural input %j', (source) => {
+    expect(() => parseEquation(source)).toThrow(/limit|safe|long|nesting|numeric/i);
+  });
+
+  it('consumes equation notation policy instead of hard-coding accepted syntax', async () => {
+    const config = await loadAllConfig(process.cwd());
+    const expected = await equationSet('zinc-copper', 'copper-positive');
+    const changed = structuredClone(config.rubrics.policy);
+    changed.equation.acceptEqualsSign = false;
+    expect(scoreEquation('Cu^2+ + 2e^- = Cu', expected, changed).outcome).toBe('miss');
+
+    changed.equation.acceptEqualsSign = true;
+    changed.equation.requireEquilibriumArrow = true;
+    expect(scoreEquation('Cu^2+ + 2e^- -> Cu', expected, changed).outcome).toBe('miss');
+    expect(scoreEquation('Cu^2+ + 2e^- ⇌ Cu', expected, changed).outcome).toBe('hit');
+
+    changed.equation.requireEquilibriumArrow = false;
+    changed.equation.requireStates = true;
+    expect(scoreEquation('Cu^2+ + 2e^- -> Cu', expected, changed).outcome).toBe('miss');
+    expect(scoreEquation('Cu^2+(aq) + 2e^- -> Cu(s)', expected, changed).outcome).toBe('hit');
   });
 
   it('scores a one-coefficient near miss partial but rejects wrong species and parse failures', async () => {
@@ -246,6 +352,7 @@ describe('electrode equation grammar and scoring', () => {
       medium: 'neutral',
       expectedElectronSide: 'none',
       accepted: ['Zn + Cu^2+ -> Zn^2+ + Cu'],
+      crossMediumAccepted: [],
     });
     const both = analyzeEquation('e^- + Zn -> Zn^2+ + 3e^-', {
       kind: 'half',
@@ -276,6 +383,14 @@ describe('electrode equation grammar and scoring', () => {
       electronCount: 4,
       multipliers: [2, 1],
     });
+  });
+
+  it('validates a half-reaction pair in the caller-selected medium', () => {
+    const oxidation = 'H2 -> 2H^+ + 2e^-';
+    const reduction = '2H^+ + 2e^- -> H2';
+
+    expect(validateHalfReactionPair(oxidation, reduction, 'acidic').balanced).toBe(true);
+    expect(validateHalfReactionPair(oxidation, reduction, 'alkaline').balanced).toBe(false);
   });
 
   it('fails paired half reactions on either parse error and returns zero without electrons', () => {

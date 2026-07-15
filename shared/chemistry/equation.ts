@@ -1,7 +1,14 @@
-import type { CaseConfig } from '../config/schemas';
+import type { CaseConfig, RubricsConfig } from '../config/schemas';
 
-export const equationGrammarVersion = 'equation-grammar.v1';
-export const equationScoringEngineVersion = 'equation-scoring.v1';
+export const equationGrammarVersion = 'equation-grammar.v2';
+export const equationScoringEngineVersion = 'equation-scoring.v2';
+
+const maximumSourceLength = 2_048;
+const maximumNumericDigits = 6;
+const maximumNumericValue = 999_999;
+const maximumFormulaNesting = 8;
+const maximumTermsPerSide = 64;
+const maximumAtomCount = 1_000_000_000;
 
 export type EquationTokenKind =
   | 'element'
@@ -46,7 +53,7 @@ export interface ParsedSpecies {
 export interface ParsedEquation {
   source: string;
   normalizedSource: string;
-  arrow: '->' | '=';
+  arrow: '->' | '=' | '⇌';
   reactants: ParsedSpecies[];
   products: ParsedSpecies[];
 }
@@ -89,20 +96,30 @@ export interface EquationParseFailure {
   error: { message: string; position: number };
 }
 
-export type EquationAnalysis = ParsedEquationAnalysis | EquationParseFailure;
+export interface EquationUnanswered {
+  status: 'unanswered';
+  grammarVersion: typeof equationGrammarVersion;
+  source: string;
+  reason: string;
+}
+
+export type AnalyzedEquation = ParsedEquationAnalysis | EquationParseFailure;
+export type EquationAnalysis = AnalyzedEquation | EquationUnanswered;
 
 export interface EquationScoreNodeDecision {
-  nodeId: 'P3' | 'P6' | 'P7';
-  outcome: 'hit' | 'partial' | 'miss';
+  nodeId: string;
+  outcome: 'hit' | 'partial' | 'miss' | 'unanswered';
   reasons: string[];
 }
 
 export interface EquationScore {
-  outcome: 'hit' | 'partial' | 'miss';
+  outcome: 'hit' | 'partial' | 'miss' | 'unanswered';
   ruleId:
     | 'equation-hit'
     | 'equation-medium-partial'
     | 'equation-balance-partial'
+    | 'equation-policy-miss'
+    | 'equation-unanswered'
     | 'equation-parse-miss'
     | 'equation-miss';
   analysis: EquationAnalysis;
@@ -111,6 +128,31 @@ export interface EquationScore {
 }
 
 type EquationSet = CaseConfig['equationSets'][number];
+
+export const knownIonIdentities: Readonly<Record<string, string>> = Object.freeze({
+  'H|1': 'hydrogen',
+  'H3O|1': 'hydronium',
+  'NH4|1': 'ammonium',
+  'OH|-1': 'hydroxide',
+  'NO3|-1': 'nitrate',
+  'NO2|-1': 'nitrite',
+  'SO4|-2': 'sulfate',
+  'SO3|-2': 'sulfite',
+  'HSO4|-1': 'hydrogen-sulfate',
+  'CO3|-2': 'carbonate',
+  'HCO3|-1': 'hydrogen-carbonate',
+  'PO4|-3': 'phosphate',
+  'HPO4|-2': 'hydrogen-phosphate',
+  'H2PO4|-1': 'dihydrogen-phosphate',
+  'MnO4|-1': 'permanganate',
+  'CrO4|-2': 'chromate',
+  'Cr2O7|-2': 'dichromate',
+  'CN|-1': 'cyanide',
+  'SCN|-1': 'thiocyanate',
+  'ClO|-1': 'hypochlorite',
+  'ClO3|-1': 'chlorate',
+  'AlO2|-1': 'aluminate',
+});
 
 const superscriptDigits: Record<string, string> = {
   '⁰': '0',
@@ -141,8 +183,7 @@ const subscriptDigits: Record<string, string> = {
 function normalizeEquationSource(source: string) {
   let normalized = source
     .replace(/−/g, '-')
-    .replace(/→/g, '->')
-    .replace(/⇌/g, '=');
+    .replace(/→/g, '->');
   normalized = normalized.replace(/[⁰¹²³⁴-⁹]+[⁺⁻]/g, (value) => {
     const sign = value.at(-1) === '⁺' ? '+' : '-';
     const magnitude = [...value.slice(0, -1)].map((digit) => superscriptDigits[digit]).join('');
@@ -150,11 +191,29 @@ function normalizeEquationSource(source: string) {
   });
   normalized = normalized.replace(/[⁺⁻]/g, (value) => `^${value === '⁺' ? '+' : '-'}`);
   normalized = normalized.replace(/[₀-₉]/g, (value) => subscriptDigits[value]);
+  const arrow = normalized.match(/->|=|⇌/);
+  if (!arrow || arrow.index === undefined) return normalized;
+  const left = normalized.slice(0, arrow.index);
+  const right = normalized.slice(arrow.index + arrow[0].length);
+  const subtraction = /^(.*?)\s+-\s+(\d*)\s*e(?:\^)?-\s*$/;
+  const leftMatch = left.match(subtraction);
+  if (leftMatch) {
+    const coefficient = leftMatch[2] || '1';
+    return `${leftMatch[1].trimEnd()} ${arrow[0]} ${right.trimStart()} + ${coefficient}e^-`;
+  }
+  const rightMatch = right.match(subtraction);
+  if (rightMatch) {
+    const coefficient = rightMatch[2] || '1';
+    return `${left.trimEnd()} + ${coefficient}e^- ${arrow[0]} ${rightMatch[1].trimStart()}`;
+  }
   return normalized;
 }
 
 export function tokenizeEquation(source: string): EquationToken[] {
   const normalized = normalizeEquationSource(source);
+  if (normalized.length > maximumSourceLength) {
+    throw new EquationParseError(`Equation exceeds source length limit ${maximumSourceLength}`, maximumSourceLength);
+  }
   const tokens: EquationToken[] = [];
   let index = 0;
   const push = (kind: EquationTokenKind, value: string, length = value.length) => {
@@ -177,6 +236,10 @@ export function tokenizeEquation(source: string): EquationToken[] {
       push('arrow', '=');
       continue;
     }
+    if (character === '⇌') {
+      push('arrow', '⇌');
+      continue;
+    }
     const state = rest.match(/^\((aq|s|l|g)\)/);
     if (state) {
       push('state', state[1], state[0].length);
@@ -194,6 +257,9 @@ export function tokenizeEquation(source: string): EquationToken[] {
     }
     const number = rest.match(/^\d+/);
     if (number) {
+      if (number[0].length > maximumNumericDigits) {
+        throw new EquationParseError('Numeric token exceeds safe digit limit', index);
+      }
       push('number', number[0]);
       continue;
     }
@@ -217,13 +283,15 @@ export function tokenizeEquation(source: string): EquationToken[] {
 }
 
 function findArrow(source: string) {
-  const arrows: Array<{ index: number; value: '->' | '='; length: number }> = [];
+  const arrows: Array<{ index: number; value: '->' | '=' | '⇌'; length: number }> = [];
   for (let index = 0; index < source.length; index += 1) {
     if (source.startsWith('->', index)) {
       arrows.push({ index, value: '->', length: 2 });
       index += 1;
     } else if (source[index] === '=') {
       arrows.push({ index, value: '=', length: 1 });
+    } else if (source[index] === '⇌') {
+      arrows.push({ index, value: '⇌', length: 1 });
     }
   }
   if (arrows.length !== 1) {
@@ -261,6 +329,9 @@ function splitSide(side: string, baseOffset: number) {
       if (value.length === 0) throw new EquationParseError('Missing species', baseOffset + index);
       const raw = side.slice(start, index);
       terms.push({ value, offset: baseOffset + start + raw.indexOf(value) });
+      if (terms.length >= maximumTermsPerSide) {
+        throw new EquationParseError('Equation term count exceeds limit', baseOffset + index);
+      }
       start = index + 1;
     }
   }
@@ -275,15 +346,39 @@ function splitSide(side: string, baseOffset: number) {
   return terms;
 }
 
+function safePositiveInteger(source: string, offset: number, label: string) {
+  if (source.length > maximumNumericDigits) {
+    throw new EquationParseError(`${label} numeric length exceeds safe limit`, offset);
+  }
+  const value = Number(source);
+  if (!Number.isSafeInteger(value) || value <= 0 || value > maximumNumericValue) {
+    throw new EquationParseError(`${label} must be positive and within the safe numeric limit`, offset);
+  }
+  return value;
+}
+
+function safeAtomCount(value: number, offset: number) {
+  if (!Number.isSafeInteger(value) || value > maximumAtomCount) {
+    throw new EquationParseError('Formula atom count exceeds safe limit', offset);
+  }
+  return value;
+}
+
 function addElements(target: Map<string, number>, source: Map<string, number>, multiplier: number) {
   for (const [element, count] of source) {
-    target.set(element, (target.get(element) ?? 0) + count * multiplier);
+    target.set(
+      element,
+      safeAtomCount((target.get(element) ?? 0) + count * multiplier, 0),
+    );
   }
 }
 
 function parseFormula(formula: string, offset: number) {
   let index = 0;
-  const parseSequence = (closing?: ')' | ']'): Map<string, number> => {
+  const parseSequence = (closing?: ')' | ']', depth = 0): Map<string, number> => {
+    if (depth > maximumFormulaNesting) {
+      throw new EquationParseError('Formula nesting exceeds limit', offset + index);
+    }
     const elements = new Map<string, number>();
     let parsedAny = false;
     while (index < formula.length) {
@@ -299,10 +394,11 @@ function parseFormula(formula: string, offset: number) {
         parsedAny = true;
         const expectedClosing = character === '(' ? ')' : ']';
         index += 1;
-        const group = parseSequence(expectedClosing);
+        const group = parseSequence(expectedClosing, depth + 1);
         const multiplierMatch = formula.slice(index).match(/^\d+/);
-        const multiplier = multiplierMatch ? Number(multiplierMatch[0]) : 1;
-        if (multiplier === 0) throw new EquationParseError('Subscript must be positive', offset + index);
+        const multiplier = multiplierMatch
+          ? safePositiveInteger(multiplierMatch[0], offset + index, 'Subscript')
+          : 1;
         if (multiplierMatch) index += multiplierMatch[0].length;
         addElements(elements, group, multiplier);
         continue;
@@ -312,10 +408,14 @@ function parseFormula(formula: string, offset: number) {
       parsedAny = true;
       index += element[0].length;
       const subscriptMatch = formula.slice(index).match(/^\d+/);
-      const subscript = subscriptMatch ? Number(subscriptMatch[0]) : 1;
-      if (subscript === 0) throw new EquationParseError('Subscript must be positive', offset + index);
+      const subscript = subscriptMatch
+        ? safePositiveInteger(subscriptMatch[0], offset + index, 'Subscript')
+        : 1;
       if (subscriptMatch) index += subscriptMatch[0].length;
-      elements.set(element[0], (elements.get(element[0]) ?? 0) + subscript);
+      elements.set(
+        element[0],
+        safeAtomCount((elements.get(element[0]) ?? 0) + subscript, offset + index),
+      );
     }
     if (closing) throw new EquationParseError(`Missing ${closing}`, offset + index);
     if (!parsedAny) throw new EquationParseError('Formula cannot be empty', offset);
@@ -332,8 +432,7 @@ function parseTerm(value: string, offset: number): ParsedSpecies {
   let coefficient = 1;
   const coefficientMatch = body.match(/^\d+/);
   if (coefficientMatch) {
-    coefficient = Number(coefficientMatch[0]);
-    if (coefficient === 0) throw new EquationParseError('Coefficient must be positive', offset);
+    coefficient = safePositiveInteger(coefficientMatch[0], offset, 'Coefficient');
     body = body.slice(coefficientMatch[0].length).trimStart();
     offset += value.length - body.length;
   }
@@ -351,8 +450,13 @@ function parseTerm(value: string, offset: number): ParsedSpecies {
   let charge = 0;
   const explicitCharge = body.match(/\^(\d*)([+-])$/);
   if (explicitCharge) {
-    const magnitude = explicitCharge[1] === '' ? 1 : Number(explicitCharge[1]);
-    if (magnitude === 0) throw new EquationParseError('Charge magnitude must be positive', offset + body.length);
+    const magnitude = explicitCharge[1] === ''
+      ? 1
+      : safePositiveInteger(
+          explicitCharge[1],
+          offset + body.length - explicitCharge[0].length + 1,
+          'Charge magnitude',
+        );
     charge = explicitCharge[2] === '+' ? magnitude : -magnitude;
     body = body.slice(0, -explicitCharge[0].length);
   } else {
@@ -362,7 +466,7 @@ function parseTerm(value: string, offset: number): ParsedSpecies {
       body = body.slice(0, -1);
       const monatomic = body.match(/^([A-Z][a-z]?)(\d+)$/);
       if (monatomic) {
-        charge = sign * Number(monatomic[2]);
+        charge = sign * safePositiveInteger(monatomic[2], offset + monatomic[1].length, 'Charge magnitude');
         body = monatomic[1];
       } else {
         charge = sign;
@@ -404,6 +508,8 @@ function elementOrder(elements: readonly string[]) {
 
 function speciesKey(species: ParsedSpecies) {
   if (species.electron) return '@electron|-1';
+  const ionIdentity = knownIonIdentities[`${species.formula}|${species.charge}`];
+  if (ionIdentity) return `@ion:${ionIdentity}|${species.charge}`;
   const elements = elementOrder(Object.keys(species.elements))
     .map((element) => `${element}:${species.elements[element]}`)
     .join(',');
@@ -504,7 +610,7 @@ function mediumCheck(equation: ParsedEquation, medium: EquationMedium) {
   return { matches: forbiddenSpecies.length === 0, forbiddenSpecies };
 }
 
-export function analyzeEquation(source: string, options: AnalyzeEquationOptions): EquationAnalysis {
+export function analyzeEquation(source: string, options: AnalyzeEquationOptions): AnalyzedEquation {
   let parsed: ParsedEquation;
   try {
     parsed = parseEquation(source);
@@ -575,7 +681,56 @@ function speciesSignature(parsed: ParsedEquation) {
   return `${serialize(sides.reactants)} -> ${serialize(sides.products)}`;
 }
 
-export function scoreEquation(source: string, expected: EquationSet): EquationScore {
+function isEquationNonResponse(source: string) {
+  const normalized = source.trim().replace(/[。.!！?？]/g, '');
+  return normalized.length === 0 || /^(不会|不知道|不会写|不清楚|放弃)$/u.test(normalized);
+}
+
+function notationPolicyIssues(
+  analysis: ParsedEquationAnalysis,
+  policy?: RubricsConfig['policy'],
+) {
+  if (!policy) return [];
+  const issues: string[] = [];
+  if (analysis.parsed.arrow === '=' && !policy.equation.acceptEqualsSign) {
+    issues.push('equals sign is disabled by equation policy');
+  }
+  if (policy.equation.requireEquilibriumArrow && analysis.parsed.arrow !== '⇌') {
+    issues.push('equilibrium arrow is required by equation policy');
+  }
+  if (
+    policy.equation.requireStates
+    && [...analysis.parsed.reactants, ...analysis.parsed.products]
+      .some((species) => !species.electron && species.state === undefined)
+  ) {
+    issues.push('physical states are required by equation policy');
+  }
+  return issues;
+}
+
+export function scoreEquation(
+  source: string,
+  expected: EquationSet,
+  policy?: RubricsConfig['policy'],
+): EquationScore {
+  if (isEquationNonResponse(source)) {
+    const configuredStatus = policy?.nonResponse.status ?? 'unanswered';
+    return {
+      outcome: configuredStatus,
+      ruleId: configuredStatus === 'unanswered' ? 'equation-unanswered' : 'equation-miss',
+      analysis: {
+        status: 'unanswered',
+        grammarVersion: equationGrammarVersion,
+        source,
+        reason: 'blank or explicit non-answer',
+      },
+      nodeDecisions: [{
+        nodeId: 'P6',
+        outcome: configuredStatus,
+        reasons: ['blank or explicit non-answer'],
+      }],
+    };
+  }
   const kind = expected.electrode === 'overall' ? 'overall' : 'half';
   const analysis = analyzeEquation(source, {
     kind,
@@ -599,7 +754,9 @@ export function scoreEquation(source: string, expected: EquationSet): EquationSc
     };
   });
   const exact = accepted.find((candidate) => candidate.canonical === analysis.canonical);
-  if (analysis.valid && exact) {
+  const notationIssues = notationPolicyIssues(analysis, policy);
+  const balanceNodeId = kind === 'overall' ? 'P7' : 'P6';
+  if (analysis.valid && exact && notationIssues.length === 0) {
     return {
       outcome: 'hit',
       ruleId: 'equation-hit',
@@ -607,7 +764,20 @@ export function scoreEquation(source: string, expected: EquationSet): EquationSc
       matchedCanonical: exact.canonical,
       nodeDecisions: [
         { nodeId: 'P3', outcome: 'hit', reasons: ['medium matches the configured case'] },
-        { nodeId: kind === 'overall' ? 'P7' : 'P6', outcome: 'hit', reasons: ['canonical form matches an accepted equation'] },
+        { nodeId: balanceNodeId, outcome: 'hit', reasons: ['canonical form matches an accepted equation'] },
+      ],
+    };
+  }
+
+  if (analysis.valid && exact && notationIssues.length > 0) {
+    return {
+      outcome: 'miss',
+      ruleId: 'equation-policy-miss',
+      analysis,
+      matchedCanonical: exact.canonical,
+      nodeDecisions: [
+        { nodeId: 'P3', outcome: 'hit', reasons: ['species and medium match the configured case'] },
+        { nodeId: balanceNodeId, outcome: 'miss', reasons: notationIssues },
       ],
     };
   }
@@ -615,18 +785,30 @@ export function scoreEquation(source: string, expected: EquationSet): EquationSc
   const conserved = analysis.conservation.atoms.balanced
     && analysis.conservation.charge.balanced
     && analysis.conservation.electrons.balanced;
-  if (conserved && !analysis.medium.matches) {
+  const crossMediumMatch = (expected.crossMediumAccepted ?? []).some((family) => {
+    const crossAnalysis = analyzeEquation(source, {
+      kind,
+      medium: family.medium,
+      expectedElectronSide: expected.expectedElectronSide,
+    });
+    if (crossAnalysis.status !== 'parsed' || !crossAnalysis.valid) return false;
+    return family.accepted.some((candidate) =>
+      canonicalizeEquation(candidate) === crossAnalysis.canonical);
+  });
+  if (conserved && !analysis.medium.matches && crossMediumMatch) {
+    const mediumOutcome = policy?.equation.mediumMismatchOutcome ?? 'partial';
+    const feedbackNodeId = policy?.equation.feedbackNodeId ?? 'P3';
     return {
-      outcome: 'partial',
+      outcome: mediumOutcome,
       ruleId: 'equation-medium-partial',
       analysis,
       nodeDecisions: [
         {
-          nodeId: 'P3',
-          outcome: 'partial',
+          nodeId: feedbackNodeId,
+          outcome: mediumOutcome,
           reasons: [`forbidden in ${expected.medium}: ${analysis.medium.forbiddenSpecies.join(', ')}`],
         },
-        { nodeId: 'P6', outcome: 'hit', reasons: ['atom, charge, and electron checks pass'] },
+        { nodeId: balanceNodeId, outcome: 'hit', reasons: ['atom, charge, and electron checks pass'] },
       ],
     };
   }
@@ -646,7 +828,7 @@ export function scoreEquation(source: string, expected: EquationSet): EquationSc
       analysis,
       nodeDecisions: [
         { nodeId: 'P3', outcome: 'hit', reasons: ['species and medium match the configured case'] },
-        { nodeId: 'P6', outcome: 'partial', reasons: ['one conservation check failed'] },
+        { nodeId: balanceNodeId, outcome: 'partial', reasons: ['one conservation check failed'] },
       ],
     };
   }
@@ -658,12 +840,10 @@ export function scoreEquation(source: string, expected: EquationSet): EquationSc
     nodeDecisions: [
       {
         nodeId: 'P3',
-        outcome: analysis.medium.matches ? 'miss' : 'partial',
-        reasons: analysis.medium.matches
-          ? ['products do not match the configured case']
-          : [`forbidden in ${expected.medium}: ${analysis.medium.forbiddenSpecies.join(', ')}`],
+        outcome: 'miss',
+        reasons: ['products or medium do not match a configured target-reaction family'],
       },
-      { nodeId: 'P6', outcome: 'miss', reasons: ['equation is not an accepted conserved equivalent'] },
+      { nodeId: balanceNodeId, outcome: 'miss', reasons: ['equation is not an accepted conserved equivalent'] },
     ],
   };
 }
@@ -677,15 +857,16 @@ export interface HalfReactionPairValidation {
 export function validateHalfReactionPair(
   oxidation: string,
   reduction: string,
+  medium: EquationMedium = 'neutral',
 ): HalfReactionPairValidation {
   const left = analyzeEquation(oxidation, {
     kind: 'half',
-    medium: 'neutral',
+    medium,
     expectedElectronSide: 'product',
   });
   const right = analyzeEquation(reduction, {
     kind: 'half',
-    medium: 'neutral',
+    medium,
     expectedElectronSide: 'reactant',
   });
   if (left.status === 'parse-error') throw new EquationParseError(left.error.message, left.error.position);

@@ -72,7 +72,10 @@
       "electrode": "positive",
       "medium": "alkaline",
       "expectedElectronSide": "reactant",
-      "accepted": ["O2 + 2H2O + 4e^- -> 4OH^-"]
+      "accepted": ["O2 + 2H2O + 4e^- -> 4OH^-"],
+      "crossMediumAccepted": [
+        { "medium": "acidic", "accepted": ["O2 + 4H^+ + 4e^- -> 2H2O"] }
+      ]
     }
   ],
   "evidencePaths": [

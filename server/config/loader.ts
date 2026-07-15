@@ -17,6 +17,7 @@ import {
   analyzeEquation,
   equationGrammarVersion,
   equationScoringEngineVersion,
+  scoreEquation,
 } from '../../shared/chemistry/equation';
 import { rubricPolicyEngineVersion } from '../../shared/scoring/rubric';
 import { topologyEngineVersion } from '../../shared/scoring/topology';
@@ -340,7 +341,67 @@ export async function validateReferences(
           );
         }
       });
+      equationSet.crossMediumAccepted.forEach((family, familyIndex) => {
+        if (family.medium === equationSet.medium) {
+          throw new ConfigValidationError(
+            relativeCaseFile,
+            `equationSets.${equationIndex}.crossMediumAccepted.${familyIndex}.medium`,
+            'cross-medium family must use a different medium',
+          );
+        }
+        family.accepted.forEach((accepted, acceptedIndex) => {
+          const analysis = analyzeEquation(accepted, {
+            kind: equationSet.electrode === 'overall' ? 'overall' : 'half',
+            medium: family.medium,
+            expectedElectronSide: equationSet.expectedElectronSide,
+          });
+          if (analysis.status !== 'parsed' || !analysis.valid) {
+            throw new ConfigValidationError(
+              relativeCaseFile,
+              `equationSets.${equationIndex}.crossMediumAccepted.${familyIndex}.accepted.${acceptedIndex}`,
+              'cross-medium equation must parse and satisfy conservation in its declared medium',
+            );
+          }
+        });
+      });
     });
+  });
+
+  const referencedCases = new Map<string, Set<string>>();
+  config.pretest.questions.forEach((question, questionIndex) => {
+    if (question.type !== 'text') return;
+    question.referenceEquations.forEach((reference, referenceIndex) => {
+      const trainingCase = config.cases.find((entry) => entry.id === reference.caseId);
+      const equationSet = trainingCase?.equationSets.find((entry) => entry.id === reference.equationSetId);
+      if (!trainingCase || !equationSet) {
+        throw new ConfigValidationError(
+          'config/pretest.json',
+          `questions.${questionIndex}.referenceEquations.${referenceIndex}.equationSetId`,
+          `unknown equation set ${reference.caseId}/${reference.equationSetId}`,
+        );
+      }
+      if (scoreEquation(reference.equation, equationSet, config.rubrics.policy).outcome !== 'hit') {
+        throw new ConfigValidationError(
+          'config/pretest.json',
+          `questions.${questionIndex}.referenceEquations.${referenceIndex}.equation`,
+          'official reference equation must be accepted by its configured grammar corpus',
+        );
+      }
+      const ids = referencedCases.get(reference.caseId) ?? new Set<string>();
+      ids.add(reference.equationSetId);
+      referencedCases.set(reference.caseId, ids);
+    });
+  });
+  referencedCases.forEach((referencedIds, caseId) => {
+    const expectedIds = config.cases.find((entry) => entry.id === caseId)!.equationSets
+      .map((entry) => entry.id);
+    if (expectedIds.some((id) => !referencedIds.has(id)) || referencedIds.size !== expectedIds.length) {
+      throw new ConfigValidationError(
+        'config/pretest.json',
+        'questions.referenceEquations',
+        `official references and ${caseId} equation sets must cover each other`,
+      );
+    }
   });
 
   if (contentRoot) {

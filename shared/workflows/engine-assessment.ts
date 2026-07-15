@@ -53,11 +53,53 @@ function appendEngineDecision(input: {
   eventId: string;
   assessedAt: string;
   nodeId: string;
-  outcome: 'hit' | 'partial' | 'miss';
+  outcome: 'hit' | 'partial' | 'miss' | 'unanswered';
   engine: { id: string; version: string; ruleId: string; reason: string };
 }) {
   const rubric = input.config.rubrics.rubrics.find((entry) => entry.nodeId === input.nodeId);
   if (!rubric) throw new Error(`No rubric configured for node ${input.nodeId}`);
+  if (input.outcome === 'unanswered') {
+    return appendSessionEvent(input.session, {
+      id: input.eventId,
+      occurredAt: input.assessedAt,
+      kind: 'assessment.completed',
+      pipelineStage: 'score',
+      caseId: input.answer.caseId,
+      stageId: input.answer.stageId,
+      attemptId: input.answer.attemptId,
+      sourceAnswerEventId: input.answer.id,
+      nodeId: input.nodeId,
+      rubric: { id: rubric.id, version: input.config.rubrics.version },
+      assistance: input.assistance,
+      extraction: {
+        status: 'assessed',
+        evidence: engineEvidence(input.answer.value),
+        model: input.engine.id,
+        provenance: {
+          promptId: input.engine.id,
+          promptVersion: input.engine.version,
+          cacheKey: `${input.answer.id}:${input.nodeId}`,
+        },
+      },
+      ruleDecision: {
+        status: 'unanswered',
+        reason: input.engine.reason,
+        promptRetry: input.config.rubrics.policy.nonResponse.promptRetry,
+        includeInDiagnosis: input.config.rubrics.policy.nonResponse.includeInDiagnosis,
+      },
+      following: {
+        status: 'not-followed',
+        anchorNodeId: null,
+        anchorOutcome: null,
+        policy: input.config.rubrics.policy.followingError.strategy,
+      },
+      score: {
+        status: 'unanswered',
+        promptRetry: input.config.rubrics.policy.nonResponse.promptRetry,
+        includeInDiagnosis: input.config.rubrics.policy.nonResponse.includeInDiagnosis,
+      },
+    });
+  }
   const decision = resolveRubricDecision({
     rubrics: input.config.rubrics,
     scaffoldPolicy: input.config.scaffoldPolicy,
@@ -156,7 +198,7 @@ export function recordEquationAssessment(
     questionId: input.answer.questionId,
     answer: { format: 'text', value: input.answer.value },
   });
-  const assessment = scoreEquation(input.answer.value, equationSet);
+  const assessment = scoreEquation(input.answer.value, equationSet, input.config.rubrics.policy);
   assessment.nodeDecisions.forEach((nodeDecision, index) => {
     session = appendEngineDecision({
       session,
