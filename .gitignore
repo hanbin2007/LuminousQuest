@@ -6,4 +6,7 @@ release/
 .DS_Store
 coverage/
 recordings/cache/
+eval/recordings/**/*.json
+eval/reports/latest-*.md
+eval/cases/imported/*.pending.json
 *.log
