@@ -8,10 +8,13 @@ import {
   importSession,
   sessionSchema,
   summarizeAssessedScores,
+  type SessionEventInput,
+  type StudentSession,
 } from '../shared/session';
 
 class MemoryStorage implements Storage {
   private readonly data = new Map<string, string>();
+  failWrites = false;
 
   get length() {
     return this.data.size;
@@ -34,126 +37,301 @@ class MemoryStorage implements Storage {
   }
 
   setItem(key: string, value: string) {
+    if (this.failWrites) throw new DOMException('Quota exceeded', 'QuotaExceededError');
     this.data.set(key, value);
   }
 }
 
-describe('session persistence', () => {
-  it('round-trips the complete answer-to-score evidence chain', () => {
-    const started = createSession({
-      id: 'session-1',
-      anonymousStudentId: 'anon-A1B2C3D4',
-      now: '2026-07-15T12:00:00.000Z',
-      configVersions: {
-        knowledgeModel: 'knowledge-model.v1',
-        rubrics: 'rubrics.v1',
-        pretest: 'pretest.v1',
-        scaffoldPolicy: 'scaffold-policy.v1',
-      },
-    });
-    const answered = appendSessionEvent(started, {
-      id: 'event-answer-1',
-      occurredAt: '2026-07-15T12:01:00.000Z',
-      kind: 'answer.submitted',
-      questionId: 'q1',
-      answer: { format: 'text', value: '电子从锌流向铜。' },
-    });
-    const assessed = appendSessionEvent(answered, {
-      id: 'event-assessment-1',
-      occurredAt: '2026-07-15T12:01:01.000Z',
-      kind: 'assessment.completed',
-      sourceAnswerEventId: 'event-answer-1',
-      nodeId: 'P4',
-      rubric: { id: 'rubric-p4', version: 'rubrics.v1' },
-      extraction: {
-        status: 'assessed',
-        evidence: [{ quote: '电子从锌流向铜', start: 0, end: 8 }],
-        model: 'mock-v1',
-      },
-      ruleDecision: { status: 'hit', ruleId: 'p4-electron-direction', reason: '方向正确' },
-      following: { status: 'not-followed', anchorNodeId: null },
-      score: { status: 'scored', earned: 2, possible: 2 },
-    });
+const configVersions = {
+  knowledgeModel: 'knowledge-model.v1',
+  rubrics: 'rubrics.v1',
+  pretest: 'pretest.v1',
+  scaffoldPolicy: 'scaffold-policy.v1',
+};
+
+function workflow(attemptId = 'attempt-1') {
+  return {
+    caseId: 'zinc-copper',
+    stageId: 'pretest-q1',
+    attemptId,
+  };
+}
+
+function provenance() {
+  return {
+    promptId: 'structured-assessment',
+    promptVersion: 'sha256:prompt',
+    cacheKey: 'sha256:cache-key',
+  };
+}
+
+function answerEvent(
+  id: string,
+  attemptId = 'attempt-1',
+  occurredAt = '2026-07-15T12:01:00.000Z',
+): SessionEventInput {
+  return {
+    id,
+    occurredAt,
+    kind: 'answer.submitted',
+    pipelineStage: 'answer',
+    ...workflow(attemptId),
+    questionId: 'q1',
+    answer: { format: 'text', value: '电子从锌流向铜。' },
+  };
+}
+
+function assessmentEvent(
+  overrides: Partial<Extract<SessionEventInput, { kind: 'assessment.completed' }>> = {},
+): Extract<SessionEventInput, { kind: 'assessment.completed' }> {
+  return {
+    id: 'event-assessment-1',
+    occurredAt: '2026-07-15T12:01:01.000Z',
+    kind: 'assessment.completed',
+    pipelineStage: 'score',
+    ...workflow(),
+    sourceAnswerEventId: 'event-answer-1',
+    nodeId: 'P4',
+    rubric: { id: 'rubric-p4', version: 'rubrics.v1' },
+    extraction: {
+      status: 'assessed',
+      evidence: [{ quote: '电子从锌流向铜', start: 0, end: 8 }],
+      model: 'mock-v1',
+      provenance: provenance(),
+    },
+    ruleDecision: { status: 'hit', ruleId: 'p4-electron-direction', reason: '方向正确' },
+    following: { status: 'not-followed', anchorNodeId: null },
+    score: { status: 'scored', earned: 2, possible: 2 },
+    ...overrides,
+  };
+}
+
+function startedSession(id = 'session-1') {
+  return createSession({
+    id,
+    anonymousStudentId: 'anon-A1B2C3D4',
+    now: '2026-07-15T12:00:00.000Z',
+    configVersions,
+  });
+}
+
+function completeSession(): StudentSession {
+  const answered = appendSessionEvent(startedSession(), answerEvent('event-answer-1'));
+  return appendSessionEvent(answered, assessmentEvent());
+}
+
+describe('session persistence and staged assessment state', () => {
+  it('round-trips the complete answer-to-score evidence chain with provenance', () => {
+    const assessed = completeSession();
 
     const restored = importSession(exportSession(assessed));
 
     expect(restored).toEqual(assessed);
     expect(restored.events[1]).toMatchObject({
-      extraction: { status: 'assessed' },
-      ruleDecision: { status: 'hit' },
-      following: { status: 'not-followed' },
+      caseId: 'zinc-copper',
+      stageId: 'pretest-q1',
+      attemptId: 'attempt-1',
+      pipelineStage: 'score',
+      extraction: {
+        status: 'assessed',
+        provenance: {
+          promptId: 'structured-assessment',
+          promptVersion: 'sha256:prompt',
+          cacheKey: 'sha256:cache-key',
+        },
+      },
       score: { status: 'scored', earned: 2 },
     });
   });
 
-  it('automatically saves each appended event and restores it after a reload', () => {
+  it('restores the latest session from a newly constructed store after a refresh', () => {
     const storage = new MemoryStorage();
-    const store = new LocalSessionStore(storage);
-    const session = createSession({
-      id: 'session-auto-save',
-      anonymousStudentId: 'anon-01020304',
-      now: '2026-07-15T12:00:00.000Z',
-      configVersions: {
-        knowledgeModel: 'knowledge-model.v1',
-        rubrics: 'rubrics.v1',
-        pretest: 'pretest.v1',
-        scaffoldPolicy: 'scaffold-policy.v1',
-      },
-    });
-    store.save(session);
+    const beforeRefresh = new LocalSessionStore(storage);
+    beforeRefresh.save(completeSession());
 
-    const updated = store.append('session-auto-save', {
-      id: 'event-answer-auto-save',
-      occurredAt: '2026-07-15T12:02:00.000Z',
-      kind: 'answer.submitted',
-      questionId: 'q2',
-      answer: { format: 'text', value: '作答' },
-    });
+    const afterRefresh = new LocalSessionStore(storage);
 
-    expect(store.load('session-auto-save')).toEqual(updated);
+    expect(afterRefresh.restoreLatest()).toEqual(completeSession());
   });
 
-  it('keeps a measured miss separate from an unassessed node and excludes unassessed scores', () => {
-    const assessedMiss = {
-      schemaVersion: 'event.v1',
-      sequence: 0,
-      id: 'event-miss',
-      occurredAt: '2026-07-15T12:00:00.000Z',
-      kind: 'assessment.completed',
-      sourceAnswerEventId: 'answer-1',
-      nodeId: 'D1',
-      rubric: { id: 'rubric-d1', version: 'rubrics.v1' },
-      extraction: { status: 'assessed', evidence: [], model: 'mock-v1' },
-      ruleDecision: { status: 'miss', ruleId: 'd1-miss', reason: '明确错误' },
-      following: { status: 'not-followed', anchorNodeId: null },
-      score: { status: 'scored', earned: 0, possible: 2 },
-    } as const;
-    const unassessed = {
-      ...assessedMiss,
-      id: 'event-unassessed',
-      sequence: 1,
-      nodeId: 'P1',
-      extraction: { status: 'unassessed', reason: '题目未覆盖' },
-      ruleDecision: { status: 'unassessed', reason: '没有证据' },
+  it('allows successful extraction while rule and downstream stages remain unassessed', () => {
+    const answered = appendSessionEvent(startedSession(), answerEvent('event-answer-1'));
+    const extractionOnly = assessmentEvent({
+      pipelineStage: 'extraction',
+      ruleDecision: { status: 'unassessed', reason: 'rule engine has not run' },
       following: { status: 'unassessed' },
       score: { status: 'unassessed' },
-    } as const;
+    });
 
-    expect(sessionSchema.shape.events.element.safeParse(assessedMiss).success).toBe(true);
-    expect(sessionSchema.shape.events.element.safeParse(unassessed).success).toBe(true);
+    expect(() => appendSessionEvent(answered, extractionOnly)).not.toThrow();
+  });
+
+  it('supports needs-review without permitting downstream assessment', () => {
+    const answered = appendSessionEvent(startedSession(), answerEvent('event-answer-1'));
+    const needsReview = assessmentEvent({
+      pipelineStage: 'extraction',
+      extraction: {
+        status: 'needs-review',
+        reason: 'image was ambiguous',
+        model: 'vision-v1',
+        provenance: provenance(),
+      },
+      ruleDecision: { status: 'unassessed', reason: 'awaiting extraction review' },
+      following: { status: 'unassessed' },
+      score: { status: 'unassessed' },
+    });
+
+    expect(() => appendSessionEvent(answered, needsReview)).not.toThrow();
     expect(
       sessionSchema.shape.events.element.safeParse({
-        ...unassessed,
-        ruleDecision: { status: 'miss', ruleId: 'bad', reason: 'must not conflate' },
+        ...needsReview,
+        schemaVersion: 'event.v2',
+        sequence: 1,
+        score: { status: 'scored', earned: 1, possible: 2 },
       }).success,
     ).toBe(false);
-    expect(summarizeAssessedScores([assessedMiss, unassessed])).toEqual({
+  });
+
+  it('enforces one-way pipeline progression for repeated snapshots of one attempt', () => {
+    const answered = appendSessionEvent(startedSession(), answerEvent('event-answer-1'));
+    const extractionOnly = appendSessionEvent(
+      answered,
+      assessmentEvent({
+        id: 'assessment-extraction',
+        pipelineStage: 'extraction',
+        ruleDecision: { status: 'unassessed', reason: 'pending' },
+        following: { status: 'unassessed' },
+        score: { status: 'unassessed' },
+      }),
+    );
+    const scored = appendSessionEvent(
+      extractionOnly,
+      assessmentEvent({ id: 'assessment-score', occurredAt: '2026-07-15T12:01:02.000Z' }),
+    );
+
+    expect(scored.events).toHaveLength(3);
+    expect(() =>
+      appendSessionEvent(
+        scored,
+        assessmentEvent({
+          id: 'assessment-regression',
+          occurredAt: '2026-07-15T12:01:03.000Z',
+          pipelineStage: 'rule',
+          ruleDecision: { status: 'hit', ruleId: 'p4-hit', reason: 'late regression' },
+          following: { status: 'unassessed' },
+          score: { status: 'unassessed' },
+        }),
+      ),
+    ).toThrow(/progress/i);
+  });
+
+  it('uses only the latest assessment per node and never reports a node in conflicting buckets', () => {
+    let session = appendSessionEvent(startedSession(), answerEvent('answer-1', 'attempt-1'));
+    session = appendSessionEvent(
+      session,
+      assessmentEvent({
+        id: 'assessed-old',
+        sourceAnswerEventId: 'answer-1',
+        nodeId: 'D1',
+        attemptId: 'attempt-1',
+      }),
+    );
+    session = appendSessionEvent(
+      session,
+      answerEvent('answer-2', 'attempt-2', '2026-07-15T12:02:00.000Z'),
+    );
+    session = appendSessionEvent(
+      session,
+      assessmentEvent({
+        id: 'unassessed-latest',
+        occurredAt: '2026-07-15T12:02:01.000Z',
+        sourceAnswerEventId: 'answer-2',
+        nodeId: 'D1',
+        attemptId: 'attempt-2',
+        pipelineStage: 'extraction',
+        extraction: {
+          status: 'unassessed',
+          reason: 'question did not cover this node',
+          provenance: provenance(),
+        },
+        ruleDecision: { status: 'unassessed', reason: 'no evidence' },
+        following: { status: 'unassessed' },
+        score: { status: 'unassessed' },
+      }),
+    );
+
+    const summary = summarizeAssessedScores(session);
+
+    expect(summary).toEqual({
       earned: 0,
-      possible: 2,
-      ratio: 0,
-      assessedNodeIds: ['D1'],
-      unassessedNodeIds: ['P1'],
+      possible: 0,
+      ratio: null,
+      assessedNodeIds: [],
+      unassessedNodeIds: ['D1'],
+      needsReviewNodeIds: [],
     });
+    expect(summary.assessedNodeIds).not.toContain('D1');
+  });
+
+  it('reports the latest needs-review node separately from unassessed nodes', () => {
+    let session = appendSessionEvent(startedSession(), answerEvent('event-answer-1'));
+    session = appendSessionEvent(
+      session,
+      assessmentEvent({
+        pipelineStage: 'rule',
+        ruleDecision: { status: 'needs-review', reason: 'rule conflict' },
+        following: { status: 'unassessed' },
+        score: { status: 'unassessed' },
+      }),
+    );
+
+    expect(summarizeAssessedScores(session).needsReviewNodeIds).toEqual(['P4']);
+    expect(summarizeAssessedScores(session).unassessedNodeIds).toEqual([]);
+  });
+
+  it('requires a completely valid session before radar aggregation', () => {
+    const session = completeSession();
+    const invalid = {
+      ...session,
+      events: session.events.map((event, index) => index === 1 ? { ...event, sequence: 99 } : event),
+    };
+
+    expect(() => summarizeAssessedScores(invalid)).toThrow();
+  });
+
+  it('rejects duplicate event ids and workflow identifiers that conflict with the source answer', () => {
+    const session = completeSession();
+    expect(
+      sessionSchema.safeParse({
+        ...session,
+        events: [session.events[0], { ...session.events[1], id: session.events[0].id }],
+      }).success,
+    ).toBe(false);
+    expect(
+      sessionSchema.safeParse({
+        ...session,
+        events: [session.events[0], { ...session.events[1], caseId: 'different-case' }],
+      }).success,
+    ).toBe(false);
+  });
+
+  it('clears a corrupted latest session instead of crashing restore', () => {
+    const storage = new MemoryStorage();
+    storage.setItem('luminous-quest:session.v2:latest', 'broken');
+    storage.setItem('luminous-quest:session.v2:broken', '{not-json');
+    const store = new LocalSessionStore(storage);
+
+    expect(store.restoreLatest()).toBeNull();
+    expect(storage.getItem('luminous-quest:session.v2:latest')).toBeNull();
+    expect(storage.getItem('luminous-quest:session.v2:broken')).toBeNull();
+  });
+
+  it('surfaces quota failures without publishing a latest-session pointer', () => {
+    const storage = new MemoryStorage();
+    storage.failWrites = true;
+    const store = new LocalSessionStore(storage);
+
+    expect(() => store.save(completeSession())).toThrow(/localStorage/i);
+    expect(storage.getItem('luminous-quest:session.v2:latest')).toBeNull();
   });
 });
-

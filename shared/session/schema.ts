@@ -3,92 +3,159 @@ import { z } from 'zod';
 const timestampSchema = z.string().datetime({ offset: true });
 const identifierSchema = z.string().trim().min(1);
 
+const workflowIdentityShape = {
+  caseId: identifierSchema,
+  stageId: identifierSchema,
+  attemptId: identifierSchema,
+};
+
 const eventBaseShape = {
-  schemaVersion: z.literal('event.v1'),
+  schemaVersion: z.literal('event.v2'),
   id: identifierSchema,
   sequence: z.number().int().nonnegative(),
   occurredAt: timestampSchema,
+  ...workflowIdentityShape,
 };
 
 const answerPayloadSchema = z.discriminatedUnion('format', [
-  z.object({
-    format: z.literal('text'),
-    value: z.string(),
-  }),
-  z.object({
-    format: z.literal('builder'),
-    value: z.object({
-      components: z.array(
-        z.object({
-          instanceId: identifierSchema,
-          componentId: identifierSchema,
-          x: z.number().finite(),
-          y: z.number().finite(),
-          label: z.string().optional(),
-        }),
-      ),
-      connections: z.array(
-        z.object({
-          from: identifierSchema,
-          to: identifierSchema,
-          kind: z.enum(['wire', 'ion-path']),
-        }),
-      ),
-    }),
-  }),
-  z.object({
-    format: z.literal('canvas'),
-    value: z.object({
-      dataUrl: z.string().startsWith('data:image/'),
-      width: z.number().int().positive(),
-      height: z.number().int().positive(),
-    }),
-  }),
+  z.object({ format: z.literal('text'), value: z.string() }).strict(),
+  z
+    .object({
+      format: z.literal('builder'),
+      value: z
+        .object({
+          components: z.array(
+            z
+              .object({
+                instanceId: identifierSchema,
+                componentId: identifierSchema,
+                x: z.number().finite(),
+                y: z.number().finite(),
+                label: z.string().optional(),
+              })
+              .strict(),
+          ),
+          connections: z.array(
+            z
+              .object({
+                from: identifierSchema,
+                to: identifierSchema,
+                kind: z.enum(['wire', 'ion-path']),
+              })
+              .strict(),
+          ),
+        })
+        .strict(),
+    })
+    .strict(),
+  z
+    .object({
+      format: z.literal('canvas'),
+      value: z
+        .object({
+          dataUrl: z.string().startsWith('data:image/'),
+          width: z.number().int().positive(),
+          height: z.number().int().positive(),
+        })
+        .strict(),
+    })
+    .strict(),
 ]);
 
-export const answerSubmittedEventSchema = z.object({
-  ...eventBaseShape,
-  kind: z.literal('answer.submitted'),
-  questionId: identifierSchema,
-  answer: answerPayloadSchema,
-});
+export const answerSubmittedEventSchema = z
+  .object({
+    ...eventBaseShape,
+    kind: z.literal('answer.submitted'),
+    pipelineStage: z.literal('answer'),
+    questionId: identifierSchema,
+    answer: answerPayloadSchema,
+  })
+  .strict();
 
-const assessedExtractionSchema = z.object({
-  status: z.literal('assessed'),
-  evidence: z.array(
-    z.object({
-      quote: z.string(),
-      start: z.number().int().nonnegative(),
-      end: z.number().int().nonnegative(),
-    }),
-  ),
-  model: identifierSchema,
-});
+const extractionProvenanceSchema = z
+  .object({
+    promptId: identifierSchema,
+    promptVersion: identifierSchema,
+    cacheKey: identifierSchema,
+  })
+  .strict();
 
-const unassessedExtractionSchema = z.object({
-  status: z.literal('unassessed'),
-  reason: z.string().trim().min(1),
-});
+const evidenceSchema = z
+  .object({
+    quote: z.string(),
+    start: z.number().int().nonnegative(),
+    end: z.number().int().nonnegative(),
+  })
+  .strict()
+  .refine((evidence) => evidence.end >= evidence.start, {
+    path: ['end'],
+    message: 'evidence end cannot precede start',
+  });
 
-const assessedRuleDecisionSchema = z.object({
-  status: z.enum(['hit', 'partial', 'miss']),
-  ruleId: identifierSchema,
-  reason: z.string().trim().min(1),
-});
+const assessedExtractionSchema = z
+  .object({
+    status: z.literal('assessed'),
+    evidence: z.array(evidenceSchema),
+    model: identifierSchema,
+    provenance: extractionProvenanceSchema,
+  })
+  .strict();
 
-const unassessedRuleDecisionSchema = z.object({
-  status: z.literal('unassessed'),
-  reason: z.string().trim().min(1),
-});
+const needsReviewExtractionSchema = z
+  .object({
+    status: z.literal('needs-review'),
+    reason: z.string().trim().min(1),
+    model: identifierSchema,
+    provenance: extractionProvenanceSchema,
+  })
+  .strict();
 
-const assessedFollowingSchema = z.object({
-  status: z.enum(['followed', 'not-followed']),
-  anchorNodeId: identifierSchema.nullable(),
-});
+const unassessedExtractionSchema = z
+  .object({
+    status: z.literal('unassessed'),
+    reason: z.string().trim().min(1),
+    model: identifierSchema.optional(),
+    provenance: extractionProvenanceSchema,
+  })
+  .strict();
 
-const unassessedFollowingSchema = z.object({
-  status: z.literal('unassessed'),
-});
+const assessedRuleDecisionSchema = z
+  .object({
+    status: z.enum(['hit', 'partial', 'miss']),
+    ruleId: identifierSchema,
+    reason: z.string().trim().min(1),
+  })
+  .strict();
+
+const needsReviewRuleDecisionSchema = z
+  .object({
+    status: z.literal('needs-review'),
+    reason: z.string().trim().min(1),
+  })
+  .strict();
+
+const unassessedRuleDecisionSchema = z
+  .object({
+    status: z.literal('unassessed'),
+    reason: z.string().trim().min(1),
+  })
+  .strict();
+
+const assessedFollowingSchema = z
+  .object({
+    status: z.enum(['followed', 'not-followed']),
+    anchorNodeId: identifierSchema.nullable(),
+  })
+  .strict();
+
+const needsReviewFollowingSchema = z
+  .object({
+    status: z.literal('needs-review'),
+    reason: z.string().trim().min(1),
+  })
+  .strict();
+
+const unassessedFollowingSchema = z.object({ status: z.literal('unassessed') }).strict();
 
 const scoredSchema = z
   .object({
@@ -96,50 +163,87 @@ const scoredSchema = z
     earned: z.number().nonnegative(),
     possible: z.number().positive(),
   })
+  .strict()
   .refine((score) => score.earned <= score.possible, {
     message: 'earned score cannot exceed possible score',
     path: ['earned'],
   });
 
-const unassessedScoreSchema = z.object({
-  status: z.literal('unassessed'),
-});
+const needsReviewScoreSchema = z
+  .object({
+    status: z.literal('needs-review'),
+    reason: z.string().trim().min(1),
+  })
+  .strict();
+
+const unassessedScoreSchema = z.object({ status: z.literal('unassessed') }).strict();
+
+const assessmentPipelineStageSchema = z.enum(['extraction', 'rule', 'following', 'score']);
 
 export const assessmentCompletedEventSchema = z
   .object({
     ...eventBaseShape,
     kind: z.literal('assessment.completed'),
+    pipelineStage: assessmentPipelineStageSchema,
     sourceAnswerEventId: identifierSchema,
     nodeId: identifierSchema,
-    rubric: z.object({
-      id: identifierSchema,
-      version: identifierSchema,
-    }),
-    extraction: z.union([assessedExtractionSchema, unassessedExtractionSchema]),
-    ruleDecision: z.union([assessedRuleDecisionSchema, unassessedRuleDecisionSchema]),
-    following: z.union([assessedFollowingSchema, unassessedFollowingSchema]),
-    score: z.union([scoredSchema, unassessedScoreSchema]),
+    rubric: z.object({ id: identifierSchema, version: identifierSchema }).strict(),
+    extraction: z.union([
+      assessedExtractionSchema,
+      needsReviewExtractionSchema,
+      unassessedExtractionSchema,
+    ]),
+    ruleDecision: z.union([
+      assessedRuleDecisionSchema,
+      needsReviewRuleDecisionSchema,
+      unassessedRuleDecisionSchema,
+    ]),
+    following: z.union([
+      assessedFollowingSchema,
+      needsReviewFollowingSchema,
+      unassessedFollowingSchema,
+    ]),
+    score: z.union([scoredSchema, needsReviewScoreSchema, unassessedScoreSchema]),
   })
+  .strict()
   .superRefine((event, context) => {
-    const isUnassessed = event.extraction.status === 'unassessed';
-    const laterStatuses = [
-      ['ruleDecision', event.ruleDecision.status],
-      ['following', event.following.status],
-      ['score', event.score.status],
-    ] as const;
+    const issue = (field: 'extraction' | 'ruleDecision' | 'following' | 'score', message: string) => {
+      context.addIssue({ code: 'custom', path: [field, 'status'], message });
+    };
+    const extractionAssessed = event.extraction.status === 'assessed';
+    const ruleAssessed = ['hit', 'partial', 'miss'].includes(event.ruleDecision.status);
+    const followingAssessed = ['followed', 'not-followed'].includes(event.following.status);
 
-    laterStatuses.forEach(([field, status]) => {
-      const laterIsUnassessed = status === 'unassessed';
-      if (laterIsUnassessed !== isUnassessed) {
-        context.addIssue({
-          code: 'custom',
-          path: [field, 'status'],
-          message: isUnassessed
-            ? 'must be unassessed when extraction is unassessed'
-            : 'cannot be unassessed when extraction was assessed',
-        });
-      }
-    });
+    if (event.pipelineStage === 'extraction') {
+      if (event.ruleDecision.status !== 'unassessed') issue('ruleDecision', 'must remain unassessed at extraction stage');
+      if (event.following.status !== 'unassessed') issue('following', 'must remain unassessed at extraction stage');
+      if (event.score.status !== 'unassessed') issue('score', 'must remain unassessed at extraction stage');
+      return;
+    }
+
+    if (!extractionAssessed) {
+      issue('extraction', `must be assessed before ${event.pipelineStage} stage`);
+    }
+
+    if (event.pipelineStage === 'rule') {
+      if (event.ruleDecision.status === 'unassessed') issue('ruleDecision', 'must be decided or need review at rule stage');
+      if (event.following.status !== 'unassessed') issue('following', 'must remain unassessed at rule stage');
+      if (event.score.status !== 'unassessed') issue('score', 'must remain unassessed at rule stage');
+      return;
+    }
+
+    if (!ruleAssessed) {
+      issue('ruleDecision', `must be assessed before ${event.pipelineStage} stage`);
+    }
+
+    if (event.pipelineStage === 'following') {
+      if (event.following.status === 'unassessed') issue('following', 'must be decided or need review at following stage');
+      if (event.score.status !== 'unassessed') issue('score', 'must remain unassessed at following stage');
+      return;
+    }
+
+    if (!followingAssessed) issue('following', 'must be assessed before score stage');
+    if (event.score.status === 'unassessed') issue('score', 'must be scored or need review at score stage');
   });
 
 export const sessionEventSchema = z.union([
@@ -147,23 +251,37 @@ export const sessionEventSchema = z.union([
   assessmentCompletedEventSchema,
 ]);
 
+const pipelineStageOrder = {
+  extraction: 1,
+  rule: 2,
+  following: 3,
+  score: 4,
+} as const;
+
 export const sessionSchema = z
   .object({
-    schemaVersion: z.literal('session.v1'),
+    schemaVersion: z.literal('session.v2'),
     id: identifierSchema,
     anonymousStudentId: z.string().regex(/^anon-[A-Z0-9]{8,}$/),
     startedAt: timestampSchema,
     updatedAt: timestampSchema,
-    configVersions: z.object({
-      knowledgeModel: identifierSchema,
-      rubrics: identifierSchema,
-      pretest: identifierSchema,
-      scaffoldPolicy: identifierSchema,
-    }),
+    configVersions: z
+      .object({
+        knowledgeModel: identifierSchema,
+        rubrics: identifierSchema,
+        pretest: identifierSchema,
+        scaffoldPolicy: identifierSchema,
+      })
+      .strict(),
     events: z.array(sessionEventSchema),
   })
+  .strict()
   .superRefine((session, context) => {
-    const answers = new Set<string>();
+    const eventIds = new Set<string>();
+    const answers = new Map<string, z.infer<typeof answerSubmittedEventSchema>>();
+    const answerWorkflows = new Set<string>();
+    const progress = new Map<string, number>();
+
     session.events.forEach((event, index) => {
       if (event.sequence !== index) {
         context.addIssue({
@@ -172,15 +290,60 @@ export const sessionSchema = z
           message: `expected sequence ${index}`,
         });
       }
+      if (eventIds.has(event.id)) {
+        context.addIssue({
+          code: 'custom',
+          path: ['events', index, 'id'],
+          message: `duplicate event id ${event.id}`,
+        });
+      }
+      eventIds.add(event.id);
+
       if (event.kind === 'answer.submitted') {
-        answers.add(event.id);
-      } else if (!answers.has(event.sourceAnswerEventId)) {
+        const workflowKey = `${event.caseId}\u0000${event.stageId}\u0000${event.attemptId}`;
+        if (answerWorkflows.has(workflowKey)) {
+          context.addIssue({
+            code: 'custom',
+            path: ['events', index, 'attemptId'],
+            message: 'duplicate answer for case, stage, and attempt',
+          });
+        }
+        answerWorkflows.add(workflowKey);
+        answers.set(event.id, event);
+        return;
+      }
+
+      const answer = answers.get(event.sourceAnswerEventId);
+      if (!answer) {
         context.addIssue({
           code: 'custom',
           path: ['events', index, 'sourceAnswerEventId'],
           message: 'must reference an earlier answer event',
         });
+      } else {
+        for (const field of ['caseId', 'stageId', 'attemptId'] as const) {
+          if (event[field] !== answer[field]) {
+            context.addIssue({
+              code: 'custom',
+              path: ['events', index, field],
+              message: `must match source answer ${field}`,
+            });
+          }
+        }
       }
+
+      const progressKey =
+        `${event.caseId}\u0000${event.stageId}\u0000${event.attemptId}\u0000${event.nodeId}`;
+      const currentProgress = pipelineStageOrder[event.pipelineStage];
+      const previousProgress = progress.get(progressKey);
+      if (previousProgress !== undefined && currentProgress < previousProgress) {
+        context.addIssue({
+          code: 'custom',
+          path: ['events', index, 'pipelineStage'],
+          message: 'assessment pipeline progress cannot move backward',
+        });
+      }
+      progress.set(progressKey, Math.max(previousProgress ?? 0, currentProgress));
     });
   });
 
@@ -193,4 +356,3 @@ type EventManagedFields = 'schemaVersion' | 'sequence';
 export type SessionEventInput =
   | Omit<AnswerSubmittedEvent, EventManagedFields>
   | Omit<AssessmentCompletedEvent, EventManagedFields>;
-
