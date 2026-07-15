@@ -187,4 +187,33 @@ describe('production assessment extraction pipeline', () => {
     expect(persisted).not.toContain('student@example.com');
     expect(persisted).toContain('[REDACTED_EMAIL]');
   });
+
+  it('retries a schema-invalid extraction once, then degrades without blocking', async () => {
+    const root = await createTemporaryDirectory();
+    let attempts = 0;
+    const invalid = { anchors: [], assessments: [{ nodeId: 'P4' }] };
+    const provider: LLMProvider = {
+      id: 'invalid-schema',
+      async chat() { throw new Error('not used'); },
+      async vision() { throw new Error('not used'); },
+      async structured() {
+        attempts += 1;
+        return { content: JSON.stringify(invalid), structured: invalid, model: 'invalid-v1' };
+      },
+    };
+    const parts = await fixture(root, new Map([[provider.id, provider]]));
+
+    const result = await runAssessmentExtraction({
+      ...runInput(parts),
+      provider: provider.id,
+    });
+
+    expect(attempts).toBe(2);
+    expect(result).toMatchObject({
+      status: 'needs-review',
+      reason: 'schema-invalid',
+      source: 'fallback',
+      degraded: true,
+    });
+  });
 });
