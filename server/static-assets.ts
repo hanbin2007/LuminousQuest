@@ -56,6 +56,7 @@ export async function loadStaticAsset(clientRoot: string, requestPath: string) {
     ? (candidate: string) => readEmbeddedAsset(candidate)
     : (candidate: string) => readDiskAsset(clientRoot, candidate);
   const direct = await load(relativePath);
+  if (!direct && path.posix.extname(relativePath) !== '') return null;
   const selectedPath = direct ? relativePath : 'index.html';
   const body = direct ?? (await load(selectedPath));
   if (!body) return null;
@@ -66,4 +67,3 @@ export async function loadStaticAsset(clientRoot: string, requestPath: string) {
     isIndex: selectedPath === 'index.html',
   };
 }
-

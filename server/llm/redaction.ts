@@ -2,7 +2,7 @@ import { hashValue } from './cache-key';
 
 export type RecordingRedactor = (value: unknown) => unknown;
 
-const secretKeyPattern = /authorization|api[-_]?key|secret|token|cookie/i;
+const secretKeyPattern = /^(authorization|api[-_]?key|secret|token|access[-_]?token|refresh[-_]?token|cookie|set-cookie)$/i;
 
 export const defaultRecordingRedactor: RecordingRedactor = (value) => {
   function visit(entry: unknown, parentKey = ''): unknown {
@@ -33,4 +33,3 @@ export const defaultRecordingRedactor: RecordingRedactor = (value) => {
 
   return visit(value);
 };
-

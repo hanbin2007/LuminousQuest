@@ -28,7 +28,9 @@ export const knowledgeModelSchema = z
           dimensionId: idSchema,
           statement: z.string().trim().min(1),
           misconceptions: z.array(z.string().trim().min(1)),
-          weight: z.union([z.literal(1), z.literal(2)]),
+          weight: z.union([z.literal(1), z.literal(2)], {
+            error: 'must be 1 (secondary) or 2 (core)',
+          }),
           position: positionSchema,
           dependsOn: z.array(idSchema).default([]),
         }),
@@ -185,4 +187,3 @@ export interface LoadedConfig {
   cases: CaseConfig[];
   scaffoldPolicy: ScaffoldPolicyConfig;
 }
-

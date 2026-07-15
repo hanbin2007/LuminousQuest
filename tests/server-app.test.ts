@@ -69,5 +69,17 @@ describe('Hono server responsibilities', () => {
     expect(await response.text()).toContain('LuminousQuest test shell');
     expect(response.headers.get('content-type')).toContain('text/html');
   });
-});
 
+  it('does not turn a missing static asset into an HTML success response', async () => {
+    const root = await createTemporaryDirectory();
+    await writeValidContentTree(root);
+    const clientRoot = path.join(root, 'client');
+    await mkdir(clientRoot, { recursive: true });
+    await writeFile(path.join(clientRoot, 'index.html'), '<main>shell</main>');
+    const app = createServerApp({ contentRoot: root, clientRoot });
+
+    const response = await app.request('/assets/missing.js');
+
+    expect(response.status).toBe(404);
+  });
+});

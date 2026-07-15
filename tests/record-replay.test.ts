@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 
 import { createDevelopmentCacheKey } from '../server/llm/cache-key';
 import { RecordingStore } from '../server/llm/recording-store';
+import { MockProvider } from '../server/llm/providers/mock';
 import { LLMService } from '../server/llm/service';
 import type { LLMProvider, LLMRequest } from '../server/llm/types';
 import { createTemporaryDirectory } from './helpers/content-fixture';
@@ -37,6 +38,18 @@ describe('LLM recording and replay', () => {
 
     expect(createDevelopmentCacheKey(left)).toBe(createDevelopmentCacheKey(right));
     expect(createDevelopmentCacheKey(left)).not.toContain('same-image');
+  });
+
+  it('hashes image bytes identically for raw base64 and data URLs', () => {
+    const base64 = Buffer.from('same pixels').toString('base64');
+    const raw = developmentRequest({
+      images: [{ mediaType: 'image/png', data: base64 }],
+    });
+    const dataUrl = developmentRequest({
+      images: [{ mediaType: 'image/png', data: `data:image/png;base64,${base64}` }],
+    });
+
+    expect(createDevelopmentCacheKey(raw)).toBe(createDevelopmentCacheKey(dataUrl));
   });
 
   it('records a development miss and replays it without a second provider call', async () => {
@@ -93,6 +106,23 @@ describe('LLM recording and replay', () => {
     expect(persisted).toContain('[IMAGE SHA256:');
   });
 
+  it('preserves non-secret token usage metadata in redacted recordings', async () => {
+    const root = await createTemporaryDirectory();
+    const store = new RecordingStore(root);
+    const request = developmentRequest();
+    const cacheKey = createDevelopmentCacheKey(request);
+
+    await store.saveDevelopment(cacheKey, request, {
+      content: 'safe response',
+      model: 'test-v1',
+      usage: { inputTokens: 12, outputTokens: 4 },
+    });
+
+    await expect(store.getDevelopment(cacheKey)).resolves.toMatchObject({
+      usage: { inputTokens: 12, outputTokens: 4 },
+    });
+  });
+
   it('replays demo responses by step id', async () => {
     const root = await createTemporaryDirectory();
     const demoRoot = path.join(root, 'recordings', 'demo');
@@ -128,6 +158,40 @@ describe('LLM recording and replay', () => {
     });
   });
 
+  it('rejects a demo script whose referenced resources are incomplete', async () => {
+    const root = await createTemporaryDirectory();
+    const demoRoot = path.join(root, 'recordings', 'demo');
+    await mkdir(demoRoot, { recursive: true });
+    await writeFile(
+      path.join(root, 'recordings', 'demo-script.json'),
+      JSON.stringify({
+        version: 'demo-script.v1',
+        steps: [
+          {
+            id: 'incomplete-step',
+            recording: 'demo/incomplete-step.json',
+            resourceRefs: ['assets/missing.png'],
+          },
+        ],
+      }),
+    );
+    await writeFile(
+      path.join(demoRoot, 'incomplete-step.json'),
+      JSON.stringify({
+        version: 'llm-recording.v1',
+        recordedAt: '2026-07-15T00:00:00.000Z',
+        request: { redacted: true },
+        response: { content: 'demo answer', model: 'recorded' },
+      }),
+    );
+
+    await expect(new RecordingStore(root).validateDemoAssets()).rejects.toMatchObject({
+      file: 'recordings/demo-script.json',
+      field: 'steps.0.resourceRefs.0',
+      reason: expect.stringContaining('assets/missing.png'),
+    });
+  });
+
   it('retries once and uses a preset fallback when a cache miss cannot reach a provider', async () => {
     const root = await createTemporaryDirectory();
     let attempts = 0;
@@ -157,6 +221,40 @@ describe('LLM recording and replay', () => {
     expect(result).toMatchObject({
       source: 'fallback',
       degraded: true,
+    });
+  });
+
+  it('keeps structured mock development on the provider path for constrained schemas', async () => {
+    const root = await createTemporaryDirectory();
+    const provider = new MockProvider();
+    const service = new LLMService({
+      providers: new Map([[provider.id, provider]]),
+      recordings: new RecordingStore(root),
+    });
+
+    const result = await service.execute(
+      developmentRequest({
+        capability: 'structured',
+        provider: 'mock',
+        schema: {
+          type: 'object',
+          required: ['status', 'score', 'evidence'],
+          properties: {
+            status: { enum: ['hit', 'miss'] },
+            score: { type: 'integer', minimum: 1 },
+            evidence: { type: 'array', minItems: 1, items: { type: 'string', minLength: 2 } },
+          },
+        },
+      }),
+    );
+
+    expect(result).toMatchObject({
+      source: 'provider',
+      degraded: false,
+      requiresTeacherReview: false,
+      response: {
+        structured: { status: 'hit', score: 1, evidence: [expect.any(String)] },
+      },
     });
   });
 });
