@@ -1,0 +1,102 @@
+/**
+ * LuminousQuest 设计 Token(权威来源,由 Fable 5 制定与维护)
+ * 全部 UI 颜色/字体/间距/动效从此文件取值;组件内禁止硬编码色值。
+ * 亮态 = 「新教辅」纸面;暗态仅用于模块三 3D 舞台(.stage-dark 作用域)。
+ */
+
+:root {
+  /* ---- 纸面与墨色 ---- */
+  --paper: #f7f8f5;            /* 页面底:冷调纸白 */
+  --paper-raised: #ffffff;     /* 卡片面 */
+  --paper-sunken: #eef0ec;     /* 输入区/画布底 */
+  --ink: #1f262b;              /* 正文与描边 */
+  --ink-soft: #4b565e;         /* 次要文字 */
+  --ink-faint: #8a959c;        /* 辅助说明/占位 */
+  --hairline: #d8dcd6;         /* 分隔线 */
+
+  /* ---- 三维度色(唯一强色系统,源自校徽) ---- */
+  --dim-device: #2b5ca8;       /* 装置维度 = 校深蓝 */
+  --dim-device-soft: #dee9f9;
+  --dim-principle: #2cb8b8;    /* 原理维度 = 校青 */
+  --dim-principle-soft: #dff3f2;
+  --dim-energy: #e8960c;       /* 能量维度 = 琥珀 */
+  --dim-energy-soft: #fbebd2;
+
+  /* ---- 批注色(AI 反馈 = 老师批改的视觉语言) ---- */
+  --annotate-red: #c2453a;     /* 红笔:错因批注 */
+  --annotate-red-soft: #f9e7e5;
+  --annotate-blue: #3a63c2;    /* 蓝笔:启发式追问 */
+  --annotate-blue-soft: #e7edf9;
+
+  /* ---- 状态色 ---- */
+  --status-hit: #2f8a4c;       /* 掌握(用于对勾/边框,不做大面积填充) */
+  --status-hit-soft: #e3f2e8;
+  --status-partial: var(--dim-energy);
+  --status-miss: var(--annotate-red);
+  --status-unassessed: #aab4ba; /* 未测到:灰,和 miss 严格区分 */
+
+  /* ---- 电子流母题(校青的流动形态) ---- */
+  --eflow: var(--dim-principle);
+  --eflow-track: #cfe9e8;      /* 流动轨道底色 */
+
+  /* ---- 字体 ---- */
+  --font-display: "Source Han Serif SC", "Noto Serif SC", "Songti SC", serif; /* 章节标题,子集化打包 */
+  --font-body: -apple-system, "PingFang SC", "HarmonyOS Sans SC", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+  --font-mono: "SF Mono", "JetBrains Mono", ui-monospace, monospace; /* 分数/坐标/数据 */
+
+  /* 字号阶梯(基准 16) */
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.1875rem;
+  --text-xl: 1.4375rem;
+  --text-2xl: 1.75rem;
+  --text-display: 2.25rem;
+
+  --leading-body: 1.75;        /* 中文正文行高要松 */
+  --leading-tight: 1.3;
+
+  /* ---- 几何 ---- */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-pill: 999px;
+  --space-1: 4px;  --space-2: 8px;  --space-3: 12px; --space-4: 16px;
+  --space-5: 24px; --space-6: 32px; --space-7: 48px; --space-8: 64px;
+  --content-max: 1200px;
+
+  /* 阴影:纸上薄影,禁大面积弥散 */
+  --shadow-card: 0 1px 3px rgba(31, 38, 43, 0.08), 0 1px 2px rgba(31, 38, 43, 0.04);
+  --shadow-pop: 0 4px 16px rgba(31, 38, 43, 0.12);
+
+  /* ---- 动效 ---- */
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --dur-fast: 150ms;           /* hover/按压 */
+  --dur-base: 250ms;           /* 面板/状态切换 */
+  --dur-stage: 900ms;          /* 全项目唯一的大动效:关灯时刻 */
+
+  /* 焦点环(键盘可达性) */
+  --focus-ring: 0 0 0 3px rgba(44, 184, 184, 0.45);
+}
+
+/* ---- 暗态 3D 舞台(仅模块三,校深蓝的夜色) ---- */
+.stage-dark {
+  --stage-bg: #0a1526;
+  --stage-fog: #101f38;
+  --glow-device: #5b8de8;      /* 三维度色的发光态 */
+  --glow-principle: #3fe0d8;
+  --glow-energy: #ffb84d;
+  --glow-unlit: #2a3a52;       /* 未点亮节点:暗玻璃 */
+  --stage-text: #d7e2ef;
+  color: var(--stage-text);
+  background: var(--stage-bg);
+}
+
+/* ---- 降级动效偏好 ---- */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-fast: 0ms;
+    --dur-base: 0ms;
+    --dur-stage: 0ms;
+  }
+}
