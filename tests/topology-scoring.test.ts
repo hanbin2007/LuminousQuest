@@ -1,0 +1,179 @@
+import { describe, expect, it } from 'vitest';
+
+import { loadAllConfig } from '../server/config/loader';
+import {
+  assessBuilderTopology,
+  type BuilderGraph,
+} from '../shared/scoring/topology';
+
+function completeGraph(): BuilderGraph {
+  return {
+    components: [
+      { instanceId: 'negative', componentId: 'site-a' },
+      { instanceId: 'wire', componentId: 'electron-link' },
+      { instanceId: 'ions', componentId: 'ion-medium' },
+      { instanceId: 'positive', componentId: 'site-b' },
+    ],
+    connections: [
+      { id: 'e1', from: 'negative', to: 'wire', kind: 'electron-path', carrier: 'electron' },
+      { id: 'e2', from: 'wire', to: 'positive', kind: 'electron-path', carrier: 'electron' },
+      { id: 'i1', from: 'ions', to: 'positive', kind: 'ion-path', carrier: 'cation' },
+      { id: 'i2', from: 'ions', to: 'negative', kind: 'ion-path', carrier: 'anion' },
+    ],
+  };
+}
+
+async function builderConfig() {
+  return (await loadAllConfig(process.cwd())).pretest.builder;
+}
+
+describe('builder topology scoring', () => {
+  it('accepts the four functional roles, both connected paths, all directions, and an abstract model', async () => {
+    const result = assessBuilderTopology(completeGraph(), await builderConfig());
+
+    expect(result.overall).toBe('hit');
+    expect(result.checks).toMatchObject({
+      fourElements: { status: 'hit' },
+      closedCircuit: { status: 'hit' },
+      directionConsistency: { status: 'hit' },
+      abstraction: { status: 'hit' },
+    });
+    expect(new Set(result.nodeDecisions.map((decision) => decision.nodeId))).toEqual(
+      new Set(['D1', 'D2', 'D3', 'D4', 'D5', 'P4']),
+    );
+    expect(result.nodeDecisions.every((decision) => decision.evidence.length > 0)).toBe(true);
+  });
+
+  it('traces a missing ion conductor to D3 and the closed circuit', async () => {
+    const graph = completeGraph();
+    graph.components = graph.components.filter((component) => component.instanceId !== 'ions');
+    graph.connections = graph.connections.filter(
+      (connection) => connection.from !== 'ions' && connection.to !== 'ions',
+    );
+
+    const result = assessBuilderTopology(graph, await builderConfig());
+
+    expect(result.overall).toBe('miss');
+    expect(result.checks.fourElements.status).toBe('miss');
+    expect(result.checks.closedCircuit.status).toBe('miss');
+    expect(result.nodeDecisions.find((decision) => decision.nodeId === 'D3')).toMatchObject({
+      status: 'miss',
+      evidence: expect.arrayContaining([
+        expect.objectContaining({ ruleId: 'four-functional-elements' }),
+      ]),
+    });
+  });
+
+  it('keeps connectivity but rejects reversed electron and ion directions', async () => {
+    const electronReversed = completeGraph();
+    electronReversed.connections = electronReversed.connections.map((connection) =>
+      connection.carrier === 'electron'
+        ? { ...connection, from: connection.to, to: connection.from }
+        : connection,
+    );
+    const ionsReversed = completeGraph();
+    ionsReversed.connections = ionsReversed.connections.map((connection) => {
+      if (connection.carrier === 'cation') return { ...connection, to: 'negative' };
+      if (connection.carrier === 'anion') return { ...connection, to: 'positive' };
+      return connection;
+    });
+
+    const electronResult = assessBuilderTopology(electronReversed, await builderConfig());
+    const ionResult = assessBuilderTopology(ionsReversed, await builderConfig());
+
+    expect(electronResult.checks.closedCircuit.status).toBe('hit');
+    expect(electronResult.checks.directionConsistency.status).toBe('miss');
+    expect(ionResult.checks.closedCircuit.status).toBe('hit');
+    expect(ionResult.checks.directionConsistency.status).toBe('miss');
+    expect(electronResult.nodeDecisions.find((decision) => decision.nodeId === 'P4')?.status).toBe('miss');
+  });
+
+  it('caps an otherwise correct concrete Zn/Cu instance at partial', async () => {
+    const graph = completeGraph();
+    graph.components = graph.components.map((component) => {
+      if (component.instanceId === 'negative') return { ...component, label: 'Zn' };
+      if (component.instanceId === 'positive') return { ...component, label: 'Cu' };
+      return component;
+    });
+
+    const result = assessBuilderTopology(graph, await builderConfig());
+
+    expect(result.overall).toBe('partial');
+    expect(result.checks.abstraction.status).toBe('partial');
+    expect(result.nodeDecisions.find((decision) => decision.nodeId === 'D5')?.status).toBe('partial');
+  });
+
+  it('marks duplicate functional roles as ambiguous instead of silently choosing one', async () => {
+    const graph = completeGraph();
+    graph.components.push({ instanceId: 'negative-2', componentId: 'site-a' });
+
+    const result = assessBuilderTopology(graph, await builderConfig());
+
+    expect(result.overall).toBe('partial');
+    expect(result.checks.fourElements.status).toBe('partial');
+  });
+
+  it('is invariant under array order and graph identifier renaming', async () => {
+    const graph = completeGraph();
+    const renamed: BuilderGraph = {
+      components: [...graph.components].reverse().map((component, index) => ({
+        ...component,
+        instanceId: `renamed-${index}-${component.instanceId}`,
+      })),
+      connections: [],
+    };
+    const renamedIds = new Map(
+      renamed.components.map((component) => {
+        const original = component.instanceId.slice(component.instanceId.lastIndexOf('-') + 1);
+        return [original, component.instanceId];
+      }),
+    );
+    renamed.connections = [...graph.connections].reverse().map((connection, index) => ({
+      ...connection,
+      id: `edge-${index}`,
+      from: renamedIds.get(connection.from)!,
+      to: renamedIds.get(connection.to)!,
+    }));
+
+    const config = await builderConfig();
+    const originalResult = assessBuilderTopology(graph, config);
+    const renamedResult = assessBuilderTopology(renamed, config);
+
+    expect(renamedResult.overall).toBe(originalResult.overall);
+    expect(
+      Object.fromEntries(Object.entries(renamedResult.checks).map(([key, value]) => [key, value.status])),
+    ).toEqual(
+      Object.fromEntries(Object.entries(originalResult.checks).map(([key, value]) => [key, value.status])),
+    );
+    expect(renamedResult.nodeDecisions.map(({ nodeId, status }) => ({ nodeId, status }))).toEqual(
+      originalResult.nodeDecisions.map(({ nodeId, status }) => ({ nodeId, status })),
+    );
+  });
+
+  it('never returns hit after removing any required functional role', async () => {
+    const config = await builderConfig();
+    for (const instanceId of ['negative', 'wire', 'ions', 'positive']) {
+      const graph = completeGraph();
+      graph.components = graph.components.filter((component) => component.instanceId !== instanceId);
+      graph.connections = graph.connections.filter(
+        (connection) => connection.from !== instanceId && connection.to !== instanceId,
+      );
+
+      expect(assessBuilderTopology(graph, config).overall).not.toBe('hit');
+    }
+  });
+
+  it('rejects dangling connections with traceable input errors', async () => {
+    const graph = completeGraph();
+    graph.connections.push({
+      id: 'dangling',
+      from: 'missing-instance',
+      to: 'positive',
+      kind: 'electron-path',
+      carrier: 'electron',
+    });
+
+    const config = await builderConfig();
+    expect(() => assessBuilderTopology(graph, config)).toThrow(/missing-instance/);
+  });
+});
