@@ -1,5 +1,5 @@
 {
-  "version": "scaffold-policy.v1.2",
+  "version": "scaffold-policy.v1.3",
   "levels": [
     { "level": 1, "label": "完整引导", "promptCount": 8 },
     { "level": 2, "label": "三维度标题", "promptCount": 3 },
@@ -31,7 +31,17 @@
   },
   "socratic": {
     "maxRounds": 3,
-    "correctedOutcome": "hit-with-help"
+    "correctedOutcome": "hit-with-help",
+    "timeoutMs": 6000,
+    "retryCount": 1,
+    "forceAdvanceAfterMs": 15000,
+    "answerOverlapThreshold": 0.55,
+    "fallback": {
+      "probe": "先只判断当前节点里最关键的对象与方向，并说明依据。",
+      "hint": "回到题目中的反应物、电极和载流粒子，逐项排除一个冲突。",
+      "check": "请把刚才的判断与原作答逐项核对，指出一处需要保留或修改的地方。",
+      "closing": "三轮已结束，本题先按当前作答交给规则层判定，我们继续下一步。"
+    }
   },
   "passing": {
     "minimumRatio": 0.75,

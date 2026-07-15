@@ -783,8 +783,20 @@ export const scaffoldPolicySchema = z
       .strict(),
     socratic: z
       .object({
-        maxRounds: z.number().int().positive(),
+        maxRounds: z.number().int().min(1).max(3),
         correctedOutcome: z.enum(['hit', 'hit-with-help']),
+        timeoutMs: z.number().int().positive().max(60_000),
+        retryCount: z.literal(1),
+        forceAdvanceAfterMs: z.number().int().positive().max(120_000),
+        answerOverlapThreshold: z.number().min(0).max(1),
+        fallback: z
+          .object({
+            probe: z.string().trim().min(1),
+            hint: z.string().trim().min(1),
+            check: z.string().trim().min(1),
+            closing: z.string().trim().min(1),
+          })
+          .strict(),
       })
       .strict(),
     passing: z
@@ -821,6 +833,16 @@ export const scaffoldPolicySchema = z
         code: 'custom',
         path: ['extraction', 'citation', 'normalizationCandidateMaxEditDistanceRatio'],
         message: 'must exceed maxEditDistanceRatio',
+      });
+    }
+    if (
+      value.socratic.forceAdvanceAfterMs
+      < value.socratic.timeoutMs * (value.socratic.retryCount + 1)
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['socratic', 'forceAdvanceAfterMs'],
+        message: 'must cover every configured timeout attempt',
       });
     }
   });

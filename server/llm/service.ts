@@ -96,6 +96,9 @@ export class LLMService {
           return this.result('development-cache', cachedResponse, cacheKey);
         } catch (error) {
           this.logFailure(request, 0, error);
+          if (error instanceof StructuredResponseValidationError && !error.retryable) {
+            return this.fallback(request, cacheKey, error);
+          }
         }
       }
     }
@@ -143,7 +146,9 @@ export class LLMService {
       return this.result('provider', providerResponse, cacheKey);
     }
 
-    if (request.stepId) {
+    const validationBlocksReplay = finalError instanceof StructuredResponseValidationError
+      && !finalError.retryable;
+    if (request.stepId && !validationBlocksReplay) {
       const demoResponse = await this.options.recordings.getDemo(request.stepId);
       if (demoResponse) {
         try {

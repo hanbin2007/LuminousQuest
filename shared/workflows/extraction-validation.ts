@@ -72,6 +72,12 @@ function normalizeWithPositions(value: string, commonTypos: Record<string, strin
   return output;
 }
 
+export function normalizeComparisonText(value: string, commonTypos: Record<string, string>) {
+  return normalizeWithPositions(value, commonTypos)
+    .map((unit) => unit.character)
+    .join('');
+}
+
 function levenshteinDistance(left: string, right: string) {
   if (left === right) return 0;
   if (left.length === 0) return right.length;
