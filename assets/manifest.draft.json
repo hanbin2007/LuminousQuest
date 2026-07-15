@@ -1,0 +1,49 @@
+{
+  "assets": [
+    {
+      "id": "electrode-carbon",
+      "file": "assets/components/electrode-carbon@2x.png",
+      "dimensions": {
+        "width": 512,
+        "height": 512
+      },
+      "purpose": "拖拽组件：惰性碳棒电极"
+    },
+    {
+      "id": "electrode-zinc",
+      "file": "assets/components/electrode-zinc@2x.png",
+      "dimensions": {
+        "width": 512,
+        "height": 512
+      },
+      "purpose": "拖拽组件：金属片电极（锌灰）"
+    },
+    {
+      "id": "beaker-electrolyte",
+      "file": "assets/components/beaker-electrolyte@2x.png",
+      "dimensions": {
+        "width": 512,
+        "height": 512
+      },
+      "purpose": "拖拽组件：烧杯与校青溶液"
+    },
+    {
+      "id": "salt-bridge",
+      "file": "assets/components/salt-bridge@2x.png",
+      "dimensions": {
+        "width": 512,
+        "height": 512
+      },
+      "purpose": "拖拽组件：U 型管盐桥"
+    },
+    {
+      "id": "ammeter",
+      "file": "assets/components/ammeter@2x.png",
+      "dimensions": {
+        "width": 512,
+        "height": 512
+      },
+      "purpose": "拖拽组件：模拟指针式电流表"
+    }
+  ]
+}
