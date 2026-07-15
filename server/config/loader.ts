@@ -13,6 +13,7 @@ import {
   rubricsSchema,
   scaffoldPolicySchema,
 } from '../../shared/config/schemas';
+import { analyzeEquation } from '../../shared/chemistry/equation';
 
 export class ConfigValidationError extends Error {
   readonly file: string;
@@ -312,6 +313,27 @@ export async function validateReferences(
           `must match case medium ${trainingCase.medium}`,
         );
       }
+      equationSet.accepted.forEach((accepted, acceptedIndex) => {
+        const analysis = analyzeEquation(accepted, {
+          kind: equationSet.electrode === 'overall' ? 'overall' : 'half',
+          medium: equationSet.medium,
+          expectedElectronSide: equationSet.expectedElectronSide,
+        });
+        if (analysis.status === 'parse-error') {
+          throw new ConfigValidationError(
+            relativeCaseFile,
+            `equationSets.${equationIndex}.accepted.${acceptedIndex}`,
+            `equation-parse-miss: ${analysis.error.message}`,
+          );
+        }
+        if (!analysis.valid) {
+          throw new ConfigValidationError(
+            relativeCaseFile,
+            `equationSets.${equationIndex}.accepted.${acceptedIndex}`,
+            'configured equation must satisfy atom, charge, electron, and medium checks',
+          );
+        }
+      });
     });
   });
 

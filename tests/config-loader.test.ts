@@ -179,6 +179,21 @@ describe('configuration loading', () => {
     });
   });
 
+  it('rejects an invalid configured electrode-equation equivalence entry', async () => {
+    const root = await createTemporaryDirectory();
+    await writeValidContentTree(root);
+    const caseFile = path.join(root, 'config', 'cases', 'zinc-copper.json');
+    const trainingCase = JSON.parse(await readFile(caseFile, 'utf8'));
+    trainingCase.equationSets[0].accepted[0] = 'Zn + -> Zn^2+';
+    await writeFile(caseFile, JSON.stringify(trainingCase));
+
+    await expect(loadAllConfig(root)).rejects.toMatchObject({
+      file: 'config/cases/zinc-copper.json',
+      field: 'equationSets.0.accepted.0',
+      reason: expect.stringContaining('equation-parse-miss'),
+    });
+  });
+
   it('rejects missing and escaping materialRef assets', async () => {
     const root = await createTemporaryDirectory();
     await writeValidContentTree(root);
