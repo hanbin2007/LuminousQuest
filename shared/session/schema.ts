@@ -335,7 +335,11 @@ export const polarityAssessedEventSchema = z
     pipelineStage: z.literal('rule'),
     sourceAnswerEventId: identifierSchema,
     anchorId: identifierSchema,
-    facts: z.array(z.object({ id: identifierSchema, value: z.string().trim().min(1) }).strict()).min(1),
+    facts: z.array(z.object({
+      id: identifierSchema,
+      value: z.string().trim().min(1),
+      evidence: evidenceSchema.optional(),
+    }).strict()).min(1),
     extractedValue: z.string().trim().min(1),
     correctValue: z.string().trim().min(1),
     outcome: z.enum(['hit', 'miss']),
@@ -452,6 +456,21 @@ export const sessionSchema = z
                 code: 'custom',
                 path: ['events', index, 'evidence', evidenceIndex],
                 message: 'evidence must exactly quote the source answer',
+              });
+            }
+          });
+          event.facts.forEach((fact, factIndex) => {
+            if (
+              fact.evidence
+              && (
+                fact.evidence.end > original.length
+                || original.slice(fact.evidence.start, fact.evidence.end) !== fact.evidence.quote
+              )
+            ) {
+              context.addIssue({
+                code: 'custom',
+                path: ['events', index, 'facts', factIndex, 'evidence'],
+                message: 'fact evidence must exactly quote the source answer',
               });
             }
           });

@@ -27,6 +27,7 @@ const factSlotSchema = z
   .object({
     id: z.string().trim().min(1),
     value: z.string().trim().min(1),
+    evidence: evidenceSchema,
   })
   .strict();
 
@@ -130,10 +131,20 @@ export const structuredAssessmentResponseJsonSchema = {
             items: {
               type: 'object',
               additionalProperties: false,
-              required: ['id', 'value'],
+              required: ['id', 'value', 'evidence'],
               properties: {
                 id: { type: 'string', minLength: 1 },
                 value: { type: 'string', minLength: 1 },
+                evidence: {
+                  type: 'object',
+                  additionalProperties: false,
+                  required: ['quote', 'start', 'end'],
+                  properties: {
+                    quote: { type: 'string', minLength: 1 },
+                    start: { type: 'integer', minimum: 0 },
+                    end: { type: 'integer', minimum: 1 },
+                  },
+                },
               },
             },
           },
@@ -184,10 +195,20 @@ export const structuredAssessmentResponseJsonSchema = {
                 items: {
                   type: 'object',
                   additionalProperties: false,
-                  required: ['id', 'value'],
+                  required: ['id', 'value', 'evidence'],
                   properties: {
                     id: { type: 'string', minLength: 1 },
                     value: { type: 'string', minLength: 1 },
+                    evidence: {
+                      type: 'object',
+                      additionalProperties: false,
+                      required: ['quote', 'start', 'end'],
+                      properties: {
+                        quote: { type: 'string', minLength: 1 },
+                        start: { type: 'integer', minimum: 0 },
+                        end: { type: 'integer', minimum: 1 },
+                      },
+                    },
                   },
                 },
               },

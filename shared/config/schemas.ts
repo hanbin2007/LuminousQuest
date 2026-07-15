@@ -780,6 +780,11 @@ export const scaffoldPolicySchema = z
     extraction: z
       .object({
         retryCount: z.literal(1),
+        maximumAnswerCharacters: z.number().int().positive().max(10_000),
+        factValueAliases: z.record(
+          z.string().trim().min(1),
+          z.array(z.string().trim().min(1)).min(1),
+        ),
         citation: z
           .object({
             maxEditDistanceRatio: z.number().min(0).max(1),

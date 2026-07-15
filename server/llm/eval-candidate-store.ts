@@ -3,34 +3,43 @@ import { mkdir, rename, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import type { ExtractionValidationCategory } from '../../shared/workflows/extraction-validation';
-import { defaultRecordingRedactor, type RecordingRedactor } from './redaction';
+import { hashValue } from './cache-key';
+import {
+  defaultRecordingRedactor,
+  redactPersonalText,
+  type RecordingRedactor,
+} from './redaction';
+
+export interface EvalCandidateProvenance {
+  configDigest: string;
+  thresholds: {
+    maxEditDistanceRatio: number;
+    normalizationCandidateMaxEditDistanceRatio: number;
+  };
+  prompt: { id: string; version: string };
+  schemaVersion: string;
+  provider: string;
+  model: string;
+}
 
 export interface ExtractionEvalCandidate {
   category: ExtractionValidationCategory;
   answer: string;
   detail: Record<string, unknown>;
+  provenance: EvalCandidateProvenance;
 }
 
 export interface EvalCandidateWriter {
   record(candidate: ExtractionEvalCandidate): Promise<string>;
 }
 
-const emailPattern = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/giu;
-const phonePattern = /(?<!\d)(?:\+?86[- ]?)?1[3-9]\d{9}(?!\d)/g;
-const identifierPattern = /(?<!\d)\d{15,18}[\dXx]?(?!\d)/g;
-
-function redactPersonalText(value: unknown): unknown {
-  if (typeof value === 'string') {
-    return value
-      .replace(emailPattern, '[REDACTED_EMAIL]')
-      .replace(phonePattern, '[REDACTED_PHONE]')
-      .replace(identifierPattern, '[REDACTED_ID]');
-  }
-  if (Array.isArray(value)) return value.map(redactPersonalText);
+function canonicalize(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonicalize);
   if (value && typeof value === 'object') {
     return Object.fromEntries(
       Object.entries(value as Record<string, unknown>)
-        .map(([key, entry]) => [key, redactPersonalText(entry)]),
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([key, entry]) => [key, canonicalize(entry)]),
     );
   }
   return value;
@@ -53,10 +62,9 @@ export class EvalCandidateStore implements EvalCandidateWriter {
     const fileName = `${recordedAt.replaceAll(':', '-')}-${candidate.category}-${id}.json`;
     const file = path.join(this.directory, fileName);
     const temporaryFile = `${file}.${process.pid}.tmp`;
-    const payload = redactPersonalText(this.redactor({
-      version: 'eval-candidate.v1',
-      recordedAt,
+    const body = redactPersonalText(this.redactor({
       category: candidate.category,
+      provenance: candidate.provenance,
       sample: {
         answer: candidate.answer,
         modelQuote: candidate.detail.modelQuote ?? null,
@@ -64,7 +72,14 @@ export class EvalCandidateStore implements EvalCandidateWriter {
       context: Object.fromEntries(
         Object.entries(candidate.detail).filter(([key]) => key !== 'modelQuote'),
       ),
-    }));
+    })) as Record<string, unknown>;
+    const payload = {
+      version: 'eval-candidate.v2',
+      recordedAt,
+      stableHash: hashValue(JSON.stringify(canonicalize(body))),
+      ...body,
+      distribution: { requiresHumanAudit: true },
+    };
 
     await mkdir(this.directory, { recursive: true });
     try {

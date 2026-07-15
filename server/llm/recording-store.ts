@@ -8,7 +8,11 @@ import { z } from 'zod';
 import type { LoadedPrompt } from '../prompts/loader';
 import { hashValue } from './cache-key';
 import type { LLMRequest, LLMResponse } from './types';
-import { defaultRecordingRedactor, type RecordingRedactor } from './redaction';
+import {
+  defaultRecordingRedactor,
+  redactPersonalText,
+  type RecordingRedactor,
+} from './redaction';
 
 const promptMetadataSchema = z
   .object({
@@ -188,7 +192,7 @@ export class RecordingStore {
         schemaVersion: request.schemaVersion,
         prompt: { id: request.prompt.id, version: request.prompt.version },
       },
-      request: this.redactor(request),
+      request: redactPersonalText(this.redactor(request)),
       response: replaceResponseImages(response),
     };
 

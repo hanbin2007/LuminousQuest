@@ -1,7 +1,22 @@
 {
-  "version": "eval-candidate.v1",
+  "version": "eval-candidate.v2",
   "recordedAt": "2026-07-15T00:00:00.000Z",
+  "stableHash": "3faafd969662deb4879db592588c030fd1702b0d75caebe1b7e0a03b8696ff0f",
   "category": "citation-mismatch",
+  "provenance": {
+    "configDigest": "sample-config-digest",
+    "thresholds": {
+      "maxEditDistanceRatio": 0.12,
+      "normalizationCandidateMaxEditDistanceRatio": 0.35
+    },
+    "prompt": {
+      "id": "structured-assessment",
+      "version": "prompt.v1"
+    },
+    "schemaVersion": "structured-assessment.v4",
+    "provider": "sample-provider",
+    "model": "sample-model"
+  },
   "sample": {
     "answer": "我还不会。",
     "modelQuote": "电子由负极流向正极。"
@@ -10,7 +25,9 @@
     "caseId": "zinc-copper",
     "nodeId": "P4",
     "evidenceIndex": 0,
-    "editDistanceRatio": 0.8888888888888888,
-    "sanitized": true
+    "editDistanceRatio": 0.8888888888888888
+  },
+  "distribution": {
+    "requiresHumanAudit": true
   }
 }

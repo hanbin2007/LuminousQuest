@@ -1,16 +1,35 @@
 {
-  "version": "eval-candidate.v1",
+  "version": "eval-candidate.v2",
   "recordedAt": "2026-07-15T00:00:00.000Z",
+  "stableHash": "ca1937005ba1133860f7445319b6eefd11b34d99d70a3661a8b0559f63952775",
   "category": "normalization-insufficient",
+  "provenance": {
+    "configDigest": "sample-config-digest",
+    "thresholds": {
+      "maxEditDistanceRatio": 0.12,
+      "normalizationCandidateMaxEditDistanceRatio": 0.35
+    },
+    "prompt": {
+      "id": "structured-assessment",
+      "version": "prompt.v1"
+    },
+    "schemaVersion": "structured-assessment.v4",
+    "provider": "sample-provider",
+    "model": "sample-model"
+  },
   "sample": {
-    "answer": "电子由负机流向正极。",
+    "answer": "电子由负机流往正极。",
     "modelQuote": "电子由负极流向正极。"
   },
   "context": {
     "caseId": "zinc-copper",
     "nodeId": "P4",
     "evidenceIndex": 0,
-    "editDistanceRatio": 0.1111111111111111,
-    "sanitized": true
+    "editDistanceRatio": 0.2,
+    "maxEditDistanceRatio": 0.12,
+    "protectedTokenMismatch": false
+  },
+  "distribution": {
+    "requiresHumanAudit": true
   }
 }

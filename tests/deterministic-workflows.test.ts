@@ -46,14 +46,22 @@ describe('deterministic workflow and persistence contracts', () => {
         syllabus: 'within' as const,
         contradiction: false,
         typo: 'none' as const,
-        slots: [{ id: 'reducing-agent', value: 'Zn' }],
+        slots: [{
+          id: 'reducing-agent',
+          value: 'Zn',
+          evidence: { quote: 'Zn', start: 0, end: 2 },
+        }],
       },
       evidence: [{ quote: 'Zn', start: 0, end: 2 }],
       assistance: { kind: 'none' as const, rounds: 0 },
     };
     const anchor = {
       anchorId: 'case-polarity',
-      facts: [{ id: 'negative', value: 'Zn' }],
+      facts: [{
+        id: 'negative',
+        value: 'Zn',
+        evidence: { quote: 'Zn', start: 0, end: 2 },
+      }],
       evidence: [{ quote: 'Zn', start: 0, end: 2 }],
     };
 
@@ -95,8 +103,8 @@ describe('deterministic workflow and persistence contracts', () => {
         anchors: [{
           anchorId: 'case-polarity',
           facts: [
-            { id: 'negative', value: 'Cu' },
-            { id: 'positive', value: 'Zn' },
+            { id: 'negative', value: 'Cu', evidence: quote('铜') },
+            { id: 'positive', value: 'Zn', evidence: quote('锌') },
           ],
           evidence: [quote('铜是负极，锌是正极')],
         }],
@@ -110,8 +118,8 @@ describe('deterministic workflow and persistence contracts', () => {
             contradiction: false,
             typo: 'none',
             slots: [
-              { id: 'electron-from', value: 'Cu' },
-              { id: 'electron-to', value: 'Zn' },
+              { id: 'electron-from', value: 'Cu', evidence: quote('铜') },
+              { id: 'electron-to', value: 'Zn', evidence: quote('锌') },
             ],
           },
           evidence: [quote('电子从铜流向锌')],
@@ -163,8 +171,8 @@ describe('deterministic workflow and persistence contracts', () => {
         anchors: [{
           anchorId: 'case-polarity',
           facts: [
-            { id: 'negative', value: 'ｚｎ' },
-            { id: 'positive', value: 'ｃｕ' },
+            { id: 'negative', value: 'ｚｎ', evidence: { quote: 'Ｚｎ', start: 0, end: 2 } },
+            { id: 'positive', value: 'ｃｕ', evidence: { quote: 'Ｃｕ', start: 6, end: 8 } },
           ],
           evidence: [{ quote: answer, start: 0, end: answer.length }],
         }],
@@ -178,8 +186,16 @@ describe('deterministic workflow and persistence contracts', () => {
             contradiction: false,
             typo: 'none',
             slots: [
-              { id: 'reducing-agent', value: 'ｚｎ' },
-              { id: 'oxidizing-agent', value: 'Cu^2+' },
+              {
+                id: 'reducing-agent',
+                value: 'ｚｎ',
+                evidence: { quote: 'Ｚｎ', start: 0, end: 2 },
+              },
+              {
+                id: 'oxidizing-agent',
+                value: 'Cu^2+',
+                evidence: { quote: answer, start: 0, end: answer.length },
+              },
             ],
           },
           evidence: [{ quote: answer, start: 0, end: answer.length }],
@@ -349,8 +365,16 @@ describe('deterministic workflow and persistence contracts', () => {
             contradiction: false,
             typo: 'ambiguous',
             slots: [
-              { id: 'reducing-agent', value: 'Zn' },
-              { id: 'oxidizing-agent', value: 'Cu^2+' },
+              {
+                id: 'reducing-agent',
+                value: 'Zn',
+                evidence: { quote: 'Zn', start: 0, end: 2 },
+              },
+              {
+                id: 'oxidizing-agent',
+                value: 'Cu^2+',
+                evidence: { quote: 'Cu^2+', start: 8, end: 13 },
+              },
             ],
           },
           evidence: [{ quote: answer, start: 0, end: answer.length }],

@@ -117,7 +117,13 @@ describe('runtime adjudication policy contracts', () => {
       assessments: [{
         nodeId: 'P4',
         errorIds: [],
-        facts: completeFacts,
+        facts: {
+          ...completeFacts,
+          slots: completeFacts.slots.map((slot) => ({
+            ...slot,
+            evidence: { quote: slot.value, start: 0, end: slot.value.length },
+          })),
+        },
         evidence: [{ quote: 'Zn', start: 0, end: 2 }],
         assistance: { kind: 'none', rounds: 0 },
       }],

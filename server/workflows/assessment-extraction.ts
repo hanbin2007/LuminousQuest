@@ -23,7 +23,25 @@ function objectProperties(schema: JsonSchema) {
   return schema.properties as Record<string, JsonSchema>;
 }
 
-function createClosedExtractionSchema(input: {
+function closedFactSlotsSchema(
+  baseSlots: JsonSchema,
+  requirements: readonly { id: string }[],
+) {
+  const baseItem = baseSlots.items as JsonSchema;
+  return {
+    ...structuredClone(baseSlots),
+    maxItems: requirements.length,
+    items: {
+      oneOf: requirements.map((requirement) => {
+        const branch = structuredClone(baseItem) as JsonSchema;
+        objectProperties(branch).id = { type: 'string', const: requirement.id };
+        return branch;
+      }),
+    },
+  };
+}
+
+export function createClosedExtractionSchema(input: {
   config: LoadedConfig;
   caseId: string;
   targetNodeIds: readonly string[];
@@ -55,9 +73,18 @@ function createClosedExtractionSchema(input: {
   const rootProperties = objectProperties(schema);
   const anchors = rootProperties.anchors;
   const anchorItem = anchors.items as JsonSchema;
-  objectProperties(anchorItem).anchorId = {
-    type: 'string',
-    enum: trainingCase.followingAnchors.map((anchor) => anchor.id),
+  anchors.maxItems = trainingCase.followingAnchors.length;
+  anchors.items = {
+    oneOf: trainingCase.followingAnchors.map((anchor) => {
+      const branch = structuredClone(anchorItem) as JsonSchema;
+      const properties = objectProperties(branch);
+      properties.anchorId = { type: 'string', const: anchor.id };
+      const requirements = anchor.correctValue.split(';').map((entry) => ({
+        id: entry.slice(0, entry.indexOf('=')).trim(),
+      }));
+      properties.facts = closedFactSlotsSchema(properties.facts, requirements);
+      return branch;
+    }),
   };
 
   const assessments = rootProperties.assessments;
@@ -71,6 +98,14 @@ function createClosedExtractionSchema(input: {
       uniqueItems: true,
       items: { type: 'string', enum: errorsByNode.get(nodeId) ?? [] },
     };
+    const evidencePath = trainingCase.evidencePaths.find((entry) =>
+      entry.nodeId === nodeId && entry.source === 'answer')!;
+    const facts = properties.facts;
+    const factsProperties = objectProperties(facts);
+    factsProperties.slots = closedFactSlotsSchema(
+      factsProperties.slots,
+      evidencePath.factRequirements,
+    );
     const assistance = properties.assistance;
     const assistanceProperties = objectProperties(assistance);
     assistanceProperties.kind = { type: 'string', const: input.assistance.kind };
@@ -121,6 +156,15 @@ export type AssessmentExtractionResult =
 export async function runAssessmentExtraction(
   input: AssessmentExtractionInput,
 ): Promise<AssessmentExtractionResult> {
+  const maximumAnswerCharacters = input.config.scaffoldPolicy.extraction.maximumAnswerCharacters;
+  if (input.answer.length > maximumAnswerCharacters) {
+    throw new ExtractionValidationError(
+      'answer-too-long',
+      false,
+      `Answer exceeds the configured ${maximumAnswerCharacters} character limit`,
+      { answerLength: input.answer.length, maximumAnswerCharacters },
+    );
+  }
   const schema = createClosedExtractionSchema(input);
   const trainingCase = input.config.cases.find((entry) => entry.id === input.caseId)!;
   const errorIdsByNode = Object.fromEntries(
@@ -134,7 +178,7 @@ export async function runAssessmentExtraction(
     provider: input.provider,
     model: input.model,
     prompt: input.prompt,
-    schemaVersion: 'structured-assessment.v3',
+    schemaVersion: 'structured-assessment.v4',
     configVersion: input.config.configVersion,
     input: {
       answer: input.answer,
@@ -168,6 +212,20 @@ export async function runAssessmentExtraction(
               category: error.category,
               answer: input.answer,
               detail: error.detail,
+              provenance: {
+                configDigest: input.config.configVersion,
+                thresholds: {
+                  maxEditDistanceRatio:
+                    input.config.scaffoldPolicy.extraction.citation.maxEditDistanceRatio,
+                  normalizationCandidateMaxEditDistanceRatio:
+                    input.config.scaffoldPolicy.extraction.citation
+                      .normalizationCandidateMaxEditDistanceRatio,
+                },
+                prompt: { id: input.prompt.id, version: input.prompt.version },
+                schemaVersion: 'structured-assessment.v4',
+                provider: input.provider,
+                model: input.model,
+              },
             });
           } catch (recordingError) {
             (input.logger ?? console).warn(

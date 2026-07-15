@@ -113,6 +113,32 @@ describe('LLM recording and replay', () => {
     expect(persisted).not.toContain('response-image-bytes');
   });
 
+  it('applies personal-data redaction to studentAnswer in development recordings', async () => {
+    const root = await createTemporaryDirectory();
+    const store = new RecordingStore(root);
+    const request = developmentRequest({
+      input: {
+        studentAnswer: 'QQ:12345678 微信:zhangsan_2026 学号:240031 南京一中高二3班',
+      },
+    });
+    const cacheKey = createDevelopmentCacheKey(request);
+
+    await store.saveDevelopment(cacheKey, request, { content: 'safe', model: 'test-v1' });
+
+    const persisted = await readFile(
+      path.join(root, 'recordings', 'cache', `${cacheKey}.json`),
+      'utf8',
+    );
+    expect(persisted).not.toContain('12345678');
+    expect(persisted).not.toContain('zhangsan_2026');
+    expect(persisted).not.toContain('240031');
+    expect(persisted).not.toContain('南京一中高二3班');
+    expect(persisted).toContain('[REDACTED_QQ]');
+    expect(persisted).toContain('[REDACTED_WECHAT]');
+    expect(persisted).toContain('[REDACTED_STUDENT_ID]');
+    expect(persisted).toContain('[REDACTED_SCHOOL_CLASS]');
+  });
+
   it('preserves non-secret token usage metadata in redacted recordings', async () => {
     const root = await createTemporaryDirectory();
     const store = new RecordingStore(root);

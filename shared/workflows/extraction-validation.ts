@@ -7,7 +7,9 @@ import {
 export type ExtractionValidationCategory =
   | 'closed-set'
   | 'citation-mismatch'
-  | 'normalization-insufficient';
+  | 'normalization-insufficient'
+  | 'fact-grounding'
+  | 'answer-too-long';
 
 export class ExtractionValidationError extends Error {
   constructor(
@@ -78,6 +80,45 @@ export function normalizeComparisonText(value: string, commonTypos: Record<strin
     .join('');
 }
 
+function aliasBoundaryCharacter(character: string | undefined) {
+  return character !== undefined && /[a-z0-9^+\-]/iu.test(character);
+}
+
+function containsNormalizedAlias(text: string, alias: string) {
+  if (!/[a-z0-9]/iu.test(alias)) return text.includes(alias);
+  for (let index = text.indexOf(alias); index >= 0; index = text.indexOf(alias, index + 1)) {
+    if (
+      !aliasBoundaryCharacter(text[index - 1])
+      && !aliasBoundaryCharacter(text[index + alias.length])
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+export function factValueAliases(
+  value: string,
+  aliases: Record<string, string[]>,
+  commonTypos: Record<string, string>,
+) {
+  const configured = aliases[value] ?? [];
+  return [...new Set([value, ...configured]
+    .map((entry) => normalizeComparisonText(entry, commonTypos))
+    .filter((entry) => entry.length > 0))];
+}
+
+export function quoteExpressesFactValue(input: {
+  quote: string;
+  value: string;
+  aliases: Record<string, string[]>;
+  commonTypos: Record<string, string>;
+}) {
+  const quote = normalizeComparisonText(input.quote, input.commonTypos);
+  return factValueAliases(input.value, input.aliases, input.commonTypos)
+    .some((alias) => containsNormalizedAlias(quote, alias));
+}
+
 function levenshteinDistance(left: string, right: string) {
   if (left === right) return 0;
   if (left.length === 0) return right.length;
@@ -101,6 +142,21 @@ interface CitationMatch {
   ratio: number;
   start: number;
   end: number;
+}
+
+function protectedSemanticTokens(value: string, commonTypos: Record<string, string>) {
+  const normalized = normalizeComparisonText(value, commonTypos);
+  const tokens = new Set<string>();
+  for (const pattern of [
+    /不|非|未/gu,
+    /正极|负极/gu,
+    /氧化|还原/gu,
+    /流入|流出/gu,
+    /[a-z][a-z0-9]*(?:\^[0-9]*[+\-]|[0-9]*[+\-])?/giu,
+  ]) {
+    for (const match of normalized.matchAll(pattern)) tokens.add(match[0]);
+  }
+  return [...tokens].sort();
 }
 
 function findCitationMatch(
@@ -159,18 +215,31 @@ function validateEvidence(
     policy.normalizationCandidateMaxEditDistanceRatio,
   );
   if (match && match.ratio <= policy.maxEditDistanceRatio) {
-    return {
-      quote: answer.slice(match.start, match.end),
-      start: match.start,
-      end: match.end,
-    };
+    if (match.ratio === 0) {
+      return {
+        quote: answer.slice(match.start, match.end),
+        start: match.start,
+        end: match.end,
+      };
+    }
   }
   if (match && match.ratio <= policy.normalizationCandidateMaxEditDistanceRatio) {
+    const actualQuote = answer.slice(match.start, match.end);
+    const modelTokens = protectedSemanticTokens(evidence.quote, policy.commonTypos);
+    const answerTokens = protectedSemanticTokens(actualQuote, policy.commonTypos);
     throw new ExtractionValidationError(
       'normalization-insufficient',
       false,
-      'Citation is close to the answer but exceeds the configured normalization threshold',
-      { ...detail, modelQuote: evidence.quote, editDistanceRatio: match.ratio },
+      'Citation contains an edit outside the configured typo map',
+      {
+        ...detail,
+        modelQuote: evidence.quote,
+        editDistanceRatio: match.ratio,
+        maxEditDistanceRatio: policy.maxEditDistanceRatio,
+        protectedTokenMismatch: JSON.stringify(modelTokens) !== JSON.stringify(answerTokens),
+        modelProtectedTokens: modelTokens,
+        answerProtectedTokens: answerTokens,
+      },
     );
   }
   throw new ExtractionValidationError(
@@ -188,6 +257,15 @@ export function validateAssessmentExtraction(input: {
   targetNodeIds: readonly string[];
   config: LoadedConfig;
 }): StructuredAssessmentResponse {
+  const maximumAnswerCharacters = input.config.scaffoldPolicy.extraction.maximumAnswerCharacters;
+  if (input.answer.length > maximumAnswerCharacters) {
+    throw new ExtractionValidationError(
+      'answer-too-long',
+      false,
+      `Answer exceeds the configured ${maximumAnswerCharacters} character limit`,
+      { answerLength: input.answer.length, maximumAnswerCharacters },
+    );
+  }
   const parsed = structuredAssessmentResponseSchema.parse(input.extraction);
   const trainingCase = input.config.cases.find((entry) => entry.id === input.caseId);
   if (!trainingCase) {
@@ -219,8 +297,50 @@ export function validateAssessmentExtraction(input: {
   );
   const anchorIds = new Set(trainingCase.followingAnchors.map((anchor) => anchor.id));
   for (const anchor of parsed.anchors) {
-    if (!anchorIds.has(anchor.anchorId)) {
+    const configuredAnchor = trainingCase.followingAnchors.find((entry) => entry.id === anchor.anchorId);
+    if (!anchorIds.has(anchor.anchorId) || !configuredAnchor) {
       throw new ExtractionValidationError('closed-set', true, `Unknown anchor ${anchor.anchorId}`);
+    }
+    const allowedFactIds = new Set(configuredAnchor.correctValue.split(';').map((entry) => {
+      const separator = entry.indexOf('=');
+      return separator < 1 ? '' : entry.slice(0, separator).trim();
+    }).filter(Boolean));
+    const seenFactIds = new Set<string>();
+    for (const [factIndex, fact] of anchor.facts.entries()) {
+      if (!allowedFactIds.has(fact.id) || seenFactIds.has(fact.id)) {
+        throw new ExtractionValidationError(
+          'closed-set',
+          true,
+          `Anchor ${anchor.anchorId} contains an unknown or duplicate fact slot ${fact.id}`,
+          { caseId: input.caseId, anchorId: anchor.anchorId, factIndex, slotId: fact.id },
+        );
+      }
+      seenFactIds.add(fact.id);
+      fact.evidence = validateEvidence(
+        fact.evidence,
+        input.answer,
+        input.config,
+        { caseId: input.caseId, anchorId: anchor.anchorId, slotId: fact.id, factIndex },
+      );
+      if (!quoteExpressesFactValue({
+        quote: fact.evidence.quote,
+        value: fact.value,
+        aliases: input.config.scaffoldPolicy.extraction.factValueAliases,
+        commonTypos: input.config.scaffoldPolicy.extraction.citation.commonTypos,
+      })) {
+        throw new ExtractionValidationError(
+          'fact-grounding',
+          false,
+          `Anchor fact ${fact.id} is not expressed by its bound quote`,
+          {
+            caseId: input.caseId,
+            anchorId: anchor.anchorId,
+            slotId: fact.id,
+            slotValue: fact.value,
+            modelQuote: fact.evidence.quote,
+          },
+        );
+      }
     }
     anchor.evidence = anchor.evidence.map((evidence, evidenceIndex) => validateEvidence(
       evidence,
@@ -230,6 +350,46 @@ export function validateAssessmentExtraction(input: {
     ));
   }
   for (const assessment of parsed.assessments) {
+    const evidencePath = trainingCase.evidencePaths.find((entry) =>
+      entry.nodeId === assessment.nodeId && entry.source === 'answer');
+    const allowedSlotIds = new Set(evidencePath?.factRequirements.map((entry) => entry.id) ?? []);
+    const seenSlotIds = new Set<string>();
+    for (const [slotIndex, slot] of assessment.facts.slots.entries()) {
+      if (!allowedSlotIds.has(slot.id) || seenSlotIds.has(slot.id)) {
+        throw new ExtractionValidationError(
+          'closed-set',
+          true,
+          `Assessment ${assessment.nodeId} contains an unknown or duplicate fact slot ${slot.id}`,
+          { caseId: input.caseId, nodeId: assessment.nodeId, slotId: slot.id, slotIndex },
+        );
+      }
+      seenSlotIds.add(slot.id);
+      slot.evidence = validateEvidence(
+        slot.evidence,
+        input.answer,
+        input.config,
+        { caseId: input.caseId, nodeId: assessment.nodeId, slotId: slot.id, slotIndex },
+      );
+      if (!quoteExpressesFactValue({
+        quote: slot.evidence.quote,
+        value: slot.value,
+        aliases: input.config.scaffoldPolicy.extraction.factValueAliases,
+        commonTypos: input.config.scaffoldPolicy.extraction.citation.commonTypos,
+      })) {
+        throw new ExtractionValidationError(
+          'fact-grounding',
+          false,
+          `Fact ${slot.id} is not expressed by its bound quote`,
+          {
+            caseId: input.caseId,
+            nodeId: assessment.nodeId,
+            slotId: slot.id,
+            slotValue: slot.value,
+            modelQuote: slot.evidence.quote,
+          },
+        );
+      }
+    }
     for (const errorId of assessment.errorIds) {
       if (misconceptionNode.get(errorId) !== assessment.nodeId) {
         throw new ExtractionValidationError(
