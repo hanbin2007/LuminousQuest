@@ -1,0 +1,106 @@
+[
+  {
+    "version": "eval-case.v1", "evaluationPath": "equation", "annotationStatus": "labeled", "id": "synthetic-p3-m1-wrong-medium",
+    "questionRef": { "caseId": "aluminum-air", "nodeId": "P3", "equationSetId": "oxygen-positive" },
+    "studentAnswer": "O2 + 4H^+ + 4e^- -> 2H2O",
+    "expectedExtraction": {
+      "response": "substantive", "terminology": "model", "syllabus": "within", "contradiction": false, "typo": "none",
+      "errorIds": ["P3-M1"],
+      "slots": [{ "id": "equation", "value": "O2 + 4H^+ + 4e^- -> 2H2O", "evidenceQuote": "O2 + 4H^+ + 4e^- -> 2H2O" }],
+      "evidenceQuotes": ["O2 + 4H^+ + 4e^- -> 2H2O"]
+    },
+    "expectedScore": "partial", "annotator": "codex-synthetic-seed", "rubricVersion": "rubrics.v1.1", "source": "synthetic",
+    "misconceptionIds": ["P3-M1"], "tags": ["misconception", "equation", "partial"], "seriousMisjudgmentOpportunity": false
+  },
+  {
+    "version": "eval-case.v1", "evaluationPath": "equation", "annotationStatus": "labeled", "id": "synthetic-p3-m2-h-plus-in-alkaline",
+    "questionRef": { "caseId": "aluminum-air", "nodeId": "P3", "equationSetId": "oxygen-positive" },
+    "studentAnswer": "O2 + 4H^+ + 4e^- -> 2H2O",
+    "expectedExtraction": {
+      "response": "substantive", "terminology": "model", "syllabus": "within", "contradiction": false, "typo": "none",
+      "errorIds": ["P3-M2"],
+      "slots": [{ "id": "equation", "value": "O2 + 4H^+ + 4e^- -> 2H2O", "evidenceQuote": "O2 + 4H^+ + 4e^- -> 2H2O" }],
+      "evidenceQuotes": ["O2 + 4H^+ + 4e^- -> 2H2O"]
+    },
+    "expectedScore": "partial", "annotator": "codex-synthetic-seed", "rubricVersion": "rubrics.v1.1", "source": "synthetic",
+    "misconceptionIds": ["P3-M2"], "tags": ["misconception", "equation", "partial"], "seriousMisjudgmentOpportunity": false
+  },
+  {
+    "version": "eval-case.v1", "evaluationPath": "equation", "annotationStatus": "labeled", "id": "synthetic-p3-m3-wrong-species",
+    "questionRef": { "caseId": "zinc-copper", "nodeId": "P3", "equationSetId": "copper-positive" },
+    "studentAnswer": "Zn -> Zn^2+ + 2e^-",
+    "expectedExtraction": {
+      "response": "substantive", "terminology": "model", "syllabus": "within", "contradiction": false, "typo": "none",
+      "errorIds": ["P3-M3"],
+      "slots": [{ "id": "equation", "value": "Zn -> Zn^2+ + 2e^-", "evidenceQuote": "Zn -> Zn^2+ + 2e^-" }],
+      "evidenceQuotes": ["Zn -> Zn^2+ + 2e^-"]
+    },
+    "expectedScore": "miss", "annotator": "codex-synthetic-seed", "rubricVersion": "rubrics.v1.1", "source": "synthetic",
+    "misconceptionIds": ["P3-M3"], "tags": ["misconception", "equation"], "seriousMisjudgmentOpportunity": true
+  },
+  {
+    "version": "eval-case.v1", "evaluationPath": "equation", "annotationStatus": "labeled", "id": "synthetic-p6-m1-charge-unbalanced",
+    "questionRef": { "caseId": "zinc-copper", "nodeId": "P6", "equationSetId": "copper-positive" },
+    "studentAnswer": "Cu^2+ + e^- -> Cu",
+    "expectedExtraction": {
+      "response": "substantive", "terminology": "model", "syllabus": "within", "contradiction": false, "typo": "none",
+      "errorIds": ["P6-M1"],
+      "slots": [{ "id": "equation", "value": "Cu^2+ + e^- -> Cu", "evidenceQuote": "Cu^2+ + e^- -> Cu" }],
+      "evidenceQuotes": ["Cu^2+ + e^- -> Cu"]
+    },
+    "expectedScore": "partial", "annotator": "codex-synthetic-seed", "rubricVersion": "rubrics.v1.1", "source": "synthetic",
+    "misconceptionIds": ["P6-M1"], "tags": ["misconception", "equation", "partial"], "seriousMisjudgmentOpportunity": false
+  },
+  {
+    "version": "eval-case.v1", "evaluationPath": "equation", "annotationStatus": "labeled", "id": "synthetic-p6-m2-electron-count",
+    "questionRef": { "caseId": "zinc-copper", "nodeId": "P6", "equationSetId": "copper-positive" },
+    "studentAnswer": "Cu^2+ + e^- -> Cu",
+    "expectedExtraction": {
+      "response": "substantive", "terminology": "model", "syllabus": "within", "contradiction": false, "typo": "none",
+      "errorIds": ["P6-M2"],
+      "slots": [{ "id": "equation", "value": "Cu^2+ + e^- -> Cu", "evidenceQuote": "Cu^2+ + e^- -> Cu" }],
+      "evidenceQuotes": ["Cu^2+ + e^- -> Cu"]
+    },
+    "expectedScore": "partial", "annotator": "codex-synthetic-seed", "rubricVersion": "rubrics.v1.1", "source": "synthetic",
+    "misconceptionIds": ["P6-M2"], "tags": ["misconception", "equation", "partial"], "seriousMisjudgmentOpportunity": false
+  },
+  {
+    "version": "eval-case.v1", "evaluationPath": "equation", "annotationStatus": "labeled", "id": "synthetic-p6-m3-medium-mismatch",
+    "questionRef": { "caseId": "aluminum-air", "nodeId": "P6", "equationSetId": "oxygen-positive" },
+    "studentAnswer": "2H^+ + 2e^- -> H2",
+    "expectedExtraction": {
+      "response": "substantive", "terminology": "model", "syllabus": "within", "contradiction": false, "typo": "none",
+      "errorIds": ["P6-M3"],
+      "slots": [{ "id": "equation", "value": "2H^+ + 2e^- -> H2", "evidenceQuote": "2H^+ + 2e^- -> H2" }],
+      "evidenceQuotes": ["2H^+ + 2e^- -> H2"]
+    },
+    "expectedScore": "miss", "annotator": "codex-synthetic-seed", "rubricVersion": "rubrics.v1.1", "source": "synthetic",
+    "misconceptionIds": ["P6-M3"], "tags": ["misconception", "equation"], "seriousMisjudgmentOpportunity": true
+  },
+  {
+    "version": "eval-case.v1", "evaluationPath": "equation", "annotationStatus": "labeled", "id": "synthetic-p7-m1-unbalanced-sum",
+    "questionRef": { "caseId": "zinc-copper", "nodeId": "P7", "equationSetId": "zinc-copper-overall" },
+    "studentAnswer": "Zn + 2Cu^2+ -> Zn^2+ + Cu",
+    "expectedExtraction": {
+      "response": "substantive", "terminology": "model", "syllabus": "within", "contradiction": false, "typo": "none",
+      "errorIds": ["P7-M1"],
+      "slots": [{ "id": "equation", "value": "Zn + 2Cu^2+ -> Zn^2+ + Cu", "evidenceQuote": "Zn + 2Cu^2+ -> Zn^2+ + Cu" }],
+      "evidenceQuotes": ["Zn + 2Cu^2+ -> Zn^2+ + Cu"]
+    },
+    "expectedScore": "miss", "annotator": "codex-synthetic-seed", "rubricVersion": "rubrics.v1.1", "source": "synthetic",
+    "misconceptionIds": ["P7-M1"], "tags": ["misconception", "equation"], "seriousMisjudgmentOpportunity": true
+  },
+  {
+    "version": "eval-case.v1", "evaluationPath": "equation", "annotationStatus": "labeled", "id": "synthetic-p7-m2-electron-remains",
+    "questionRef": { "caseId": "zinc-copper", "nodeId": "P7", "equationSetId": "zinc-copper-overall" },
+    "studentAnswer": "Zn + Cu^2+ -> Zn^2+ + Cu + e^-",
+    "expectedExtraction": {
+      "response": "substantive", "terminology": "model", "syllabus": "within", "contradiction": false, "typo": "none",
+      "errorIds": ["P7-M2"],
+      "slots": [{ "id": "equation", "value": "Zn + Cu^2+ -> Zn^2+ + Cu + e^-", "evidenceQuote": "Zn + Cu^2+ -> Zn^2+ + Cu + e^-" }],
+      "evidenceQuotes": ["Zn + Cu^2+ -> Zn^2+ + Cu + e^-"]
+    },
+    "expectedScore": "miss", "annotator": "codex-synthetic-seed", "rubricVersion": "rubrics.v1.1", "source": "synthetic",
+    "misconceptionIds": ["P7-M2"], "tags": ["misconception", "equation"], "seriousMisjudgmentOpportunity": true
+  }
+]

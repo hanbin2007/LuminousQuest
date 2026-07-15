@@ -19,15 +19,14 @@ const paraphrases = [
   ['所以', '因此'],
 ] as const;
 
-function replaceFirstKnownParaphrase(value: string) {
-  for (const [from, to] of paraphrases) {
-    if (value.includes(from)) return value.replace(from, to);
-  }
-  return value.length === 0 ? ' ' : `换句话说，${value}`;
-}
-
 function replaceAllKnownParaphrases(value: string) {
   return paraphrases.reduce((current, [from, to]) => current.replaceAll(from, to), value);
+}
+
+function paraphrasedAnswer(value: string) {
+  const transformed = replaceAllKnownParaphrases(value);
+  if (transformed !== value) return transformed;
+  return value.length === 0 ? ' ' : `换句话说，${value}`;
 }
 
 function renamedPerson(value: string) {
@@ -57,9 +56,35 @@ function transformQuotes(
 export function generateMetamorphicVariants(
   evalCase: LabeledEvalCase,
 ): MetamorphicEvalVariant[] {
+  if (evalCase.evaluationPath === 'equation') {
+    const rewritten = (value: string) => value.includes('->')
+      ? value.replace('->', '=')
+      : value.replace('=', '->');
+    const paraphrase = labeledEvalCaseSchema.parse({
+      ...evalCase,
+      studentAnswer: rewritten(evalCase.studentAnswer),
+      expectedExtraction: {
+        ...transformQuotes(evalCase, rewritten),
+        slots: evalCase.expectedExtraction.slots.map((slot) => ({
+          ...slot,
+          value: slot.id === 'equation' ? rewritten(slot.value) : slot.value,
+          evidenceQuote: rewritten(slot.evidenceQuote),
+        })),
+      },
+    });
+    const noise = labeledEvalCaseSchema.parse({
+      ...evalCase,
+      studentAnswer: `  ${evalCase.studentAnswer}  `,
+    });
+    return [
+      { variant: 'paraphrase', case: paraphrase },
+      { variant: 'noise', case: noise },
+      { variant: 'rename-person', case: labeledEvalCaseSchema.parse(evalCase) },
+    ];
+  }
   const paraphrase = labeledEvalCaseSchema.parse({
     ...evalCase,
-    studentAnswer: replaceFirstKnownParaphrase(evalCase.studentAnswer),
+    studentAnswer: paraphrasedAnswer(evalCase.studentAnswer),
     expectedExtraction: transformQuotes(evalCase, replaceAllKnownParaphrases),
   });
   const noise = labeledEvalCaseSchema.parse({
@@ -84,4 +109,3 @@ export function generateMetamorphicVariants(
     { variant: 'rename-person', case: rename },
   ];
 }
-

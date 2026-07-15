@@ -18,6 +18,7 @@ const questionReferenceSchema = z
   .object({
     caseId: z.string().trim().min(1),
     nodeId: z.string().trim().min(1),
+    equationSetId: z.string().trim().min(1).optional(),
   })
   .strict();
 
@@ -85,6 +86,7 @@ const candidateImportSchema = z
 
 const evalCaseBase = z.object({
   version: z.literal('eval-case.v1'),
+  evaluationPath: z.enum(['structured-assessment', 'equation']).default('structured-assessment'),
   id: z.string().trim().min(1),
   questionRef: questionReferenceSchema,
   studentAnswer: z.string(),
@@ -104,7 +106,26 @@ export const labeledEvalCaseSchema = evalCaseBase
     annotator: z.string().trim().min(1),
     candidateImport: candidateImportSchema.optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    if (value.evaluationPath === 'equation' && value.questionRef.equationSetId === undefined) {
+      context.addIssue({
+        code: 'custom',
+        path: ['questionRef', 'equationSetId'],
+        message: 'is required for equation eval cases',
+      });
+    }
+    if (
+      value.evaluationPath === 'equation'
+      && !value.expectedExtraction.slots.some((slot) => slot.id === 'equation')
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['expectedExtraction', 'slots'],
+        message: 'equation eval cases require an equation slot',
+      });
+    }
+  });
 
 export const pendingEvalCaseSchema = evalCaseBase
   .extend({
@@ -173,7 +194,13 @@ export const evalObservationSchema = z
     predictedScore: evalOutcomeSchema,
     extractionExact: z.boolean().nullable(),
     resultSignature: z.string(),
-    source: z.enum(['provider', 'development-cache', 'demo-recording', 'fallback']),
+    source: z.enum([
+      'provider',
+      'development-cache',
+      'demo-recording',
+      'fallback',
+      'deterministic-engine',
+    ]),
     failureReason: z.string().optional(),
     latencyMs: z.number().nonnegative(),
     inputTokens: z.number().int().nonnegative(),
@@ -191,4 +218,3 @@ export type LabeledEvalCase = z.infer<typeof labeledEvalCaseSchema>;
 export type PendingEvalCase = z.infer<typeof pendingEvalCaseSchema>;
 export type EvalConfig = z.infer<typeof evalConfigSchema>;
 export type EvalObservation = z.infer<typeof evalObservationSchema>;
-

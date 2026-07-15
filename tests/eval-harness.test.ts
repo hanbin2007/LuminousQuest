@@ -42,6 +42,39 @@ function partialCase(): LabeledEvalCase {
   });
 }
 
+function equationCase(): LabeledEvalCase {
+  const equation = 'Zn + Cu^2+ -> Zn^2+ + Cu + e^-';
+  return labeledEvalCaseSchema.parse({
+    version: 'eval-case.v1',
+    annotationStatus: 'labeled',
+    evaluationPath: 'equation',
+    id: 'zc-p7-electron-remains',
+    questionRef: {
+      caseId: 'zinc-copper',
+      nodeId: 'P7',
+      equationSetId: 'zinc-copper-overall',
+    },
+    studentAnswer: equation,
+    expectedExtraction: {
+      response: 'substantive',
+      terminology: 'model',
+      syllabus: 'within',
+      contradiction: false,
+      typo: 'none',
+      errorIds: ['P7-M2'],
+      slots: [{ id: 'equation', value: equation, evidenceQuote: equation }],
+      evidenceQuotes: [equation],
+    },
+    expectedScore: 'miss',
+    annotator: 'test-annotator',
+    rubricVersion: 'rubrics.v1.1',
+    source: 'synthetic',
+    misconceptionIds: ['P7-M2'],
+    tags: ['equation'],
+    seriousMisjudgmentOpportunity: true,
+  });
+}
+
 function harnessConfig(defaultRuns = 1) {
   return evalConfigSchema.parse({
     version: 'eval-config.v1',
@@ -112,6 +145,24 @@ describe('eval harness production-path execution', () => {
     expect(result.observations.every((entry) => entry.extractionExact)).toBe(true);
     expect(result.metrics.consistencyRate).toBe(1);
     expect(result.metrics.passed).toBe(true);
+  });
+
+  it('uses the production equation engine for deterministic P3/P6/P7 golden cases', async () => {
+    const result = await runEvalHarness({
+      contentRoot: process.cwd(),
+      cases: [equationCase()],
+      config: harnessConfig(2),
+      mode: 'mock',
+      providerId: 'eval-mock',
+      model: 'eval-mock-v1',
+      includeMetamorphic: true,
+    });
+
+    expect(result.observations).toHaveLength(5);
+    expect(result.observations.every((entry) => entry.predictedScore === 'miss')).toBe(true);
+    expect(result.observations.every((entry) => entry.source === 'deterministic-engine')).toBe(true);
+    expect(result.metrics.metamorphic.rate).toBe(1);
+    expect(result.metrics.tokenUsage.totalTokens).toBe(0);
   });
 
   it('passes the configured low temperature to the provider and records every response for replay', async () => {

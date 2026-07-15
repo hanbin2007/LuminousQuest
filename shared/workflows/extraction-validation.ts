@@ -181,6 +181,11 @@ interface CitationMatch {
   end: number;
 }
 
+export type CitationCandidateClassification =
+  | 'grounded'
+  | 'normalization-insufficient'
+  | 'citation-mismatch';
+
 function protectedSemanticTokens(value: string, commonTypos: Record<string, string>) {
   const normalized = normalizeComparisonText(value, commonTypos);
   const tokens = new Set<string>();
@@ -236,6 +241,30 @@ function findCitationMatch(
     }
   }
   return best;
+}
+
+export function classifyCitationCandidate(input: {
+  answer: string;
+  quote: string;
+  commonTypos: Record<string, string>;
+  normalizationCandidateMaxEditDistanceRatio: number;
+}) {
+  const match = findCitationMatch(
+    input.answer,
+    input.quote,
+    input.commonTypos,
+    input.normalizationCandidateMaxEditDistanceRatio,
+  );
+  const classification: CitationCandidateClassification = match?.ratio === 0
+    ? 'grounded'
+    : match && match.ratio <= input.normalizationCandidateMaxEditDistanceRatio
+      ? 'normalization-insufficient'
+      : 'citation-mismatch';
+  return {
+    classification,
+    editDistanceRatio: match?.ratio ?? null,
+    ...(match ? { start: match.start, end: match.end } : {}),
+  };
 }
 
 function validateEvidence(

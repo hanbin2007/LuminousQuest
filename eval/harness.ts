@@ -5,6 +5,7 @@ import {
   recordNeedsReviewTextAssessment,
   recordStructuredTextAssessment,
 } from '../shared/workflows/assessment';
+import { recordEquationAssessment } from '../shared/workflows/engine-assessment';
 import { createSession, sessionConfigVersions } from '../shared/session/session';
 import { loadAllConfig } from '../server/config/loader';
 import type {
@@ -164,6 +165,52 @@ export async function runEvalHarness(options: EvalHarnessOptions) {
     variant: EvalVariant,
     iteration: number,
   ) => {
+    if (evalCase.evaluationPath === 'equation') {
+      const timestamp = '2026-07-15T00:00:00.000Z';
+      const session = createSession({
+        id: `eval-${evalCase.id}-${variant}-${iteration}`,
+        now: timestamp,
+        configVersions: sessionConfigVersions(productionConfig),
+      });
+      const started = performance.now();
+      const recorded = recordEquationAssessment({
+        session,
+        config: productionConfig,
+        equationSetId: evalCase.questionRef.equationSetId!,
+        answer: {
+          id: `answer-${evalCase.id}-${variant}-${iteration}`,
+          occurredAt: timestamp,
+          caseId: evalCase.questionRef.caseId,
+          stageId: 'eval-equation',
+          attemptId: `${variant}-${iteration}`,
+          questionId: `${evalCase.questionRef.caseId}:${evalCase.questionRef.nodeId}`,
+          value: evalCase.studentAnswer,
+        },
+        assistance: { kind: 'none', rounds: 0 },
+        assessmentEventIdPrefix: `assessment-${evalCase.id}-${variant}-${iteration}`,
+        assessedAt: timestamp,
+      });
+      const predictedScore = outcomeFromRecorded(recorded.session, evalCase.questionRef.nodeId);
+      const equationSlot = evalCase.expectedExtraction.slots.find((slot) => slot.id === 'equation');
+      observations.push(evalObservationSchema.parse({
+        caseId: evalCase.id,
+        nodeId: evalCase.questionRef.nodeId,
+        variant,
+        iteration,
+        expectedScore: evalCase.expectedScore,
+        predictedScore,
+        extractionExact: equationSlot?.value.trim() === evalCase.studentAnswer.trim(),
+        resultSignature: JSON.stringify({ predictedScore, engine: recorded.assessment.ruleId }),
+        source: 'deterministic-engine',
+        latencyMs: performance.now() - started,
+        inputTokens: 0,
+        outputTokens: 0,
+        estimatedCostUsd: estimatedCost(0, 0, options.config.pricing),
+        citationHallucination: false,
+        schemaFailure: false,
+      }));
+      return;
+    }
     const recordingFile = options.recordingsRoot
       ? evalRecordingFile({
           recordingsRoot: options.recordingsRoot,

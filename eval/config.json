@@ -1,0 +1,33 @@
+{
+  "version": "eval-config.v1",
+  "defaultRuns": 3,
+  "temperature": 0.1,
+  "thresholds": {
+    "nodeMacroAccuracy": 0.9,
+    "severeFalseMasteryRate": 0.02,
+    "citationHallucinationRate": 0.02,
+    "schemaFailureRate": 0.02,
+    "metamorphicInvariantRate": 0.9
+  },
+  "metamorphic": {
+    "enabled": true,
+    "variants": [
+      "paraphrase",
+      "noise",
+      "rename-person"
+    ]
+  },
+  "pricing": {
+    "inputUsdPerMillionTokens": null,
+    "outputUsdPerMillionTokens": null
+  },
+  "coverage": {
+    "minimumCases": 40,
+    "minimumCasesPerNode": 2,
+    "minimumCasesPerMisconception": 1
+  },
+  "live": {
+    "provider": "deepseek",
+    "model": "deepseek-chat"
+  }
+}
