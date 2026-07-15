@@ -40,7 +40,8 @@ describe('stubborn student behavior', () => {
     });
     const answerPoints = config.cases
       .find((entry) => entry.id === 'zinc-copper')!
-      .scaffold.flatMap((level) => level.answerPoints);
+      .evidencePaths.find((entry) => entry.nodeId === 'P4')!
+      .referenceAnswerPoints;
     const base = {
       service,
       config,

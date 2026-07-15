@@ -81,6 +81,12 @@ describe('bounded Socratic tutoring loop', () => {
       required: ['action', 'content'],
       properties: { action: { enum: ['probe', 'hint', 'check'] } },
     });
+    const p4ReferencePoints = parts.config.cases
+      .find((entry) => entry.id === 'zinc-copper')!
+      .evidencePaths.find((entry) => entry.nodeId === 'P4')!
+      .referenceAnswerPoints;
+    expect((request?.input as { referenceAnswerPoints: string[] }).referenceAnswerPoints)
+      .toEqual(p4ReferencePoints);
   });
 
   it('consumes the section 15/16 policy while leaving a wrong answer as miss', async () => {
@@ -158,7 +164,8 @@ describe('bounded Socratic tutoring loop', () => {
     const parts = await fixture(providerWith({ action: 'probe', content: 'unused' }));
     const answerPoint = parts.config.cases
       .find((entry) => entry.id === 'zinc-copper')!
-      .scaffold[0].answerPoints[2];
+      .evidencePaths.find((entry) => entry.nodeId === 'P4')!
+      .referenceAnswerPoints[0];
 
     expect(answerLeakage(
       answerPoint,

@@ -121,7 +121,8 @@ describe('M1b AC4 fault injection', () => {
     })));
     const leakedAnswer = input.config.cases
       .find((entry) => entry.id === 'zinc-copper')!
-      .scaffold[0].answerPoints[2];
+      .evidencePaths.find((entry) => entry.nodeId === 'P4')!
+      .referenceAnswerPoints[0];
     const value = { action: 'hint', content: leakedAnswer };
     const provider = providerWith(
       async () => ({ content: JSON.stringify(value), structured: value, model: 'fault-v1' }),

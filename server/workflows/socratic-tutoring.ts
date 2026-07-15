@@ -62,10 +62,7 @@ function configuredReferencePoints(config: LoadedConfig, caseId: string, nodeId:
   if (!trainingCase) throw new Error(`Unknown case ${caseId}`);
   const evidencePaths = trainingCase.evidencePaths.filter((entry) => entry.nodeId === nodeId);
   if (evidencePaths.length === 0) throw new Error(`Node ${nodeId} is not configured for case ${caseId}`);
-  return [...new Set([
-    ...evidencePaths.map((entry) => entry.description),
-    ...trainingCase.scaffold.flatMap((level) => level.answerPoints),
-  ])];
+  return [...new Set(evidencePaths.flatMap((entry) => entry.referenceAnswerPoints))];
 }
 
 function fallbackAction(round: number): SocraticAction['action'] {

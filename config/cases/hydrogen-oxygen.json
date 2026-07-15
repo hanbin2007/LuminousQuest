@@ -1,5 +1,5 @@
 {
-  "version": "case.v1.1",
+  "version": "case.v1.2",
   "id": "hydrogen-oxygen",
   "title": "酸性氢氧燃料电池",
   "type": "analysis",
@@ -80,21 +80,21 @@
     }
   ],
   "evidencePaths": [
-    { "id": "ho-d1", "nodeId": "D1", "description": "指出氢气侧 Pt 是失电子场所且自身不消耗。", "source": "answer", "factRequirements": [{ "id": "oxidation-site", "acceptedValues": ["hydrogen-Pt"] }, { "id": "site-consumed", "acceptedValues": ["false"] }] },
-    { "id": "ho-d2", "nodeId": "D2", "description": "指出外电路由电子导体连接两片 Pt。", "source": "answer", "factRequirements": [{ "id": "external-carrier", "acceptedValues": ["electron"] }] },
-    { "id": "ho-d3", "nodeId": "D3", "description": "指出酸性电解质或质子交换膜提供离子通路。", "source": "answer", "factRequirements": [{ "id": "internal-carrier", "acceptedValues": ["H+"] }, { "id": "ion-path", "acceptedValues": ["proton-exchange-membrane", "acidic-electrolyte"] }] },
-    { "id": "ho-d4", "nodeId": "D4", "description": "指出氧气侧 Pt 是得电子场所且自身不消耗。", "source": "answer", "factRequirements": [{ "id": "reduction-site", "acceptedValues": ["oxygen-Pt"] }, { "id": "site-consumed", "acceptedValues": ["false"] }] },
-    { "id": "ho-d5", "nodeId": "D5", "description": "区分两片 Pt 场所与外部通入的 H2、O2 反应物。", "source": "answer", "factRequirements": [{ "id": "negative-reactant", "acceptedValues": ["H2"] }, { "id": "positive-reactant", "acceptedValues": ["O2"] }] },
-    { "id": "ho-p1", "nodeId": "P1", "description": "指出 H2 与 O2 的自发反应分处两极进行。", "source": "answer", "factRequirements": [{ "id": "spontaneous", "acceptedValues": ["true"] }, { "id": "half-reactions-separated", "acceptedValues": ["true"] }] },
-    { "id": "ho-p2", "nodeId": "P2", "description": "确定 H2 为还原剂、O2 为氧化剂。", "source": "answer", "factRequirements": [{ "id": "reducing-agent", "acceptedValues": ["H2"] }, { "id": "oxidizing-agent", "acceptedValues": ["O2"] }] },
+    { "id": "ho-d1", "nodeId": "D1", "description": "指出氢气侧 Pt 是失电子场所且自身不消耗。", "source": "answer", "referenceAnswerPoints": ["氢气侧 Pt 是氧化反应发生的失电子场所，Pt 自身不消耗。"], "factRequirements": [{ "id": "oxidation-site", "acceptedValues": ["hydrogen-Pt"] }, { "id": "site-consumed", "acceptedValues": ["false"] }] },
+    { "id": "ho-d2", "nodeId": "D2", "description": "指出外电路由电子导体连接两片 Pt。", "source": "answer", "referenceAnswerPoints": ["外电路用电子导体连接两片 Pt 并传导电子。"], "factRequirements": [{ "id": "external-carrier", "acceptedValues": ["electron"] }] },
+    { "id": "ho-d3", "nodeId": "D3", "description": "指出酸性电解质或质子交换膜提供离子通路。", "source": "answer", "referenceAnswerPoints": ["酸性电解质或质子交换膜通过 H^+ 迁移提供离子通路。"], "factRequirements": [{ "id": "internal-carrier", "acceptedValues": ["H+"] }, { "id": "ion-path", "acceptedValues": ["proton-exchange-membrane", "acidic-electrolyte"] }] },
+    { "id": "ho-d4", "nodeId": "D4", "description": "指出氧气侧 Pt 是得电子场所且自身不消耗。", "source": "answer", "referenceAnswerPoints": ["氧气侧 Pt 是还原反应发生的得电子场所，Pt 自身不消耗。"], "factRequirements": [{ "id": "reduction-site", "acceptedValues": ["oxygen-Pt"] }, { "id": "site-consumed", "acceptedValues": ["false"] }] },
+    { "id": "ho-d5", "nodeId": "D5", "description": "区分两片 Pt 场所与外部通入的 H2、O2 反应物。", "source": "answer", "referenceAnswerPoints": ["两片 Pt 是反应场所，外部通入的 H2 和 O2 才是反应物。"], "factRequirements": [{ "id": "negative-reactant", "acceptedValues": ["H2"] }, { "id": "positive-reactant", "acceptedValues": ["O2"] }] },
+    { "id": "ho-p1", "nodeId": "P1", "description": "指出 H2 与 O2 的自发反应分处两极进行。", "source": "answer", "referenceAnswerPoints": ["H2 与 O2 的自发氧化还原反应分处两极进行。"], "factRequirements": [{ "id": "spontaneous", "acceptedValues": ["true"] }, { "id": "half-reactions-separated", "acceptedValues": ["true"] }] },
+    { "id": "ho-p2", "nodeId": "P2", "description": "确定 H2 为还原剂、O2 为氧化剂。", "source": "answer", "referenceAnswerPoints": ["H2 是还原剂，O2 是氧化剂。"], "factRequirements": [{ "id": "reducing-agent", "acceptedValues": ["H2"] }, { "id": "oxidizing-agent", "acceptedValues": ["O2"] }] },
     { "id": "ho-p3", "nodeId": "P3", "description": "按酸性介质确定 H^+ 和 H2O 的存在位置。", "source": "equation" },
-    { "id": "ho-p4", "nodeId": "P4", "description": "说明电子和 H^+ 的通路方向。", "source": "answer", "factRequirements": [{ "id": "electron-from", "acceptedValues": ["hydrogen-Pt"] }, { "id": "electron-to", "acceptedValues": ["oxygen-Pt"] }, { "id": "permitted-ion", "acceptedValues": ["H+"] }, { "id": "ion-toward", "acceptedValues": ["oxygen-Pt"] }] },
-    { "id": "ho-p5", "nodeId": "P5", "description": "由过程解释气体消耗和水生成。", "source": "answer", "factRequirements": [{ "id": "consumed", "acceptedValues": ["H2+O2"] }, { "id": "generated", "acceptedValues": ["H2O"] }] },
+    { "id": "ho-p4", "nodeId": "P4", "description": "说明电子和 H^+ 的通路方向。", "source": "answer", "referenceAnswerPoints": ["电子由氢气侧 Pt 经外电路流向氧气侧 Pt，H^+ 经膜移向氧气侧。"], "factRequirements": [{ "id": "electron-from", "acceptedValues": ["hydrogen-Pt"] }, { "id": "electron-to", "acceptedValues": ["oxygen-Pt"] }, { "id": "permitted-ion", "acceptedValues": ["H+"] }, { "id": "ion-toward", "acceptedValues": ["oxygen-Pt"] }] },
+    { "id": "ho-p5", "nodeId": "P5", "description": "由过程解释气体消耗和水生成。", "source": "answer", "referenceAnswerPoints": ["H2 和 O2 被消耗并生成 H2O。"], "factRequirements": [{ "id": "consumed", "acceptedValues": ["H2+O2"] }, { "id": "generated", "acceptedValues": ["H2O"] }] },
     { "id": "ho-p6", "nodeId": "P6", "description": "酸性两极反应式通过守恒和等价式校验。", "source": "equation" },
     { "id": "ho-p7", "nodeId": "P7", "description": "配平电子后合成 2H2 + O2 -> 2H2O。", "source": "equation" },
-    { "id": "ho-e1", "nodeId": "E1", "description": "指出化学能不经燃烧直接转化为电能。", "source": "answer", "factRequirements": [{ "id": "energy-from", "acceptedValues": ["chemical"] }, { "id": "energy-to", "acceptedValues": ["electric"] }] },
-    { "id": "ho-e2", "nodeId": "E2", "description": "把电能来源追溯到 H2 与 O2 的自发反应。", "source": "answer", "factRequirements": [{ "id": "energy-source-reaction", "acceptedValues": ["H2+O2"] }] },
-    { "id": "ho-e3", "nodeId": "E3", "description": "指出燃料电池转化率较高但仍存在损耗。", "source": "answer", "factRequirements": [{ "id": "complete-conversion", "acceptedValues": ["false"] }, { "id": "comparison", "acceptedValues": ["fuel-cell-over-thermal-power"] }] }
+    { "id": "ho-e1", "nodeId": "E1", "description": "指出化学能不经燃烧直接转化为电能。", "source": "answer", "referenceAnswerPoints": ["H2 与 O2 的化学能不经燃烧而直接转化为电能。"], "factRequirements": [{ "id": "energy-from", "acceptedValues": ["chemical"] }, { "id": "energy-to", "acceptedValues": ["electric"] }] },
+    { "id": "ho-e2", "nodeId": "E2", "description": "把电能来源追溯到 H2 与 O2 的自发反应。", "source": "answer", "referenceAnswerPoints": ["电能来自 H2 与 O2 的自发反应。"], "factRequirements": [{ "id": "energy-source-reaction", "acceptedValues": ["H2+O2"] }] },
+    { "id": "ho-e3", "nodeId": "E3", "description": "指出燃料电池转化率较高但仍存在损耗。", "source": "answer", "referenceAnswerPoints": ["燃料电池转化率较高，但仍存在能量损耗。"], "factRequirements": [{ "id": "complete-conversion", "acceptedValues": ["false"] }, { "id": "comparison", "acceptedValues": ["fuel-cell-over-thermal-power"] }] }
   ],
   "targetNodeIds": ["D1", "D2", "D3", "D4", "D5", "P1", "P2", "P3", "P4", "P5", "P6", "P7", "E1", "E2", "E3"]
 }

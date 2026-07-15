@@ -261,6 +261,24 @@ describe('configuration loading', () => {
     });
   });
 
+  it('rejects answer evidence without node-specific tutoring reference points', async () => {
+    const root = await createTemporaryDirectory();
+    await writeValidContentTree(root);
+    const caseFile = path.join(root, 'config', 'cases', 'zinc-copper.json');
+    const trainingCase = JSON.parse(await readFile(caseFile, 'utf8'));
+    const answerEvidence = trainingCase.evidencePaths.find(
+      (entry: { source: string }) => entry.source === 'answer',
+    );
+    answerEvidence.referenceAnswerPoints = [];
+    await writeFile(caseFile, JSON.stringify(trainingCase));
+
+    await expect(loadAllConfig(root)).rejects.toMatchObject({
+      file: 'config/cases/zinc-copper.json',
+      field: expect.stringContaining('referenceAnswerPoints'),
+      reason: expect.stringContaining('node-specific'),
+    });
+  });
+
   it('rejects missing and escaping materialRef assets', async () => {
     const root = await createTemporaryDirectory();
     await writeValidContentTree(root);

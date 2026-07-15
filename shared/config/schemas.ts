@@ -655,6 +655,7 @@ export const caseSchema = z
             nodeId: idSchema,
             description: z.string().trim().min(1),
             source: z.enum(['answer', 'equation', 'builder']),
+            referenceAnswerPoints: z.array(z.string().trim().min(1)).default([]),
             factRequirements: z
               .array(
                 z
@@ -712,6 +713,13 @@ export const caseSchema = z
           code: 'custom',
           path: ['evidencePaths', index, 'factRequirements'],
           message: 'answer evidence requires deterministic fact requirements',
+        });
+      }
+      if (entry.source === 'answer' && entry.referenceAnswerPoints.length === 0) {
+        context.addIssue({
+          code: 'custom',
+          path: ['evidencePaths', index, 'referenceAnswerPoints'],
+          message: 'answer evidence requires node-specific reference answer points',
         });
       }
     });
