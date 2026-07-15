@@ -95,7 +95,7 @@ function assessmentEvent(
     rubric: { id: 'rubric-p4', version: 'rubrics.v1' },
     extraction: {
       status: 'assessed',
-      evidence: [{ quote: '电子从锌流向铜', start: 0, end: 8 }],
+      evidence: [{ quote: '电子从锌流向铜', start: 0, end: '电子从锌流向铜'.length }],
       model: 'mock-v1',
       provenance: provenance(),
     },

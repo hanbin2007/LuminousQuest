@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { functionalRoleSchema } from '../config/schemas';
+
 const timestampSchema = z.string().datetime({ offset: true });
 const identifierSchema = z.string().trim().min(1);
 
@@ -32,15 +34,18 @@ const answerPayloadSchema = z.discriminatedUnion('format', [
                 x: z.number().finite(),
                 y: z.number().finite(),
                 label: z.string().optional(),
+                assignedRole: functionalRoleSchema.optional(),
               })
               .strict(),
           ),
           connections: z.array(
             z
               .object({
+                id: identifierSchema.optional(),
                 from: identifierSchema,
                 to: identifierSchema,
-                kind: z.enum(['wire', 'ion-path']),
+                kind: z.enum(['wire', 'electron-path', 'ion-path']),
+                carrier: z.enum(['electron', 'cation', 'anion']).optional(),
               })
               .strict(),
           ),
@@ -124,6 +129,10 @@ const assessedRuleDecisionSchema = z
     status: z.enum(['hit', 'partial', 'miss']),
     ruleId: identifierSchema,
     reason: z.string().trim().min(1),
+    engine: z
+      .object({ id: identifierSchema, version: identifierSchema })
+      .strict()
+      .default({ id: 'legacy-rule', version: 'legacy.v1' }),
   })
   .strict();
 
@@ -145,6 +154,10 @@ const assessedFollowingSchema = z
   .object({
     status: z.enum(['followed', 'not-followed']),
     anchorNodeId: identifierSchema.nullable(),
+    anchorOutcome: z.enum(['hit', 'partial', 'miss']).nullable().default(null),
+    policy: z
+      .enum(['score-logical-chain', 'score-objective-fact'])
+      .default('score-logical-chain'),
   })
   .strict();
 
@@ -162,6 +175,7 @@ const scoredSchema = z
     status: z.literal('scored'),
     earned: z.number().nonnegative(),
     possible: z.number().positive(),
+    annotations: z.array(z.enum(['following', 'hit-with-help'])).default([]),
   })
   .strict()
   .refine((score) => score.earned <= score.possible, {
@@ -244,6 +258,23 @@ export const assessmentCompletedEventSchema = z
 
     if (!followingAssessed) issue('following', 'must be assessed before score stage');
     if (event.score.status === 'unassessed') issue('score', 'must be scored or need review at score stage');
+    if (event.score.status === 'scored' && followingAssessed) {
+      const hasFollowingAnnotation = event.score.annotations.includes('following');
+      if (event.following.status === 'followed') {
+        if (event.following.anchorNodeId === null || event.following.anchorOutcome === null) {
+          issue('following', 'followed status requires an anchor and anchor outcome');
+        }
+        if (!hasFollowingAnnotation) issue('score', 'followed status requires following annotation');
+      } else if (hasFollowingAnnotation) {
+        issue('score', 'following annotation requires followed status');
+      }
+      if (
+        event.score.annotations.includes('hit-with-help')
+        && event.ruleDecision.status !== 'hit'
+      ) {
+        issue('score', 'hit-with-help annotation requires a hit rule decision');
+      }
+    }
   });
 
 export const sessionEventSchema = z.union([
@@ -330,6 +361,23 @@ export const sessionSchema = z
             });
           }
         }
+        if (event.extraction.status === 'assessed') {
+          const original = answer.answer.format === 'text'
+            ? answer.answer.value
+            : JSON.stringify(answer.answer.value);
+          event.extraction.evidence.forEach((evidence, evidenceIndex) => {
+            if (
+              evidence.end > original.length
+              || original.slice(evidence.start, evidence.end) !== evidence.quote
+            ) {
+              context.addIssue({
+                code: 'custom',
+                path: ['events', index, 'extraction', 'evidence', evidenceIndex],
+                message: 'evidence must exactly quote the source answer',
+              });
+            }
+          });
+        }
       }
 
       const progressKey =
@@ -354,5 +402,5 @@ export type StudentSession = z.infer<typeof sessionSchema>;
 
 type EventManagedFields = 'schemaVersion' | 'sequence';
 export type SessionEventInput =
-  | Omit<AnswerSubmittedEvent, EventManagedFields>
-  | Omit<AssessmentCompletedEvent, EventManagedFields>;
+  | Omit<z.input<typeof answerSubmittedEventSchema>, EventManagedFields>
+  | Omit<z.input<typeof assessmentCompletedEventSchema>, EventManagedFields>;
