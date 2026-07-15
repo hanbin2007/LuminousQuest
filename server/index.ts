@@ -6,6 +6,7 @@ import { config as loadEnvironment } from 'dotenv';
 import { createServerApp } from './app';
 import { loadAllConfig, ConfigValidationError } from './config/loader';
 import { RecordingStore, RecordingValidationError } from './llm/recording-store';
+import { loadAllPrompts, PromptValidationError } from './prompts/loader';
 import { resolveClientRoot, resolveContentRoot } from './runtime/content-root';
 import { openBrowser } from './runtime/open-browser';
 import { findAvailablePort } from './runtime/ports';
@@ -16,9 +17,15 @@ async function main() {
   const contentRoot = resolveContentRoot();
   loadEnvironment({ path: path.join(contentRoot, '.env'), quiet: true });
 
-  await loadAllConfig(contentRoot);
+  const [loadedConfig, prompts] = await Promise.all([
+    loadAllConfig(contentRoot),
+    loadAllPrompts(contentRoot),
+  ]);
   const recordings = new RecordingStore(contentRoot);
-  await recordings.validateDemoAssets();
+  await recordings.validateDemoAssets({
+    configVersion: loadedConfig.configVersion,
+    prompts,
+  });
 
   const preferredPort = Number.parseInt(process.env.LQ_PORT ?? '4173', 10);
   const port = await findAvailablePort({ host, preferredPort, attempts: 100 });
@@ -51,11 +58,14 @@ async function main() {
 }
 
 main().catch((error: unknown) => {
-  if (error instanceof ConfigValidationError || error instanceof RecordingValidationError) {
+  if (
+    error instanceof ConfigValidationError ||
+    error instanceof RecordingValidationError ||
+    error instanceof PromptValidationError
+  ) {
     console.error(`[startup] ${error.file} | ${error.field} | ${error.reason}`);
   } else {
     console.error(`[startup] ${(error as Error).message}`);
   }
   process.exitCode = 1;
 });
-

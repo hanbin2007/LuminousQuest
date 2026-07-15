@@ -1,4 +1,7 @@
 import type { LLMProvider, LLMRequest, LLMResponse } from '../types';
+import { ProviderHttpError, UnsupportedCapabilityError } from '../errors';
+
+export { ProviderHttpError } from '../errors';
 
 interface OpenAICompatibleOptions {
   id: string;
@@ -32,13 +35,22 @@ export class OpenAICompatibleProvider implements LLMProvider {
 
   vision(request: LLMRequest) {
     if (!this.options.supportsVision) {
-      return Promise.reject(new Error(`${this.id} vision is not enabled by this adapter`));
+      return this.rejectUnsupportedVision();
     }
     return this.complete(request, true, false);
   }
 
   structured(request: LLMRequest) {
+    if (request.images.length > 0 && !this.options.supportsVision) {
+      return this.rejectUnsupportedVision();
+    }
     return this.complete(request, request.images.length > 0, true);
+  }
+
+  private rejectUnsupportedVision(): Promise<never> {
+    const error = new UnsupportedCapabilityError(this.id, 'vision');
+    console.error(`[llm:${this.id}] ${error.message}`);
+    return Promise.reject(error);
   }
 
   private async complete(
@@ -77,12 +89,12 @@ export class OpenAICompatibleProvider implements LLMProvider {
         ],
         ...(structured ? { response_format: { type: 'json_object' } } : {}),
       }),
-      signal: AbortSignal.timeout(Number(process.env.LLM_TIMEOUT_MS ?? 20_000)),
+      signal: AbortSignal.timeout(this.timeoutMilliseconds()),
     });
 
     if (!response.ok) {
       const detail = (await response.text()).slice(0, 500);
-      throw new Error(`${this.id} returned HTTP ${response.status}: ${detail}`);
+      throw new ProviderHttpError(this.id, response.status, detail);
     }
 
     const payload = (await response.json()) as {
@@ -101,5 +113,9 @@ export class OpenAICompatibleProvider implements LLMProvider {
       },
     };
   }
-}
 
+  private timeoutMilliseconds() {
+    const configured = Number(process.env.LLM_TIMEOUT_MS ?? 20_000);
+    return Number.isFinite(configured) && configured > 0 ? configured : 20_000;
+  }
+}

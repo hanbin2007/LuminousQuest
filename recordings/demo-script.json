@@ -1,11 +1,16 @@
 {
-  "version": "demo-script.v1",
+  "version": "demo-script.v2",
   "steps": [
     {
       "id": "m0-health-check",
       "recording": "demo/m0-health-check.json",
-      "resourceRefs": []
+      "resourceRefs": [],
+      "configVersion": "sha256:afbf9c51d5393eafafcbe77d073c8fb4d642672da4bb269008ea1ec28dd3b62e",
+      "schemaVersion": "chat-response.v1",
+      "prompt": {
+        "id": "chat-system",
+        "version": "sha256:b309e7063494540ff07461b4a8dd289f86162fde52324f84c95a3cf642f75cd6"
+      }
     }
   ]
 }
-

@@ -1,8 +1,30 @@
 {
-  "version": "llm-recording.v1",
+  "version": "llm-recording.v2",
   "recordedAt": "2026-07-15T00:00:00.000Z",
+  "metadata": {
+    "configVersion": "sha256:afbf9c51d5393eafafcbe77d073c8fb4d642672da4bb269008ea1ec28dd3b62e",
+    "schemaVersion": "chat-response.v1",
+    "prompt": {
+      "id": "chat-system",
+      "version": "sha256:b309e7063494540ff07461b4a8dd289f86162fde52324f84c95a3cf642f75cd6"
+    }
+  },
   "request": {
-    "redacted": true,
+    "executionMode": "demo",
+    "capability": "chat",
+    "provider": "mock",
+    "model": "recorded-mock.v1",
+    "prompt": {
+      "id": "chat-system",
+      "version": "sha256:b309e7063494540ff07461b4a8dd289f86162fde52324f84c95a3cf642f75cd6",
+      "text": "# role\n\n你是电化学思维模型辅导助手。只依据传入量表与作答证据反馈,不得自行修改规则分数。\n"
+    },
+    "schemaVersion": "chat-response.v1",
+    "configVersion": "sha256:afbf9c51d5393eafafcbe77d073c8fb4d642672da4bb269008ea1ec28dd3b62e",
+    "input": {
+      "healthCheck": true
+    },
+    "images": [],
     "stepId": "m0-health-check"
   },
   "response": {
@@ -10,4 +32,3 @@
     "model": "recorded-mock.v1"
   }
 }
-

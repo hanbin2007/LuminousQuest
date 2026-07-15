@@ -5,4 +5,5 @@ release/
 .env
 .DS_Store
 coverage/
+recordings/cache/
 *.log

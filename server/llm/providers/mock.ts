@@ -1,5 +1,7 @@
 import type { LLMProvider, LLMRequest, LLMResponse } from '../types';
 
+// KNOWN LIMITATIONS: this creates deterministic fixtures for common JSON Schema keywords only;
+// it is not a general-purpose JSON Schema example generator or validity oracle.
 function exampleForSchema(schema: Record<string, unknown> | undefined): unknown {
   if (!schema) return { status: 'unassessed', reason: 'mock schema was not supplied' };
   if ('default' in schema) return schema.default;
