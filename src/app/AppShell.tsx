@@ -1,0 +1,43 @@
+import { GraduationCap } from 'lucide-react';
+import { NavLink, Outlet } from 'react-router-dom';
+
+import { useAppContext } from './AppContext';
+import { ElectronFlowProgress } from './ElectronFlowProgress';
+import { SessionControls } from '../session/SessionControls';
+
+export function AppShell() {
+  const { config, session, setSession, pretestComplete } = useAppContext();
+
+  return (
+    <div className="app-shell">
+      <header className="app-header">
+        <div className="app-header__inner">
+          <NavLink className="brand" to="/pretest" aria-label="LuminousQuest 前测">
+            <span>LQ</span>
+            <strong>LuminousQuest</strong>
+          </NavLink>
+          <ElectronFlowProgress pretestComplete={pretestComplete} />
+          <NavLink className="teacher-link" to="/teacher">
+            <GraduationCap aria-hidden="true" />教师视图
+          </NavLink>
+        </div>
+        <div className="session-bar">
+          <div className="session-bar__identity">
+            <span>{session.anonymousStudentId}</span>
+            <small>{config.pretest.version}</small>
+          </div>
+          <SessionControls
+            session={session}
+            onImport={(imported) => {
+              if (JSON.stringify(imported.configVersions) !== JSON.stringify(session.configVersions)) {
+                throw new Error('导入会话与当前配置版本不匹配');
+              }
+              setSession(imported);
+            }}
+          />
+        </div>
+      </header>
+      <Outlet />
+    </div>
+  );
+}

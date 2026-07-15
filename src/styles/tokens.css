@@ -73,6 +73,9 @@
   --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
   --dur-fast: 150ms;           /* hover/按压 */
   --dur-base: 250ms;           /* 面板/状态切换 */
+  --dur-eflow-answer: 600ms;   /* 答对反馈电子流 */
+  --delay-eflow-answer: 150ms;
+  --dur-eflow-complete: 2000ms;/* 完成步骤后的电子流,只运行一次 */
   --dur-stage: 900ms;          /* 全项目唯一的大动效:关灯时刻 */
 
   /* 焦点环(键盘可达性) */
@@ -97,6 +100,9 @@
   :root {
     --dur-fast: 0ms;
     --dur-base: 0ms;
+    --dur-eflow-answer: 0ms;
+    --delay-eflow-answer: 0ms;
+    --dur-eflow-complete: 0ms;
     --dur-stage: 0ms;
   }
 }
