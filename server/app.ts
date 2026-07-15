@@ -419,10 +419,17 @@ export function createServerApp(options: ServerAppOptions) {
   app.get('/assets/*', async (context) => {
     const pathname = new URL(context.req.url).pathname;
     const asset = await loadExternalAsset(options.contentRoot, pathname.slice('/assets/'.length));
-    if (!asset) return context.text('Asset not found', 404);
-    context.header('content-type', asset.contentType);
-    context.header('cache-control', 'no-cache');
-    return context.body(asset.body);
+    if (asset) {
+      context.header('content-type', asset.contentType);
+      context.header('cache-control', 'no-cache');
+      return context.body(asset.body);
+    }
+    // Vite 构建产物同样输出到 /assets/*(哈希文件名),外置素材未命中时回落到客户端静态资源
+    const clientAsset = await loadStaticAsset(options.clientRoot, pathname);
+    if (!clientAsset) return context.text('Asset not found', 404);
+    context.header('content-type', clientAsset.contentType);
+    context.header('cache-control', 'public, max-age=31536000, immutable');
+    return context.body(clientAsset.body);
   });
 
   app.get('*', async (context) => {

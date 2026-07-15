@@ -245,3 +245,21 @@ describe('Hono server responsibilities', () => {
     expect(doubleEncodedTraversal.status).toBe(404);
   });
 });
+
+it('serves built client bundles under /assets when not an external content asset', async () => {
+  const root = await createTemporaryDirectory();
+  await writeValidContentTree(root);
+  const clientRoot = path.join(root, 'client');
+  await mkdir(path.join(clientRoot, 'assets'), { recursive: true });
+  await writeFile(path.join(clientRoot, 'index.html'), '<html><head></head><body>shell</body></html>');
+  await writeFile(path.join(clientRoot, 'assets', 'index-test-bundle.js'), 'console.log("bundle");');
+  const app = createServerApp({ contentRoot: root, clientRoot, apiToken: 'token-a' });
+
+  const bundle = await app.request('/assets/index-test-bundle.js');
+  expect(bundle.status).toBe(200);
+  expect(await bundle.text()).toContain('bundle');
+
+  const missing = await app.request('/assets/definitely-missing.js');
+  expect(missing.status).toBe(404);
+});
+
