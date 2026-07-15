@@ -9,6 +9,7 @@ import { runSocraticTurn } from '../server/workflows/socratic-tutoring';
 import { resolveRubricDecision } from '../shared/scoring/rubric';
 import { answerLeakage, type SocraticAction } from '../shared/workflows/socratic';
 import { createTemporaryDirectory } from './helpers/content-fixture';
+import { sessionWithAssessment } from './helpers/tutor-session';
 
 describe('stubborn student behavior', () => {
   it('does not yield the score or answer across three wrong rounds and closes correctly', async () => {
@@ -46,19 +47,17 @@ describe('stubborn student behavior', () => {
       service,
       config,
       prompt: prompts['socratic-tutoring'],
-      caseId: 'zinc-copper',
       nodeId: 'P4',
       studentAnswer: '我就认为电子从Cu极流向Zn极。',
       executionMode: 'live' as const,
       provider: provider.id,
       model: 'stubborn-v1',
-      cycleStartedAtMs: Date.now(),
     };
-    const conversation: Array<{ student: string; tutor: SocraticAction }> = [];
-    let lastAssistance: { kind: 'socratic'; rounds: number } | undefined;
+    let session = sessionWithAssessment({ config });
+    let lastAssistance: { kind: 'none'; rounds: 0 } | { kind: 'socratic'; rounds: number } | undefined;
 
     for (let completedRounds = 0; completedRounds < 3; completedRounds += 1) {
-      const result = await runSocraticTurn({ ...base, conversation, completedRounds });
+      const result = await runSocraticTurn({ ...base, session });
       expect(result.status).toBe('respond');
       if (result.status !== 'respond') throw new Error('expected three tutor turns');
       expect(result).not.toHaveProperty('score');
@@ -68,9 +67,10 @@ describe('stubborn student behavior', () => {
         answerPoints,
         config.scaffoldPolicy.socratic.answerOverlapThreshold,
         config.scaffoldPolicy.extraction.citation.commonTypos,
+        config.scaffoldPolicy.socratic.minimumSharedBigrams,
       ).leaked).toBe(false);
-      conversation.push({ student: base.studentAnswer, tutor: result.turn });
       lastAssistance = result.assistance;
+      session = result.session;
       if (completedRounds === 2) expect(result.finalRound).toBe(true);
     }
 
@@ -83,7 +83,7 @@ describe('stubborn student behavior', () => {
     });
     expect(decision.score.outcome).toBe('miss');
 
-    const closing = await runSocraticTurn({ ...base, conversation, completedRounds: 3 });
+    const closing = await runSocraticTurn({ ...base, session });
     expect(calls).toBe(3);
     expect(closing).toMatchObject({
       status: 'advance',
@@ -96,6 +96,7 @@ describe('stubborn student behavior', () => {
       answerPoints,
       config.scaffoldPolicy.socratic.answerOverlapThreshold,
       config.scaffoldPolicy.extraction.citation.commonTypos,
+      config.scaffoldPolicy.socratic.minimumSharedBigrams,
     ).leaked).toBe(false);
   });
 });

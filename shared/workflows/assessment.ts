@@ -493,6 +493,7 @@ export function recordStructuredTextAssessment(input: RecordStructuredTextAssess
     session = appendSessionEvent(session, {
       ...eventBase,
       pipelineStage: 'score',
+      objectiveOutcome: evaluation.status,
       extraction: {
         status: 'assessed',
         evidence: assessment.evidence,

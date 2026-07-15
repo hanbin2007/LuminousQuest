@@ -125,8 +125,8 @@ describe('M1a external teaching configuration', () => {
     expect(config.knowledgeModel.version).toBe('knowledge-model.v1.1');
     expect(config.rubrics.version).toBe('rubrics.v1.1');
     expect(config.pretest.version).toBe('pretest.v1.1');
-    expect(config.scaffoldPolicy.version).toBe('scaffold-policy.v1.3');
-    expect(config.cases.every((entry) => entry.version === 'case.v1.2')).toBe(true);
+    expect(config.scaffoldPolicy.version).toBe('scaffold-policy.v1.4');
+    expect(config.cases.every((entry) => entry.version === 'case.v1.3')).toBe(true);
     expect(config.knowledgeModel.nodes.find((node) => node.id === 'D4')?.statement)
       .toContain('惰性电极');
     expect(config.knowledgeModel.nodes.find((node) => node.id === 'D4')?.statement)
@@ -191,6 +191,13 @@ describe('M1a external teaching configuration', () => {
       expect(trainingCase.evidencePaths
         .filter((entry) => entry.source === 'answer')
         .every((entry) => entry.factRequirements.length > 0)).toBe(true);
+      expect(trainingCase.tutoring.length).toBeGreaterThan(0);
+      expect(trainingCase.tutoring.every((entry) => {
+        const evidence = trainingCase.evidencePaths.find((candidate) =>
+          candidate.nodeId === entry.nodeId && candidate.source === 'answer');
+        return evidence !== undefined
+          && evidence.factRequirements.flatMap((requirement) => requirement.acceptedValues).length > 0;
+      })).toBe(true);
     }
   });
 });

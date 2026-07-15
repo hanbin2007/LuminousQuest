@@ -647,6 +647,13 @@ export const caseSchema = z
       )
       .length(3),
     equationSets: z.array(equationSetSchema).length(3),
+    tutoring: z
+      .array(
+        z
+          .object({ nodeId: idSchema })
+          .strict(),
+      )
+      .default([]),
     evidencePaths: z
       .array(
         z
@@ -677,6 +684,7 @@ export const caseSchema = z
     reportDuplicateIds(value.materials, ['materials'], context);
     reportDuplicateIds(value.followingAnchors, ['followingAnchors'], context);
     reportDuplicateIds(value.equationSets, ['equationSets'], context);
+    reportDuplicateStrings(value.tutoring.map((entry) => entry.nodeId), ['tutoring'], context);
     reportDuplicateIds(value.evidencePaths, ['evidencePaths'], context);
     reportDuplicateStrings(value.targetNodeIds, ['targetNodeIds'], context);
     const electrodeCounts = new Map<'negative' | 'positive' | 'overall', number>([
@@ -720,6 +728,19 @@ export const caseSchema = z
           code: 'custom',
           path: ['evidencePaths', index, 'referenceAnswerPoints'],
           message: 'answer evidence requires node-specific reference answer points',
+        });
+      }
+    });
+    value.tutoring.forEach((entry, index) => {
+      const answerEvidence = value.evidencePaths.find((evidence) =>
+        evidence.nodeId === entry.nodeId && evidence.source === 'answer');
+      const antiLeakFacts = answerEvidence?.factRequirements
+        .flatMap((requirement) => requirement.acceptedValues) ?? [];
+      if (antiLeakFacts.length === 0) {
+        context.addIssue({
+          code: 'custom',
+          path: ['tutoring', index, 'nodeId'],
+          message: `tutorable node ${entry.nodeId} requires a non-empty deterministic anti-leak fact set`,
         });
       }
     });
@@ -802,6 +823,7 @@ export const scaffoldPolicySchema = z
         retryCount: z.literal(1),
         forceAdvanceAfterMs: z.number().int().positive().max(120_000),
         answerOverlapThreshold: z.number().min(0).max(1),
+        minimumSharedBigrams: z.number().int().positive(),
         fallback: z
           .object({
             probe: z.string().trim().min(1),

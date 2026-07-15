@@ -1,5 +1,5 @@
 {
-  "version": "case.v1.2",
+  "version": "case.v1.3",
   "id": "zinc-copper",
   "title": "锌铜原电池",
   "type": "analysis",
@@ -78,6 +78,20 @@
       "expectedElectronSide": "none",
       "accepted": ["Zn + Cu^2+ -> Zn^2+ + Cu"]
     }
+  ],
+  "tutoring": [
+    { "nodeId": "D1" },
+    { "nodeId": "D2" },
+    { "nodeId": "D3" },
+    { "nodeId": "D4" },
+    { "nodeId": "D5" },
+    { "nodeId": "P1" },
+    { "nodeId": "P2" },
+    { "nodeId": "P4" },
+    { "nodeId": "P5" },
+    { "nodeId": "E1" },
+    { "nodeId": "E2" },
+    { "nodeId": "E3" }
   ],
   "evidencePaths": [
     { "id": "zc-d1", "nodeId": "D1", "description": "指出 Zn 是发生氧化反应的失电子场所。", "source": "answer", "referenceAnswerPoints": ["Zn 是发生氧化反应并失去电子的电极场所。"], "factRequirements": [{ "id": "oxidation-site", "acceptedValues": ["Zn"] }] },

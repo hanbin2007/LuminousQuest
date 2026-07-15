@@ -8,6 +8,7 @@ import { loadAllConfig } from '../server/config/loader';
 import { loadAllPrompts } from '../server/prompts/loader';
 import { runSocraticTurn } from '../server/workflows/socratic-tutoring';
 import { createTemporaryDirectory } from './helpers/content-fixture';
+import { sessionWithAssessment } from './helpers/tutor-session';
 
 type StructuredHandler = () => Promise<LLMResponse>;
 
@@ -37,12 +38,9 @@ async function inputFor(provider: LLMProvider) {
     }),
     config,
     prompt: prompts['socratic-tutoring'],
-    caseId: 'zinc-copper',
+    session: sessionWithAssessment({ config }),
     nodeId: 'P4',
     studentAnswer: '电子从Cu极流向Zn极。',
-    conversation: [],
-    completedRounds: 0,
-    cycleStartedAtMs: Date.now(),
     executionMode: 'live' as const,
     provider: provider.id,
     model: 'fault-v1',

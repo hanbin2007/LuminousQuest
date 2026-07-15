@@ -246,6 +246,7 @@ export const assessmentCompletedEventSchema = z
     nodeId: identifierSchema,
     rubric: z.object({ id: identifierSchema, version: identifierSchema }).strict(),
     assistance: assistanceMetadataSchema.default({ kind: 'none', rounds: 0 }),
+    objectiveOutcome: z.enum(['hit', 'partial', 'miss']).optional(),
     extraction: z.union([
       assessedExtractionSchema,
       needsReviewExtractionSchema,
@@ -348,10 +349,56 @@ export const polarityAssessedEventSchema = z
   })
   .strict();
 
+const tutorEventIdentityShape = {
+  ...eventBaseShape,
+  pipelineStage: z.literal('tutor'),
+  sourceAnswerEventId: identifierSchema,
+  sourceAssessmentEventId: identifierSchema,
+  nodeId: identifierSchema,
+  cycleId: identifierSchema,
+};
+
+export const tutorCycleStartedEventSchema = z
+  .object({
+    ...tutorEventIdentityShape,
+    kind: z.literal('tutor.cycle.started'),
+  })
+  .strict();
+
+export const tutorTurnCompletedEventSchema = z
+  .object({
+    ...tutorEventIdentityShape,
+    kind: z.literal('tutor.turn.completed'),
+    studentAnswer: z.string(),
+    turn: z
+      .object({
+        action: z.enum(['probe', 'hint', 'check']),
+        content: z.string().trim().min(1),
+      })
+      .strict(),
+    source: z.enum(['provider', 'development-cache', 'demo-recording', 'preset']),
+    degraded: z.boolean(),
+    activeElapsedMs: z.number().int().nonnegative(),
+  })
+  .strict();
+
+export const tutorCycleTerminalEventSchema = z
+  .object({
+    ...tutorEventIdentityShape,
+    kind: z.literal('tutor.cycle.terminal'),
+    reason: z.enum(['max-rounds', 'deadline']),
+    content: z.string().trim().min(1),
+    activeElapsedMs: z.number().int().nonnegative(),
+  })
+  .strict();
+
 export const sessionEventSchema = z.union([
   answerSubmittedEventSchema,
   polarityAssessedEventSchema,
   assessmentCompletedEventSchema,
+  tutorCycleStartedEventSchema,
+  tutorTurnCompletedEventSchema,
+  tutorCycleTerminalEventSchema,
 ]);
 
 const pipelineStageOrder = {
@@ -392,8 +439,14 @@ export const sessionSchema = z
   .superRefine((session, context) => {
     const eventIds = new Set<string>();
     const answers = new Map<string, z.infer<typeof answerSubmittedEventSchema>>();
+    const assessments = new Map<string, z.infer<typeof assessmentCompletedEventSchema>>();
     const answerWorkflows = new Set<string>();
     const progress = new Map<string, number>();
+    const tutorCycles = new Map<string, {
+      sourceAssessmentEventId: string;
+      nodeId: string;
+      terminal: boolean;
+    }>();
 
     session.events.forEach((event, index) => {
       if (event.sequence !== index) {
@@ -474,7 +527,7 @@ export const sessionSchema = z
               });
             }
           });
-        } else if (event.extraction.status === 'assessed') {
+        } else if (event.kind === 'assessment.completed' && event.extraction.status === 'assessed') {
           const original = answer.answer.format === 'text'
             ? answer.answer.value
             : JSON.stringify(answer.answer.value);
@@ -494,6 +547,81 @@ export const sessionSchema = z
       }
 
       if (event.kind === 'polarity.assessed') return;
+      if (
+        event.kind === 'tutor.cycle.started'
+        || event.kind === 'tutor.turn.completed'
+        || event.kind === 'tutor.cycle.terminal'
+      ) {
+        const assessment = assessments.get(event.sourceAssessmentEventId);
+        if (!assessment) {
+          context.addIssue({
+            code: 'custom',
+            path: ['events', index, 'sourceAssessmentEventId'],
+            message: 'must reference an earlier assessment event',
+          });
+        } else {
+          if (assessment.sourceAnswerEventId !== event.sourceAnswerEventId) {
+            context.addIssue({
+              code: 'custom',
+              path: ['events', index, 'sourceAnswerEventId'],
+              message: 'must match the source assessment answer',
+            });
+          }
+          if (assessment.nodeId !== event.nodeId) {
+            context.addIssue({
+              code: 'custom',
+              path: ['events', index, 'nodeId'],
+              message: 'must match the source assessment node',
+            });
+          }
+        }
+
+        const cycle = tutorCycles.get(event.cycleId);
+        if (event.kind === 'tutor.cycle.started') {
+          if (cycle) {
+            context.addIssue({
+              code: 'custom',
+              path: ['events', index, 'cycleId'],
+              message: 'tutor cycle has already started',
+            });
+          } else {
+            tutorCycles.set(event.cycleId, {
+              sourceAssessmentEventId: event.sourceAssessmentEventId,
+              nodeId: event.nodeId,
+              terminal: false,
+            });
+          }
+          return;
+        }
+
+        if (!cycle) {
+          context.addIssue({
+            code: 'custom',
+            path: ['events', index, 'cycleId'],
+            message: 'tutor turn or terminal event requires an earlier cycle start',
+          });
+          return;
+        }
+        if (
+          cycle.sourceAssessmentEventId !== event.sourceAssessmentEventId
+          || cycle.nodeId !== event.nodeId
+        ) {
+          context.addIssue({
+            code: 'custom',
+            path: ['events', index, 'cycleId'],
+            message: 'tutor event identity must match its cycle start',
+          });
+        }
+        if (cycle.terminal) {
+          context.addIssue({
+            code: 'custom',
+            path: ['events', index, 'cycleId'],
+            message: 'tutor cycle is already terminal',
+          });
+        }
+        if (event.kind === 'tutor.cycle.terminal') cycle.terminal = true;
+        return;
+      }
 
       const progressKey =
         `${event.caseId}\u0000${event.stageId}\u0000${event.attemptId}\u0000${event.nodeId}`;
@@ -507,12 +635,16 @@ export const sessionSchema = z
         });
       }
       progress.set(progressKey, Math.max(previousProgress ?? 0, currentProgress));
+      assessments.set(event.id, event);
     });
   });
 
 export type AnswerSubmittedEvent = z.infer<typeof answerSubmittedEventSchema>;
 export type AssessmentCompletedEvent = z.infer<typeof assessmentCompletedEventSchema>;
 export type PolarityAssessedEvent = z.infer<typeof polarityAssessedEventSchema>;
+export type TutorCycleStartedEvent = z.infer<typeof tutorCycleStartedEventSchema>;
+export type TutorTurnCompletedEvent = z.infer<typeof tutorTurnCompletedEventSchema>;
+export type TutorCycleTerminalEvent = z.infer<typeof tutorCycleTerminalEventSchema>;
 export type SessionEvent = z.infer<typeof sessionEventSchema>;
 export type StudentSession = z.infer<typeof sessionSchema>;
 
@@ -520,4 +652,7 @@ type EventManagedFields = 'schemaVersion' | 'sequence';
 export type SessionEventInput =
   | Omit<z.input<typeof answerSubmittedEventSchema>, EventManagedFields>
   | Omit<z.input<typeof polarityAssessedEventSchema>, EventManagedFields>
-  | Omit<z.input<typeof assessmentCompletedEventSchema>, EventManagedFields>;
+  | Omit<z.input<typeof assessmentCompletedEventSchema>, EventManagedFields>
+  | Omit<z.input<typeof tutorCycleStartedEventSchema>, EventManagedFields>
+  | Omit<z.input<typeof tutorTurnCompletedEventSchema>, EventManagedFields>
+  | Omit<z.input<typeof tutorCycleTerminalEventSchema>, EventManagedFields>;

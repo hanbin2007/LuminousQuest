@@ -1,5 +1,5 @@
 {
-  "version": "case.v1.2",
+  "version": "case.v1.3",
   "id": "aluminum-air",
   "title": "碱性铝-空气电池",
   "type": "analysis",
@@ -87,6 +87,18 @@
         "4Al + 3O2 + 6H2O + 4OH^- -> 4[Al(OH)4]^-"
       ]
     }
+  ],
+  "tutoring": [
+    { "nodeId": "D1" },
+    { "nodeId": "D3" },
+    { "nodeId": "D4" },
+    { "nodeId": "D5" },
+    { "nodeId": "P1" },
+    { "nodeId": "P2" },
+    { "nodeId": "P4" },
+    { "nodeId": "P5" },
+    { "nodeId": "E1" },
+    { "nodeId": "E2" }
   ],
   "evidencePaths": [
     { "id": "aa-d1", "nodeId": "D1", "description": "指出 Al 是氧化反应场所且能导电。", "source": "answer", "referenceAnswerPoints": ["Al 是氧化反应发生的失电子场所，并能传导电子。"], "factRequirements": [{ "id": "oxidation-site", "acceptedValues": ["Al"] }] },

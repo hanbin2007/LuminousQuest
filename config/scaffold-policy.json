@@ -1,5 +1,5 @@
 {
-  "version": "scaffold-policy.v1.3",
+  "version": "scaffold-policy.v1.4",
   "levels": [
     { "level": 1, "label": "完整引导", "promptCount": 8 },
     { "level": 2, "label": "三维度标题", "promptCount": 3 },
@@ -65,6 +65,7 @@
     "retryCount": 1,
     "forceAdvanceAfterMs": 15000,
     "answerOverlapThreshold": 0.55,
+    "minimumSharedBigrams": 3,
     "fallback": {
       "probe": "先只判断当前节点里最关键的对象与方向，并说明依据。",
       "hint": "回到题目中的反应物、电极和载流粒子，逐项排除一个冲突。",

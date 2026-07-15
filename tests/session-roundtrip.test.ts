@@ -152,6 +152,47 @@ describe('session persistence and staged assessment state', () => {
     });
   });
 
+  it('round-trips tutor cycle, turn, and terminal events without changing legacy v2 events', () => {
+    let session = completeSession();
+    expect(session.events[1]).not.toHaveProperty('objectiveOutcome');
+    const identity = {
+      pipelineStage: 'tutor' as const,
+      ...workflow(),
+      sourceAnswerEventId: 'event-answer-1',
+      sourceAssessmentEventId: 'event-assessment-1',
+      nodeId: 'P4',
+      cycleId: 'tutor-event-assessment-1',
+    };
+    session = appendSessionEvent(session, {
+      id: 'tutor-cycle-started',
+      occurredAt: '2026-07-15T12:01:02.000Z',
+      kind: 'tutor.cycle.started',
+      ...identity,
+    });
+    session = appendSessionEvent(session, {
+      id: 'tutor-turn-1',
+      occurredAt: '2026-07-15T12:01:03.000Z',
+      kind: 'tutor.turn.completed',
+      ...identity,
+      studentAnswer: '我再想想。',
+      turn: { action: 'probe', content: '先说明判断依据。' },
+      source: 'provider',
+      degraded: false,
+      activeElapsedMs: 120,
+    });
+    session = appendSessionEvent(session, {
+      id: 'tutor-terminal',
+      occurredAt: '2026-07-15T12:01:04.000Z',
+      kind: 'tutor.cycle.terminal',
+      ...identity,
+      reason: 'max-rounds',
+      content: '本轮结束。',
+      activeElapsedMs: 120,
+    });
+
+    expect(importSession(exportSession(session))).toEqual(session);
+  });
+
   it('restores the latest session from a newly constructed store after a refresh', () => {
     const storage = new MemoryStorage();
     const beforeRefresh = new LocalSessionStore(storage);

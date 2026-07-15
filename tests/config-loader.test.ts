@@ -279,6 +279,21 @@ describe('configuration loading', () => {
     });
   });
 
+  it('requires explicitly tutorable nodes to have a non-empty deterministic leak set', async () => {
+    const root = await createTemporaryDirectory();
+    await writeValidContentTree(root);
+    const caseFile = path.join(root, 'config', 'cases', 'zinc-copper.json');
+    const trainingCase = JSON.parse(await readFile(caseFile, 'utf8'));
+    trainingCase.tutoring = [...(trainingCase.tutoring ?? []), { nodeId: 'P6' }];
+    await writeFile(caseFile, JSON.stringify(trainingCase));
+
+    await expect(loadAllConfig(root)).rejects.toMatchObject({
+      file: 'config/cases/zinc-copper.json',
+      field: expect.stringContaining('tutoring'),
+      reason: expect.stringContaining('anti-leak'),
+    });
+  });
+
   it('rejects missing and escaping materialRef assets', async () => {
     const root = await createTemporaryDirectory();
     await writeValidContentTree(root);
