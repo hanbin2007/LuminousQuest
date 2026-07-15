@@ -1,5 +1,5 @@
 {
-  "version": "scaffold-policy.v1.1",
+  "version": "scaffold-policy.v1.2",
   "levels": [
     { "level": 1, "label": "完整引导", "promptCount": 8 },
     { "level": 2, "label": "三维度标题", "promptCount": 3 },
@@ -16,6 +16,18 @@
   "assistance": {
     "correctOutcome": "hit-with-help",
     "countsForPromotion": false
+  },
+  "extraction": {
+    "retryCount": 1,
+    "citation": {
+      "maxEditDistanceRatio": 0.12,
+      "normalizationCandidateMaxEditDistanceRatio": 0.35,
+      "commonTypos": {
+        "负级": "负极",
+        "正级": "正极",
+        "电级": "电极"
+      }
+    }
   },
   "socratic": {
     "maxRounds": 3,

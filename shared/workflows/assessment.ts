@@ -2,7 +2,11 @@ import { z } from 'zod';
 
 import type { LoadedConfig } from '../config/schemas';
 import { buildLearnerProfile } from '../scoring/profile';
-import { evaluateExtractedFacts, factsMatchRequirements } from '../scoring/policy';
+import {
+  evaluateExtractedFacts,
+  factsMatchRequirements,
+  normalizeFactValue,
+} from '../scoring/policy';
 import { resolveRubricDecision, rubricPolicyEngineVersion } from '../scoring/rubric';
 import { appendSessionEvent } from '../session/session';
 import type { StudentSession } from '../session/schema';
@@ -104,6 +108,8 @@ export const structuredAssessmentResponseSchema = z
       seen.add(assessment.nodeId);
     });
   });
+
+export type StructuredAssessmentResponse = z.infer<typeof structuredAssessmentResponseSchema>;
 
 export const structuredAssessmentResponseJsonSchema = {
   type: 'object',
@@ -293,7 +299,11 @@ export function recordStructuredTextAssessment(input: RecordStructuredTextAssess
     const correct = parseAnchorValue(configured.correctValue);
     const extracted = new Map(anchor.facts.map((fact) => [fact.id, fact.value]));
     const extractedValue = serializeAnchorFacts(anchor.facts);
-    const outcome = [...correct].every(([id, value]) => extracted.get(id) === value) ? 'hit' : 'miss';
+    const outcome = [...correct].every(([id, value]) => {
+      const extractedValue = extracted.get(id);
+      return extractedValue !== undefined
+        && normalizeFactValue(extractedValue) === normalizeFactValue(value);
+    }) ? 'hit' : 'miss';
     session = appendSessionEvent(session, {
       id: `${input.assessmentEventIdPrefix}-anchor-${index + 1}`,
       occurredAt: input.assessedAt,

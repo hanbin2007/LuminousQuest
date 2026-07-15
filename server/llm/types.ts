@@ -22,6 +22,7 @@ export interface LLMRequest {
   images: LLMImage[];
   schema?: Record<string, unknown>;
   stepId?: string;
+  timeoutMs?: number;
 }
 
 export interface LLMResponse {
@@ -48,5 +49,5 @@ export interface LLMExecutionResult {
   degraded: boolean;
   requiresTeacherReview: boolean;
   error?: string;
+  failureReason?: string;
 }
-

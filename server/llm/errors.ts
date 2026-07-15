@@ -10,9 +10,24 @@ export class ProviderHttpError extends Error {
 }
 
 export class StructuredResponseValidationError extends Error {
-  constructor(message: string) {
+  readonly retryable: boolean;
+  readonly category: string;
+
+  constructor(
+    message: string,
+    options: { retryable?: boolean; category?: string } = {},
+  ) {
     super(message);
     this.name = 'StructuredResponseValidationError';
+    this.retryable = options.retryable ?? true;
+    this.category = options.category ?? 'schema-invalid';
+  }
+}
+
+export class ProviderTimeoutError extends Error {
+  constructor(readonly timeoutMs: number) {
+    super(`Provider call exceeded ${timeoutMs}ms`);
+    this.name = 'ProviderTimeoutError';
   }
 }
 

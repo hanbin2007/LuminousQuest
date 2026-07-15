@@ -769,6 +769,18 @@ export const scaffoldPolicySchema = z
         countsForPromotion: z.boolean(),
       })
       .strict(),
+    extraction: z
+      .object({
+        retryCount: z.literal(1),
+        citation: z
+          .object({
+            maxEditDistanceRatio: z.number().min(0).max(1),
+            normalizationCandidateMaxEditDistanceRatio: z.number().min(0).max(1),
+            commonTypos: z.record(z.string().min(1), z.string().min(1)),
+          })
+          .strict(),
+      })
+      .strict(),
     socratic: z
       .object({
         maxRounds: z.number().int().positive(),
@@ -801,6 +813,16 @@ export const scaffoldPolicySchema = z
       }
       levels.add(entry.level);
     });
+    if (
+      value.extraction.citation.normalizationCandidateMaxEditDistanceRatio
+      <= value.extraction.citation.maxEditDistanceRatio
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['extraction', 'citation', 'normalizationCandidateMaxEditDistanceRatio'],
+        message: 'must exceed maxEditDistanceRatio',
+      });
+    }
   });
 
 export type FunctionalRole = z.infer<typeof functionalRoleSchema>;

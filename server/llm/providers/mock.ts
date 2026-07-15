@@ -33,6 +33,50 @@ function exampleForSchema(schema: Record<string, unknown> | undefined): unknown 
   return 'mock'.padEnd(minimumLength, 'x');
 }
 
+function assessmentFixture(request: LLMRequest) {
+  if (request.prompt.id !== 'structured-assessment') return undefined;
+  const input = request.input as {
+    answer?: unknown;
+    targetNodeIds?: unknown;
+    assistance?: unknown;
+  } | null;
+  if (
+    typeof input?.answer !== 'string'
+    || !Array.isArray(input.targetNodeIds)
+    || !input.targetNodeIds.every((nodeId) => typeof nodeId === 'string')
+  ) {
+    return undefined;
+  }
+  const answer = input.answer;
+  const targetNodeIds = input.targetNodeIds as string[];
+  const substantive = answer.trim().length > 0;
+  const assistance = input.assistance
+    && typeof input.assistance === 'object'
+    && 'kind' in input.assistance
+    && 'rounds' in input.assistance
+    ? input.assistance
+    : { kind: 'none', rounds: 0 };
+  return {
+    anchors: [],
+    assessments: targetNodeIds.map((nodeId) => ({
+      nodeId,
+      errorIds: [],
+      facts: {
+        response: substantive ? 'substantive' : 'blank',
+        terminology: 'model',
+        syllabus: 'within',
+        contradiction: false,
+        typo: 'none',
+        slots: [],
+      },
+      evidence: substantive
+        ? [{ quote: answer, start: 0, end: answer.length }]
+        : [],
+      assistance,
+    })),
+  };
+}
+
 export class MockProvider implements LLMProvider {
   readonly id = 'mock';
 
@@ -52,7 +96,9 @@ export class MockProvider implements LLMProvider {
 
   async structured(request: LLMRequest): Promise<LLMResponse> {
     const input = request.input as { mockStructuredResponse?: unknown } | null;
-    const value = input?.mockStructuredResponse ?? exampleForSchema(request.schema);
+    const value = input?.mockStructuredResponse
+      ?? assessmentFixture(request)
+      ?? exampleForSchema(request.schema);
     return {
       content: JSON.stringify(value),
       structured: value,

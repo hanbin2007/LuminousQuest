@@ -144,6 +144,63 @@ describe('deterministic workflow and persistence contracts', () => {
     });
   });
 
+  it('normalizes polarity anchor fact values with the shared fact normalizer', async () => {
+    const { config, session } = await fixture();
+    const answer = 'Ｚｎ是负极，Ｃｕ是正极。';
+    const result = recordStructuredTextAssessment({
+      session,
+      config,
+      answer: {
+        id: 'answer-normalized-anchor',
+        occurredAt: '2026-07-15T12:01:00.000Z',
+        caseId: 'zinc-copper',
+        stageId: 'analysis',
+        attemptId: 'attempt-normalized-anchor',
+        questionId: 'polarity',
+        value: answer,
+      },
+      extraction: {
+        anchors: [{
+          anchorId: 'case-polarity',
+          facts: [
+            { id: 'negative', value: 'ｚｎ' },
+            { id: 'positive', value: 'ｃｕ' },
+          ],
+          evidence: [{ quote: answer, start: 0, end: answer.length }],
+        }],
+        assessments: [{
+          nodeId: 'P2',
+          errorIds: [],
+          facts: {
+            response: 'substantive',
+            terminology: 'model',
+            syllabus: 'within',
+            contradiction: false,
+            typo: 'none',
+            slots: [
+              { id: 'reducing-agent', value: 'ｚｎ' },
+              { id: 'oxidizing-agent', value: 'Cu^2+' },
+            ],
+          },
+          evidence: [{ quote: answer, start: 0, end: answer.length }],
+          assistance: { kind: 'none', rounds: 0 },
+        }],
+      },
+      provenance: {
+        promptId: 'structured-assessment',
+        promptVersion: 'prompt.v2',
+        cacheKey: 'cache-normalized-anchor',
+        model: 'mock-v2',
+      },
+      assessmentEventIdPrefix: 'normalized-anchor',
+      assessedAt: '2026-07-15T12:01:01.000Z',
+    });
+
+    expect(result.session.events.find((event) => event.kind === 'polarity.assessed')).toMatchObject({
+      outcome: 'hit',
+    });
+  });
+
   it('bridges real builder and equation engine decisions through rubric rule ids and scores', async () => {
     const { config, session } = await fixture();
     const built = recordBuilderAssessment({

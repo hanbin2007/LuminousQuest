@@ -1,0 +1,16 @@
+{
+  "version": "eval-candidate.v1",
+  "recordedAt": "2026-07-15T00:00:00.000Z",
+  "category": "normalization-insufficient",
+  "sample": {
+    "answer": "电子由负机流向正极。",
+    "modelQuote": "电子由负极流向正极。"
+  },
+  "context": {
+    "caseId": "zinc-copper",
+    "nodeId": "P4",
+    "evidenceIndex": 0,
+    "editDistanceRatio": 0.1111111111111111,
+    "sanitized": true
+  }
+}

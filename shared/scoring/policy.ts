@@ -32,7 +32,7 @@ export interface PolicyEvaluation {
   bonusPoints: number;
 }
 
-function normalizeFactValue(value: string) {
+export function normalizeFactValue(value: string) {
   return value.trim().normalize('NFKC').toLocaleLowerCase('en-US');
 }
 

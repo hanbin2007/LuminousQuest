@@ -89,7 +89,7 @@ export class OpenAICompatibleProvider implements LLMProvider {
         ],
         ...(structured ? { response_format: { type: 'json_object' } } : {}),
       }),
-      signal: AbortSignal.timeout(this.timeoutMilliseconds()),
+      signal: AbortSignal.timeout(this.timeoutMilliseconds(request.timeoutMs)),
     });
 
     if (!response.ok) {
@@ -114,8 +114,8 @@ export class OpenAICompatibleProvider implements LLMProvider {
     };
   }
 
-  private timeoutMilliseconds() {
-    const configured = Number(process.env.LLM_TIMEOUT_MS ?? 20_000);
+  private timeoutMilliseconds(requestTimeout?: number) {
+    const configured = Number(requestTimeout ?? process.env.LLM_TIMEOUT_MS ?? 20_000);
     return Number.isFinite(configured) && configured > 0 ? configured : 20_000;
   }
 }

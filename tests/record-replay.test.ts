@@ -400,7 +400,7 @@ describe('LLM recording and replay', () => {
     expect(logger.error).toHaveBeenCalledWith(expect.stringContaining('temporary offline detail'));
   });
 
-  it('does not retry deterministic authorization or schema failures', async () => {
+  it('does not retry authorization failures but retries a schema failure once', async () => {
     const root = await createTemporaryDirectory();
     let authAttempts = 0;
     const unauthorized: LLMProvider = {
@@ -451,7 +451,7 @@ describe('LLM recording and replay', () => {
     );
 
     expect(authAttempts).toBe(1);
-    expect(schemaAttempts).toBe(1);
+    expect(schemaAttempts).toBe(2);
     expect(schemaResult).toMatchObject({
       requiresTeacherReview: true,
       response: { structured: { status: 'needs-review' } },
