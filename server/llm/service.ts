@@ -134,7 +134,7 @@ export class LLMService {
             : 'AI 服务暂时不可用,请保留当前作答并稍后重试。',
         model: 'preset-fallback.v1',
         ...(request.capability === 'structured'
-          ? { structured: { status: 'unassessed', reason: 'provider unavailable or invalid' } }
+          ? { structured: { status: 'needs-review', reason: 'provider unavailable or invalid' } }
           : {}),
       },
     };

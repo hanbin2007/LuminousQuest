@@ -1,8 +1,11 @@
 import { createServer } from 'node:net';
+import { EventEmitter } from 'node:events';
 
 import { afterEach, describe, expect, it } from 'vitest';
+import type { ServerType } from '@hono/node-server';
 
 import { findAvailablePort } from '../server/runtime/ports';
+import { serveOnLoopback, type ServeImplementation } from '../server/runtime/serve-on-loopback';
 
 const servers: ReturnType<typeof createServer>[] = [];
 
@@ -34,5 +37,36 @@ describe('port detection', () => {
     expect(selected).toBeGreaterThan(address.port);
     expect(selected).toBeLessThanOrEqual(address.port + 20);
   });
-});
 
+  it('binds only to 127.0.0.1 and retries when serve loses an EADDRINUSE race', async () => {
+    const attempts: Array<{ hostname?: string; port?: number }> = [];
+    const serveImplementation: ServeImplementation = (options, listeningListener) => {
+      attempts.push({ hostname: options.hostname, port: options.port });
+      const server = new EventEmitter() as ServerType;
+      if (attempts.length === 1) {
+        queueMicrotask(() => {
+          const error = Object.assign(new Error('address in use'), { code: 'EADDRINUSE' });
+          server.emit('error', error);
+        });
+      } else {
+        queueMicrotask(() =>
+          listeningListener?.({ address: '127.0.0.1', family: 'IPv4', port: options.port ?? 0 }),
+        );
+      }
+      return server;
+    };
+
+    const started = await serveOnLoopback({
+      fetch: () => new Response('ok'),
+      preferredPort: 4173,
+      attempts: 2,
+      serveImplementation,
+    });
+
+    expect(started.port).toBe(4174);
+    expect(attempts).toEqual([
+      { hostname: '127.0.0.1', port: 4173 },
+      { hostname: '127.0.0.1', port: 4174 },
+    ]);
+  });
+});

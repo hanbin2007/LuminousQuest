@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { readdir, readFile, stat } from 'node:fs/promises';
+import { readdir, readFile, realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
 
 import type { ZodType } from 'zod';
@@ -122,7 +122,14 @@ async function validateMaterialRef(
     throw new ConfigValidationError(relativeCaseFile, field, 'materialRef must stay inside assets/');
   }
   try {
-    const info = await stat(absoluteFile);
+    const [resolvedAssetsRoot, resolvedFile] = await Promise.all([
+      realpath(assetsRoot),
+      realpath(absoluteFile),
+    ]);
+    if (!resolvedFile.startsWith(`${resolvedAssetsRoot}${path.sep}`)) {
+      throw new Error('materialRef escapes assets/');
+    }
+    const info = await stat(resolvedFile);
     if (!info.isFile()) throw new Error('not a file');
   } catch {
     throw new ConfigValidationError(relativeCaseFile, field, `materialRef is missing: ${materialRef}`);
@@ -212,7 +219,16 @@ async function listConfigFiles(directory: string, relativeDirectory = ''): Promi
 async function deriveConfigVersion(contentRoot: string) {
   const configRoot = path.join(contentRoot, 'config');
   const hash = createHash('sha256');
-  for (const relativeFile of await listConfigFiles(configRoot)) {
+  let files: string[];
+  try {
+    files = await listConfigFiles(configRoot);
+  } catch (error) {
+    const reason = (error as NodeJS.ErrnoException).code === 'ENOENT'
+      ? 'directory is missing'
+      : `cannot read directory: ${(error as Error).message}`;
+    throw new ConfigValidationError('config', '$', reason);
+  }
+  for (const relativeFile of files) {
     const contents = await readFile(path.join(configRoot, relativeFile));
     const normalizedPath = relativeFile.split(path.sep).join('/');
     hash.update(`${Buffer.byteLength(normalizedPath)}:${normalizedPath}:${contents.length}:`);
@@ -222,18 +238,27 @@ async function deriveConfigVersion(contentRoot: string) {
 }
 
 export async function loadAllConfig(contentRoot: string): Promise<LoadedConfig> {
-  const [knowledgeModel, rubrics, pretest, loadedCases, scaffoldPolicy, configVersion] = await Promise.all([
-    parseJsonFile(contentRoot, 'config/knowledge-model.json', knowledgeModelSchema),
-    parseJsonFile(contentRoot, 'config/rubrics.json', rubricsSchema),
-    parseJsonFile(contentRoot, 'config/pretest.json', pretestSchema),
-    loadCases(contentRoot),
-    parseJsonFile(contentRoot, 'config/scaffold-policy.json', scaffoldPolicySchema),
-    deriveConfigVersion(contentRoot),
-  ]);
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const configVersion = await deriveConfigVersion(contentRoot);
+    const knowledgeModel = await parseJsonFile(
+      contentRoot,
+      'config/knowledge-model.json',
+      knowledgeModelSchema,
+    );
+    const rubrics = await parseJsonFile(contentRoot, 'config/rubrics.json', rubricsSchema);
+    const pretest = await parseJsonFile(contentRoot, 'config/pretest.json', pretestSchema);
+    const loadedCases = await loadCases(contentRoot);
+    const scaffoldPolicy = await parseJsonFile(
+      contentRoot,
+      'config/scaffold-policy.json',
+      scaffoldPolicySchema,
+    );
 
-  assertUniqueCaseIds(loadedCases);
-  const cases = loadedCases.map((entry) => entry.value);
-  const config = { configVersion, knowledgeModel, rubrics, pretest, cases, scaffoldPolicy };
-  await validateReferences(config, contentRoot, loadedCases.map((entry) => entry.file));
-  return config;
+    assertUniqueCaseIds(loadedCases);
+    const cases = loadedCases.map((entry) => entry.value);
+    const config = { configVersion, knowledgeModel, rubrics, pretest, cases, scaffoldPolicy };
+    await validateReferences(config, contentRoot, loadedCases.map((entry) => entry.file));
+    if (await deriveConfigVersion(contentRoot) === configVersion) return config;
+  }
+  throw new ConfigValidationError('config', '$', 'files changed while loading; retry the request');
 }

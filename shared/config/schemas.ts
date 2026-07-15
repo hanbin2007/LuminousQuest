@@ -77,6 +77,18 @@ export const knowledgeModelSchema = z
     reportDuplicateIds(value.nodes, ['nodes'], context);
     reportDuplicateIds(value.edges, ['edges'], context);
 
+    const axes = new Set<string>();
+    value.dimensions.forEach((dimension, index) => {
+      if (axes.has(dimension.axis)) {
+        context.addIssue({
+          code: 'custom',
+          path: ['dimensions', index, 'axis'],
+          message: `duplicate axis ${dimension.axis}`,
+        });
+      }
+      axes.add(dimension.axis);
+    });
+
     const dimensionIds = new Set(value.dimensions.map((dimension) => dimension.id));
     const nodeIds = new Set(value.nodes.map((node) => node.id));
 
@@ -150,9 +162,18 @@ export const rubricsSchema = z
   .strict()
   .superRefine((value, context) => {
     reportDuplicateIds(value.rubrics, ['rubrics'], context);
+    const ruleIds = new Set<string>();
     value.rubrics.forEach((rubric, rubricIndex) => {
       reportDuplicateIds(rubric.rules, ['rubrics', rubricIndex, 'rules'], context);
       rubric.rules.forEach((rule, ruleIndex) => {
+        if (ruleIds.has(rule.id)) {
+          context.addIssue({
+            code: 'custom',
+            path: ['rubrics', rubricIndex, 'rules', ruleIndex, 'id'],
+            message: `duplicate id ${rule.id}`,
+          });
+        }
+        ruleIds.add(rule.id);
         if (rule.score > rubric.maxScore) {
           context.addIssue({
             code: 'custom',

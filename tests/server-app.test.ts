@@ -1,7 +1,7 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { createServerApp } from '../server/app';
 import type { LLMProvider, LLMRequest } from '../server/llm/types';
@@ -169,6 +169,34 @@ describe('Hono server responsibilities', () => {
     expect(seen[0].prompt.version).not.toBe('client-version');
     expect(secondResult.source).toBe('development-cache');
     expect(secondResult.cacheKey).toBe(firstResult.cacheKey);
+  });
+
+  it('keeps external-data failure details in server logs for LLM requests', async () => {
+    const root = await createTemporaryDirectory();
+    await writeValidContentTree(root);
+    const app = createServerApp({ contentRoot: root, clientRoot: path.join(root, 'client'), apiToken });
+    await writeFile(path.join(root, 'config', 'knowledge-model.json'), '{}');
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    const response = await app.request('/api/llm', {
+      method: 'POST',
+      headers: apiHeaders,
+      body: JSON.stringify({
+        executionMode: 'live',
+        capability: 'chat',
+        provider: 'mock',
+        model: 'mock-v1',
+        prompt: { id: 'test' },
+        schemaVersion: 'schema.v1',
+        input: {},
+        images: [],
+      }),
+    });
+
+    expect(response.status).toBe(500);
+    expect(await response.json()).toEqual({ error: 'LLM request failed' });
+    expect(errorLog).toHaveBeenCalledWith(expect.stringContaining('config/knowledge-model.json'));
+    errorLog.mockRestore();
   });
 
   it('serves the built SPA and falls back to index.html for client routes', async () => {

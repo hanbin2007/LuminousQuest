@@ -4,7 +4,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 
 import { loadAllConfig, ConfigValidationError } from './config/loader';
-import { RecordingStore, RecordingValidationError } from './llm/recording-store';
+import { RecordingStore } from './llm/recording-store';
 import { createProviderRegistry } from './llm/providers';
 import { LLMService } from './llm/service';
 import type { LLMProvider, LLMRequest } from './llm/types';
@@ -66,15 +66,37 @@ export interface ServerAppOptions {
   maxRequestBodyBytes?: number;
 }
 
-function externalDataError(
-  error: ConfigValidationError | RecordingValidationError | PromptValidationError,
-) {
+function externalDataError(error: ConfigValidationError | PromptValidationError) {
   return {
     error: error.name,
     file: error.file,
     field: error.field,
     reason: error.reason,
   };
+}
+
+async function readBoundedBody(request: Request, maximumBytes: number) {
+  if (!request.body) return new Uint8Array();
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let length = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    length += value.byteLength;
+    if (length > maximumBytes) {
+      await reader.cancel();
+      return null;
+    }
+    chunks.push(value);
+  }
+  const body = new Uint8Array(length);
+  let offset = 0;
+  for (const chunk of chunks) {
+    body.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return body;
 }
 
 export function createServerApp(options: ServerAppOptions) {
@@ -122,8 +144,8 @@ export function createServerApp(options: ServerAppOptions) {
 
     let body: unknown;
     try {
-      const bytes = await context.req.raw.arrayBuffer();
-      if (bytes.byteLength > maxRequestBodyBytes) {
+      const bytes = await readBoundedBody(context.req.raw, maxRequestBodyBytes);
+      if (!bytes) {
         return context.json({ error: 'Request body is too large' }, 413);
       }
       body = JSON.parse(new TextDecoder().decode(bytes));
@@ -157,14 +179,9 @@ export function createServerApp(options: ServerAppOptions) {
       };
       return context.json(await llmService.execute(request));
     } catch (error) {
-      if (
-        error instanceof RecordingValidationError ||
-        error instanceof ConfigValidationError ||
-        error instanceof PromptValidationError
-      ) {
-        return context.json(externalDataError(error), 500);
-      }
-      throw error;
+      const detail = error instanceof Error ? error.message : String(error);
+      console.error(`[llm] request failed: ${detail}`);
+      return context.json({ error: 'LLM request failed' }, 500);
     }
   });
 

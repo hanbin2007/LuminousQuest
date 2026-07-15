@@ -65,6 +65,12 @@ describe('configuration loading', () => {
   });
 
   it('identifies missing and empty configuration files', async () => {
+    const absentRoot = await createTemporaryDirectory();
+    await expect(loadAllConfig(absentRoot)).rejects.toMatchObject({
+      file: 'config',
+      reason: expect.stringContaining('missing'),
+    });
+
     const missingRoot = await createTemporaryDirectory();
     await mkdir(path.join(missingRoot, 'config'), { recursive: true });
 
@@ -106,6 +112,28 @@ describe('configuration loading', () => {
       },
       field: 'dimensions.1.id',
       reason: 'duplicate',
+    },
+    {
+      name: 'duplicate knowledge axes',
+      file: 'knowledge-model.json',
+      mutate(value: any) {
+        value.dimensions[1].axis = value.dimensions[0].axis;
+      },
+      field: 'dimensions.1.axis',
+      reason: 'duplicate axis',
+    },
+    {
+      name: 'duplicate rule ids across rubrics',
+      file: 'rubrics.json',
+      mutate(value: any) {
+        value.rubrics.push({
+          ...value.rubrics[0],
+          id: 'rubric-second',
+          rules: [{ ...value.rubrics[0].rules[0] }],
+        });
+      },
+      field: 'rubrics.1.rules.0.id',
+      reason: 'duplicate id',
     },
     {
       name: 'rubric scores over their maximum',

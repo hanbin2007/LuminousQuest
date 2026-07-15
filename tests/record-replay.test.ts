@@ -439,7 +439,7 @@ describe('LLM recording and replay', () => {
       recordings: new RecordingStore(root),
       logger: { error: vi.fn(), warn: vi.fn() },
     });
-    await schemaService.execute(
+    const schemaResult = await schemaService.execute(
       developmentRequest({
         capability: 'structured',
         schema: {
@@ -452,6 +452,10 @@ describe('LLM recording and replay', () => {
 
     expect(authAttempts).toBe(1);
     expect(schemaAttempts).toBe(1);
+    expect(schemaResult).toMatchObject({
+      requiresTeacherReview: true,
+      response: { structured: { status: 'needs-review' } },
+    });
   });
 
   it('returns a provider response even when the development cache write fails', async () => {

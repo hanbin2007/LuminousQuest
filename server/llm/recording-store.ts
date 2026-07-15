@@ -289,6 +289,23 @@ export class RecordingStore {
     warning('schema', recording.metadata.schemaVersion, step.schemaVersion);
     warning('prompt', recording.metadata.prompt.version, step.prompt.version);
 
+    const request = recordedRequest(recording);
+    if (typeof request?.configVersion === 'string') {
+      warning('request config', request.configVersion, step.configVersion);
+    }
+    if (typeof request?.schemaVersion === 'string') {
+      warning('request schema', request.schemaVersion, step.schemaVersion);
+    }
+    if (request?.prompt && typeof request.prompt === 'object') {
+      if (typeof request.prompt.id === 'string') {
+        warning('request prompt id', request.prompt.id, step.prompt.id);
+      }
+      if (typeof request.prompt.version === 'string') {
+        warning('request prompt', request.prompt.version, step.prompt.version);
+      }
+    }
+    warning('recording prompt id', recording.metadata.prompt.id, step.prompt.id);
+
     const currentPrompt = options.prompts?.[step.prompt.id];
     if (options.prompts && !currentPrompt) {
       throw new RecordingValidationError(
@@ -298,6 +315,22 @@ export class RecordingStore {
       );
     }
     if (currentPrompt) warning('current prompt', step.prompt.version, currentPrompt.version);
+
+    if (options.prompts) {
+      const recordedPromptIds = [
+        recording.metadata.prompt.id,
+        request?.prompt && typeof request.prompt === 'object' ? request.prompt.id : undefined,
+      ];
+      for (const promptId of recordedPromptIds) {
+        if (typeof promptId === 'string' && !options.prompts[promptId]) {
+          throw new RecordingValidationError(
+            path.join('recordings', step.recording),
+            'metadata.prompt.id',
+            `unknown prompt ${promptId}`,
+          );
+        }
+      }
+    }
   }
 
   private validateStructuredReplay(step: DemoScript['steps'][number], recording: Recording) {
