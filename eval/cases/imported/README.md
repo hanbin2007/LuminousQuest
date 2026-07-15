@@ -7,5 +7,6 @@ replaces stale config, prompt, schema, and threshold provenance.
 
 Pending files are ignored by Git and excluded from harness runs. A human must
 audit residual personal information, fill `expectedExtraction`,
-`expectedScore`, `annotator`, and misconception labels, change
+`expectedScore`, annotator/reviewer metadata, rationale references,
+metamorphic signoff, and misconception labels, change
 `annotationStatus` to `labeled`, then move the case to `../human/`.

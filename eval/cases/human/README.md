@@ -10,6 +10,8 @@ Before committing a case:
    student numbers that are not required for the scientific judgment.
 2. Have the named annotator fill every expected slot and score against the
    pinned `rubricVersion`.
-3. Mark serious full-wrong opportunities explicitly; do not infer them later
-   from the model output.
-4. Run `pnpm eval:mock` to validate schema, references, citations, and coverage.
+3. Have a different reviewer record rubric/adjudication references, approve
+   metamorphic applicability, and leave `expectedDisagreement: false`.
+4. Mark serious full-wrong opportunities explicitly as auxiliary audit data;
+   the safety denominator is still derived from every ground-truth miss.
+5. Run `pnpm eval:mock` to validate schema, references, citations, and coverage.
