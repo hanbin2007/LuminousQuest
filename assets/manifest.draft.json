@@ -124,7 +124,7 @@
         "width": 3200,
         "height": 2400
       },
-      "purpose": "案例图：双液盐桥锌铜电池装置简图"
+      "purpose": "案例图：双液盐桥锌铜电池装置简图（CuSO₄ 侧稀蓝）"
     },
     {
       "id": "aluminum-air-schematic",
@@ -133,7 +133,7 @@
         "width": 3200,
         "height": 2400
       },
-      "purpose": "案例图：铝-空气电池装置简图"
+      "purpose": "案例图：铝-空气电池装置简图（蓝色灯泡接口；空气管口朝向多孔碳正极）"
     },
     {
       "id": "aluminum-air-cross-section",
@@ -151,7 +151,7 @@
         "width": 3200,
         "height": 2400
       },
-      "purpose": "案例图：氢氧燃料电池装置简图"
+      "purpose": "案例图：氢氧燃料电池装置简图（蓝色灯泡接口）"
     },
     {
       "id": "hydrogen-oxygen-cross-section",
@@ -169,7 +169,7 @@
         "width": 3200,
         "height": 2400
       },
-      "purpose": "案例图：甲烷燃料电池冷迁移装置简图"
+      "purpose": "案例图：甲烷燃料电池冷迁移装置简图（蓝色灯泡接口）"
     }
   ]
 }
