@@ -13,6 +13,9 @@ function completeGraph(): BuilderGraph {
       { instanceId: 'wire', componentId: 'electron-link' },
       { instanceId: 'ions', componentId: 'ion-medium' },
       { instanceId: 'positive', componentId: 'site-b' },
+      { instanceId: 'electron-arrow', componentId: 'electron-arrow' },
+      { instanceId: 'cation-arrow', componentId: 'cation-arrow' },
+      { instanceId: 'anion-arrow', componentId: 'anion-arrow' },
     ],
     connections: [
       { id: 'e1', from: 'negative', to: 'wire', kind: 'electron-path', carrier: 'electron' },
@@ -91,8 +94,12 @@ describe('builder topology scoring', () => {
   it('caps an otherwise correct concrete Zn/Cu instance at partial', async () => {
     const graph = completeGraph();
     graph.components = graph.components.map((component) => {
-      if (component.instanceId === 'negative') return { ...component, label: 'Zn' };
-      if (component.instanceId === 'positive') return { ...component, label: 'Cu' };
+      if (component.instanceId === 'negative') {
+        return { ...component, materialBinding: { materialId: 'Zn', specificity: 'specific' as const } };
+      }
+      if (component.instanceId === 'positive') {
+        return { ...component, materialBinding: { materialId: 'Cu', specificity: 'specific' as const } };
+      }
       return component;
     });
 
@@ -103,10 +110,16 @@ describe('builder topology scoring', () => {
     expect(result.nodeDecisions.find((decision) => decision.nodeId === 'D5')?.status).toBe('partial');
   });
 
-  it('recognizes both Latin and Chinese concrete material labels', async () => {
+  it('uses structured material bindings instead of presentation labels', async () => {
     const graph = completeGraph();
     graph.components = graph.components.map((component) =>
-      component.instanceId === 'negative' ? { ...component, label: '锌电极' } : component,
+      component.instanceId === 'negative'
+        ? {
+            ...component,
+            label: '通用负极',
+            materialBinding: { materialId: '锌', specificity: 'specific' as const },
+          }
+        : component,
     );
 
     expect(assessBuilderTopology(graph, await builderConfig()).checks.abstraction.status)
@@ -120,14 +133,141 @@ describe('builder topology scoring', () => {
     expect(assessBuilderTopology(graph, await builderConfig()).overall).toBe('hit');
   });
 
-  it('marks duplicate functional roles as ambiguous instead of silently choosing one', async () => {
+  it('accepts multiple instances of one role when they form one connected functional network', async () => {
     const graph = completeGraph();
-    graph.components.push({ instanceId: 'negative-2', componentId: 'site-a' });
+    graph.components.push({ instanceId: 'wire-2', componentId: 'electron-link' });
+    graph.connections = graph.connections.flatMap((connection) =>
+      connection.id === 'e2'
+        ? [
+            { ...connection, id: 'e2a', to: 'wire-2' },
+            { ...connection, id: 'e2b', from: 'wire-2' },
+          ]
+        : [connection],
+    );
 
     const result = assessBuilderTopology(graph, await builderConfig());
 
-    expect(result.overall).toBe('partial');
-    expect(result.checks.fourElements.status).toBe('partial');
+    expect(result.overall).toBe('hit');
+    expect(result.checks.fourElements.status).toBe('hit');
+  });
+
+  it('rejects role overrides outside the component whitelist, especially distractors', async () => {
+    const graph = completeGraph();
+    const config = await builderConfig();
+    graph.components.push({
+      instanceId: 'fake-ion-medium',
+      componentId: 'sucrose-solution',
+      assignedRole: 'ion-conductor',
+    });
+
+    expect(() => assessBuilderTopology(graph, config)).toThrow(/role.*not allowed/i);
+  });
+
+  it('returns one closed-loop witness using the same site pair and rejects split components', async () => {
+    const valid = assessBuilderTopology(completeGraph(), await builderConfig());
+    expect(valid.checks.closedCircuit).toMatchObject({
+      status: 'hit',
+      witness: {
+        oxidationSiteId: 'negative',
+        reductionSiteId: 'positive',
+        electronConnectionIds: ['e1', 'e2'],
+        ionConnectionIds: ['i1', 'i2'],
+      },
+    });
+
+    const split = completeGraph();
+    split.components.push(
+      { instanceId: 'negative-2', componentId: 'site-a' },
+      { instanceId: 'positive-2', componentId: 'site-b' },
+    );
+    split.connections = split.connections.map((connection) => {
+      if (connection.kind !== 'ion-path') return connection;
+      return {
+        ...connection,
+        to: connection.to === 'negative' ? 'negative-2' : 'positive-2',
+      };
+    });
+
+    expect(assessBuilderTopology(split, await builderConfig()).checks.closedCircuit.status).toBe('miss');
+  });
+
+  it('rejects self-loop edges before they can masquerade as a circuit witness', async () => {
+    const graph = completeGraph();
+    const config = await builderConfig();
+    graph.connections.push({
+      id: 'self-loop',
+      from: 'negative',
+      to: 'negative',
+      kind: 'electron-path',
+    });
+
+    expect(() => assessBuilderTopology(graph, config)).toThrow(/self-loop/i);
+  });
+
+  it('distinguishes missing direction markers from explicit contradictions', async () => {
+    const missing = completeGraph();
+    missing.connections = missing.connections.map((connection) => {
+      const { carrier: _carrier, ...withoutCarrier } = connection;
+      return withoutCarrier;
+    });
+    const contradictory = completeGraph();
+    contradictory.connections = contradictory.connections.map((connection) =>
+      connection.carrier === 'electron'
+        ? { ...connection, from: connection.to, to: connection.from }
+        : connection);
+
+    expect(assessBuilderTopology(missing, await builderConfig()).checks.directionConsistency.status)
+      .toBe('partial');
+    expect(assessBuilderTopology(contradictory, await builderConfig()).checks.directionConsistency.status)
+      .toBe('miss');
+  });
+
+  it('consumes required component ids and all structural assessment switches', async () => {
+    const config = await builderConfig();
+    const requiredChanged = structuredClone(config);
+    requiredChanged.structuralRules.find((rule) => rule.check === 'closed-circuit')!
+      .requiredComponentIds.push('container');
+    expect(assessBuilderTopology(completeGraph(), requiredChanged).checks.closedCircuit.status).toBe('miss');
+
+    const saltBridgeChanged = structuredClone(config);
+    saltBridgeChanged.assessment.generalModel.saltBridgeRequired = true;
+    expect(assessBuilderTopology(completeGraph(), saltBridgeChanged).checks.closedCircuit.status).toBe('miss');
+
+    const openElectron = completeGraph();
+    openElectron.connections = openElectron.connections.filter((connection) =>
+      connection.kind !== 'electron-path');
+    const electronOptional = structuredClone(config);
+    electronOptional.assessment.generalModel.requireClosedElectronPath = false;
+    expect(assessBuilderTopology(openElectron, electronOptional).checks.closedCircuit.status).toBe('hit');
+
+    const reversed = completeGraph();
+    reversed.connections = reversed.connections.map((connection) => {
+      if (connection.carrier === 'electron') return { ...connection, from: connection.to, to: connection.from };
+      if (connection.carrier === 'cation') return { ...connection, to: 'negative' };
+      if (connection.carrier === 'anion') return { ...connection, to: 'positive' };
+      return connection;
+    });
+    const directionChanged = structuredClone(config);
+    directionChanged.assessment.direction = {
+      electronFrom: 'reduction-site',
+      electronTo: 'oxidation-site',
+      cationToward: 'oxidation-site',
+      anionToward: 'reduction-site',
+    };
+    expect(assessBuilderTopology(reversed, directionChanged).checks.directionConsistency.status).toBe('hit');
+  });
+
+  it('maps a placed distractor through its own configured misconception ids', async () => {
+    const graph = completeGraph();
+    graph.components = graph.components.filter((component) => component.instanceId !== 'ions');
+    graph.connections = graph.connections.filter((connection) => connection.kind !== 'ion-path');
+    graph.components.push({ instanceId: 'sugar', componentId: 'sucrose-solution' });
+
+    const d3 = assessBuilderTopology(graph, await builderConfig()).nodeDecisions
+      .find((decision) => decision.nodeId === 'D3');
+    expect(d3?.evidence).toEqual(expect.arrayContaining([
+      expect.objectContaining({ misconceptionIds: ['D3-M2'] }),
+    ]));
   });
 
   it('is invariant under array order and graph identifier renaming', async () => {

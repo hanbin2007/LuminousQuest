@@ -394,6 +394,8 @@ const builderComponentSchema = z
       'distractor',
     ]),
     functionalRole: functionalRoleSchema.optional(),
+    allowedRoles: z.array(functionalRoleSchema).default([]),
+    saltBridge: z.boolean().default(false),
     abstract: z.boolean(),
     distractor: z
       .object({
@@ -403,7 +405,37 @@ const builderComponentSchema = z
       .strict()
       .optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    const kindRoles: Record<typeof value.kind, readonly FunctionalRole[]> = {
+      electrode: ['oxidation-site', 'reduction-site'],
+      'electron-conductor': ['electron-conductor'],
+      'ion-conductor': ['ion-conductor'],
+      container: [],
+      'direction-marker': [],
+      meter: [],
+      distractor: [],
+    };
+    const allowedForKind = new Set(kindRoles[value.kind]);
+    const configuredRoles = [value.functionalRole, ...value.allowedRoles]
+      .filter((role): role is FunctionalRole => role !== undefined);
+    configuredRoles.forEach((role, index) => {
+      if (!allowedForKind.has(role)) {
+        context.addIssue({
+          code: 'custom',
+          path: index === 0 && value.functionalRole ? ['functionalRole'] : ['allowedRoles', index],
+          message: `role ${role} is not allowed for component kind ${value.kind}`,
+        });
+      }
+    });
+    if (value.saltBridge && value.kind !== 'ion-conductor') {
+      context.addIssue({
+        code: 'custom',
+        path: ['saltBridge'],
+        message: 'only an ion-conductor can be a salt bridge',
+      });
+    }
+  });
 
 const structuralRuleSchema = z
   .object({

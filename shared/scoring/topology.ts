@@ -4,7 +4,7 @@ import type {
 } from '../config/schemas';
 
 export type BuilderConnectionKind = 'electron-path' | 'ion-path';
-export const topologyEngineVersion = 'builder-topology.v1';
+export const topologyEngineVersion = 'builder-topology.v2';
 export type BuilderCarrier = 'electron' | 'cation' | 'anion';
 export type TopologyOutcome = 'hit' | 'partial' | 'miss';
 
@@ -13,6 +13,10 @@ export interface BuilderGraphComponent {
   componentId: string;
   label?: string;
   assignedRole?: FunctionalRole;
+  materialBinding?: {
+    materialId: string;
+    specificity: 'generic' | 'specific';
+  };
 }
 
 export interface BuilderGraphConnection {
@@ -33,12 +37,23 @@ export interface TopologyEvidence {
   message: string;
   componentInstanceIds: string[];
   connectionIds: string[];
+  misconceptionIds?: string[];
+}
+
+export interface ClosedCircuitWitness {
+  oxidationSiteId: string;
+  reductionSiteId: string;
+  electronComponentInstanceIds: string[];
+  ionComponentInstanceIds: string[];
+  electronConnectionIds: string[];
+  ionConnectionIds: string[];
 }
 
 export interface TopologyCheck {
   status: TopologyOutcome;
   ruleId: string;
   evidence: TopologyEvidence[];
+  witness?: ClosedCircuitWitness;
 }
 
 export interface TopologyNodeDecision {
@@ -59,6 +74,7 @@ export interface BuilderTopologyAssessment {
 }
 
 type BuilderConfig = PretestConfig['builder'];
+type ConfiguredComponent = BuilderConfig['components'][number];
 
 const outcomeRank: Record<TopologyOutcome, number> = {
   hit: 0,
@@ -75,15 +91,29 @@ function sorted(values: Iterable<string>) {
   return [...values].sort((left, right) => left.localeCompare(right));
 }
 
+function configuredRoleWhitelist(component: ConfiguredComponent) {
+  return new Set([
+    ...(component.functionalRole ? [component.functionalRole] : []),
+    ...component.allowedRoles,
+  ]);
+}
+
 function validateGraph(graph: BuilderGraph, config: BuilderConfig) {
-  const configuredIds = new Set(config.components.map((component) => component.id));
+  const configured = new Map(config.components.map((component) => [component.id, component]));
   const instanceIds = new Set<string>();
   for (const component of graph.components) {
     if (instanceIds.has(component.instanceId)) {
       throw new Error(`Duplicate builder instance ${component.instanceId}`);
     }
-    if (!configuredIds.has(component.componentId)) {
-      throw new Error(`Unknown builder component ${component.componentId}`);
+    const definition = configured.get(component.componentId);
+    if (!definition) throw new Error(`Unknown builder component ${component.componentId}`);
+    if (
+      component.assignedRole
+      && !configuredRoleWhitelist(definition).has(component.assignedRole)
+    ) {
+      throw new Error(
+        `Builder role ${component.assignedRole} is not allowed for component ${component.componentId}`,
+      );
     }
     instanceIds.add(component.instanceId);
   }
@@ -94,6 +124,9 @@ function validateGraph(graph: BuilderGraph, config: BuilderConfig) {
       throw new Error(`Duplicate builder connection ${connection.id}`);
     }
     connectionIds.add(connection.id);
+    if (connection.from === connection.to) {
+      throw new Error(`Builder connection ${connection.id} is a self-loop`);
+    }
     for (const endpoint of [connection.from, connection.to]) {
       if (!instanceIds.has(endpoint)) {
         throw new Error(`Builder connection ${connection.id} references missing instance ${endpoint}`);
@@ -109,65 +142,81 @@ function validateGraph(graph: BuilderGraph, config: BuilderConfig) {
       throw new Error(`Ion carrier ${connection.id} must use ion-path`);
     }
   }
+  return configured;
 }
 
-function buildRoleIndex(graph: BuilderGraph, config: BuilderConfig) {
-  const configured = new Map(config.components.map((component) => [component.id, component]));
+function buildRoleIndex(
+  graph: BuilderGraph,
+  configured: ReadonlyMap<string, ConfiguredComponent>,
+  requiredRoles: readonly FunctionalRole[],
+) {
   const roles = new Map<FunctionalRole, string[]>();
-  for (const role of config.assessment.generalModel.requiredRoles) roles.set(role, []);
+  for (const role of requiredRoles) roles.set(role, []);
   const roleByInstance = new Map<string, FunctionalRole>();
 
   for (const instance of graph.components) {
     const role = instance.assignedRole ?? configured.get(instance.componentId)?.functionalRole;
     if (!role) continue;
     roleByInstance.set(instance.instanceId, role);
-    const instances = roles.get(role)!;
+    const instances = roles.get(role) ?? [];
     instances.push(instance.instanceId);
     roles.set(role, instances);
   }
   for (const instances of roles.values()) instances.sort((left, right) => left.localeCompare(right));
-  return { configured, roles, roleByInstance };
+  return { roles, roleByInstance };
 }
 
-function roleOutcome(instances: readonly string[]): TopologyOutcome {
-  if (instances.length === 0) return 'miss';
-  if (instances.length > 1) return 'partial';
-  return 'hit';
+interface PathWitness {
+  componentInstanceIds: string[];
+  connectionIds: string[];
 }
 
-function pathExists(
-  starts: readonly string[],
-  targets: ReadonlySet<string>,
-  requiredIntermediate: ReadonlySet<string>,
+function findPath(
+  start: string,
+  target: string,
   connections: readonly BuilderGraphConnection[],
+  internalRole: FunctionalRole,
+  roleByInstance: ReadonlyMap<string, FunctionalRole>,
   directed: boolean,
-) {
-  if (starts.length === 0 || targets.size === 0 || requiredIntermediate.size === 0) return false;
-  const adjacency = new Map<string, string[]>();
-  const addEdge = (from: string, to: string) => {
-    const next = adjacency.get(from) ?? [];
-    next.push(to);
-    adjacency.set(from, next);
+): PathWitness | null {
+  const adjacency = new Map<string, Array<{ next: string; connectionId: string }>>();
+  const add = (from: string, next: string, connectionId: string) => {
+    const entries = adjacency.get(from) ?? [];
+    entries.push({ next, connectionId });
+    entries.sort((left, right) =>
+      left.connectionId.localeCompare(right.connectionId) || left.next.localeCompare(right.next));
+    adjacency.set(from, entries);
   };
-  for (const connection of connections) {
-    addEdge(connection.from, connection.to);
-    if (!directed) addEdge(connection.to, connection.from);
-  }
+  connections.forEach((connection) => {
+    add(connection.from, connection.to, connection.id);
+    if (!directed) add(connection.to, connection.from, connection.id);
+  });
 
-  const queue = starts.map((instanceId) => ({ instanceId, usedIntermediate: false }));
-  const visited = new Set(queue.map(({ instanceId, usedIntermediate }) => `${instanceId}\0${usedIntermediate}`));
+  const queue: Array<{
+    instanceId: string;
+    components: string[];
+    connections: string[];
+    usedInternal: boolean;
+  }> = [{ instanceId: start, components: [start], connections: [], usedInternal: false }];
+  const visited = new Set([`${start}\0false`]);
   while (queue.length > 0) {
     const current = queue.shift()!;
-    if (targets.has(current.instanceId) && current.usedIntermediate) return true;
-    for (const next of adjacency.get(current.instanceId) ?? []) {
-      const usedIntermediate = current.usedIntermediate || requiredIntermediate.has(next);
-      const key = `${next}\0${usedIntermediate}`;
-      if (visited.has(key)) continue;
-      visited.add(key);
-      queue.push({ instanceId: next, usedIntermediate });
+    for (const edge of adjacency.get(current.instanceId) ?? []) {
+      if (edge.next !== target && roleByInstance.get(edge.next) !== internalRole) continue;
+      const usedInternal = current.usedInternal || roleByInstance.get(edge.next) === internalRole;
+      const visitKey = `${edge.next}\0${usedInternal}`;
+      if (visited.has(visitKey)) continue;
+      const components = [...current.components, edge.next];
+      const connectionIds = [...current.connections, edge.connectionId];
+      if (edge.next === target) {
+        if (usedInternal) return { componentInstanceIds: components, connectionIds };
+        continue;
+      }
+      visited.add(visitKey);
+      queue.push({ instanceId: edge.next, components, connections: connectionIds, usedInternal });
     }
   }
-  return false;
+  return null;
 }
 
 function evidence(
@@ -175,103 +224,214 @@ function evidence(
   message: string,
   componentInstanceIds: Iterable<string>,
   connectionIds: Iterable<string> = [],
+  misconceptionIds?: Iterable<string>,
 ): TopologyEvidence {
   return {
     ruleId,
     message,
     componentInstanceIds: sorted(componentInstanceIds),
     connectionIds: sorted(connectionIds),
+    ...(misconceptionIds ? { misconceptionIds: sorted(misconceptionIds) } : {}),
   };
 }
 
-function labelContainsConcreteMaterial(label: string, concreteLabels: readonly string[]) {
-  return concreteLabels.some((candidate) => {
-    if (/^[A-Za-z]+$/.test(candidate)) {
-      const escaped = candidate.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      return new RegExp(`(^|[^A-Za-z])${escaped}($|[^A-Za-z])`, 'i').test(label);
+function missingRequiredComponents(
+  requiredComponentIds: readonly string[],
+  graph: BuilderGraph,
+) {
+  const placed = new Set(graph.components.map((component) => component.componentId));
+  return requiredComponentIds.filter((componentId) => !placed.has(componentId));
+}
+
+function findCircuitWitness(input: {
+  oxidationSites: readonly string[];
+  reductionSites: readonly string[];
+  electronConnections: readonly BuilderGraphConnection[];
+  ionConnections: readonly BuilderGraphConnection[];
+  roleByInstance: ReadonlyMap<string, FunctionalRole>;
+  configured: ReadonlyMap<string, ConfiguredComponent>;
+  graph: BuilderGraph;
+  requireElectron: boolean;
+  requireIon: boolean;
+  requireSaltBridge: boolean;
+}) {
+  for (const oxidationSiteId of input.oxidationSites) {
+    for (const reductionSiteId of input.reductionSites) {
+      const electron = input.requireElectron
+        ? findPath(
+            oxidationSiteId,
+            reductionSiteId,
+            input.electronConnections,
+            'electron-conductor',
+            input.roleByInstance,
+            false,
+          )
+        : { componentInstanceIds: [oxidationSiteId, reductionSiteId], connectionIds: [] };
+      if (!electron) continue;
+      const ion = input.requireIon
+        ? findPath(
+            oxidationSiteId,
+            reductionSiteId,
+            input.ionConnections,
+            'ion-conductor',
+            input.roleByInstance,
+            false,
+          )
+        : { componentInstanceIds: [oxidationSiteId, reductionSiteId], connectionIds: [] };
+      if (!ion) continue;
+      if (input.requireSaltBridge) {
+        const ionComponents = new Set(ion.componentInstanceIds);
+        const hasSaltBridge = input.graph.components.some((instance) =>
+          ionComponents.has(instance.instanceId)
+          && input.configured.get(instance.componentId)?.saltBridge === true);
+        if (!hasSaltBridge) continue;
+      }
+      return {
+        oxidationSiteId,
+        reductionSiteId,
+        electronComponentInstanceIds: sorted(electron.componentInstanceIds),
+        ionComponentInstanceIds: sorted(ion.componentInstanceIds),
+        electronConnectionIds: sorted(electron.connectionIds),
+        ionConnectionIds: sorted(ion.connectionIds),
+      } satisfies ClosedCircuitWitness;
     }
-    return label.includes(candidate);
-  });
+  }
+  return undefined;
+}
+
+function directionTargetCorrect(
+  connections: readonly BuilderGraphConnection[],
+  targetRole: FunctionalRole,
+  roleByInstance: ReadonlyMap<string, FunctionalRole>,
+) {
+  return connections.length > 0
+    && connections.every((connection) => roleByInstance.get(connection.to) === targetRole);
 }
 
 export function assessBuilderTopology(
   graph: BuilderGraph,
   config: BuilderConfig,
 ): BuilderTopologyAssessment {
-  validateGraph(graph, config);
-  const { configured, roles, roleByInstance } = buildRoleIndex(graph, config);
+  const configured = validateGraph(graph, config);
   const requiredRoles = config.assessment.generalModel.requiredRoles;
-  const roleStatuses = new Map(
-    requiredRoles.map((role) => [role, roleOutcome(roles.get(role)!)]),
-  );
-  const allRoleInstances = requiredRoles.flatMap((role) => roles.get(role)!);
-  const fourElementsStatus = worstOutcome(...requiredRoles.map((role) => roleStatuses.get(role)!));
+  const { roles, roleByInstance } = buildRoleIndex(graph, configured, requiredRoles);
+  const roleStatuses = new Map(requiredRoles.map((role) => [
+    role,
+    roles.get(role)?.length ? 'hit' as const : 'miss' as const,
+  ]));
+
   const fourElementsRule = config.structuralRules.find((rule) => rule.check === 'four-elements')!;
+  const fourMissing = missingRequiredComponents(fourElementsRule.requiredComponentIds, graph);
+  const fourElementsStatus = worstOutcome(
+    ...requiredRoles.map((role) => roleStatuses.get(role)!),
+    fourMissing.length > 0 ? 'miss' : 'hit',
+  );
   const fourElements: TopologyCheck = {
     status: fourElementsStatus,
     ruleId: fourElementsRule.id,
-    evidence: requiredRoles.map((role) => {
-      const instances = roles.get(role)!;
-      const message = instances.length === 0
-        ? `Missing functional role ${role}`
-        : instances.length === 1
-          ? `Functional role ${role} is represented once`
-          : `Functional role ${role} is ambiguous (${instances.length} instances)`;
-      return evidence(fourElementsRule.id, message, instances);
-    }),
+    evidence: [
+      ...requiredRoles.map((role) => {
+        const instances = roles.get(role) ?? [];
+        return evidence(
+          fourElementsRule.id,
+          instances.length === 0
+            ? `Missing functional role ${role}`
+            : `Functional role ${role} is represented in the connected model`,
+          instances,
+        );
+      }),
+      ...(fourMissing.length > 0
+        ? [evidence(
+            fourElementsRule.id,
+            `Missing required component definitions: ${fourMissing.join(', ')}`,
+            [],
+          )]
+        : []),
+    ],
   };
 
-  const oxidation = roles.get('oxidation-site')!;
-  const reduction = new Set(roles.get('reduction-site')!);
-  const electronConductors = new Set(roles.get('electron-conductor')!);
-  const ionConductors = new Set(roles.get('ion-conductor')!);
+  const oxidation = roles.get('oxidation-site') ?? [];
+  const reduction = roles.get('reduction-site') ?? [];
   const electronConnections = graph.connections.filter((edge) => edge.kind === 'electron-path');
   const ionConnections = graph.connections.filter((edge) => edge.kind === 'ion-path');
-  const electronConnected = pathExists(
-    oxidation,
-    reduction,
-    electronConductors,
-    electronConnections,
-    false,
-  );
-  const ionConnected = pathExists(oxidation, reduction, ionConductors, ionConnections, false);
   const circuitRule = config.structuralRules.find((rule) => rule.check === 'closed-circuit')!;
+  const circuitMissing = missingRequiredComponents(circuitRule.requiredComponentIds, graph);
+  const witness = circuitMissing.length === 0
+    ? findCircuitWitness({
+        oxidationSites: oxidation,
+        reductionSites: reduction,
+        electronConnections,
+        ionConnections,
+        roleByInstance,
+        configured,
+        graph,
+        requireElectron: config.assessment.generalModel.requireClosedElectronPath,
+        requireIon: config.assessment.generalModel.requireClosedIonPath,
+        requireSaltBridge: config.assessment.generalModel.saltBridgeRequired,
+      })
+    : undefined;
+  const electronConnected = !config.assessment.generalModel.requireClosedElectronPath
+    || Boolean(witness?.electronConnectionIds.length);
+  const ionConnected = !config.assessment.generalModel.requireClosedIonPath
+    || Boolean(witness?.ionConnectionIds.length);
   const closedCircuit: TopologyCheck = {
-    status: electronConnected && ionConnected ? 'hit' : 'miss',
+    status: witness ? 'hit' : 'miss',
     ruleId: circuitRule.id,
     evidence: [
       evidence(
         circuitRule.id,
-        electronConnected ? 'Electron path connects both reaction sites' : 'Electron path is open',
-        [...oxidation, ...reduction, ...electronConductors],
-        electronConnections.map((edge) => edge.id),
+        electronConnected ? 'Electron path satisfies the configured closure rule' : 'Electron path is open',
+        witness?.electronComponentInstanceIds ?? [...oxidation, ...reduction],
+        witness?.electronConnectionIds ?? [],
       ),
       evidence(
         circuitRule.id,
-        ionConnected ? 'Ion path connects both reaction sites' : 'Ion path is open',
-        [...oxidation, ...reduction, ...ionConductors],
-        ionConnections.map((edge) => edge.id),
+        ionConnected ? 'Ion path satisfies the configured closure rule' : 'Ion path is open',
+        witness?.ionComponentInstanceIds ?? [...oxidation, ...reduction],
+        witness?.ionConnectionIds ?? [],
       ),
+      ...(circuitMissing.length > 0
+        ? [evidence(
+            circuitRule.id,
+            `Missing required components: ${circuitMissing.join(', ')}`,
+            [],
+          )]
+        : []),
+      ...(config.assessment.generalModel.saltBridgeRequired && !witness
+        ? [evidence(circuitRule.id, 'Configured salt bridge is absent from the ion-path witness', [])]
+        : []),
     ],
+    ...(witness ? { witness } : {}),
   };
 
+  const directionRule = config.structuralRules.find((rule) => rule.check === 'direction-consistency')!;
+  const directionMissing = missingRequiredComponents(directionRule.requiredComponentIds, graph);
   const markedElectronConnections = electronConnections.filter((edge) => edge.carrier === 'electron');
-  const electronDirectionCorrect = pathExists(
-    oxidation,
-    reduction,
-    electronConductors,
-    markedElectronConnections,
-    true,
-  );
+  const electronStarts = roles.get(config.assessment.direction.electronFrom) ?? [];
+  const electronTargets = roles.get(config.assessment.direction.electronTo) ?? [];
+  const electronDirectionCorrect = electronStarts.some((start) => electronTargets.some((target) =>
+    findPath(
+      start,
+      target,
+      markedElectronConnections,
+      'electron-conductor',
+      roleByInstance,
+      true,
+    ) !== null));
   const cationConnections = ionConnections.filter((edge) => edge.carrier === 'cation');
   const anionConnections = ionConnections.filter((edge) => edge.carrier === 'anion');
-  const cationCorrect = cationConnections.length > 0 && cationConnections.every(
-    (edge) => roleByInstance.get(edge.to) === config.assessment.direction.cationToward,
+  const cationCorrect = directionTargetCorrect(
+    cationConnections,
+    config.assessment.direction.cationToward,
+    roleByInstance,
   );
-  const anionCorrect = anionConnections.length > 0 && anionConnections.every(
-    (edge) => roleByInstance.get(edge.to) === config.assessment.direction.anionToward,
+  const anionCorrect = directionTargetCorrect(
+    anionConnections,
+    config.assessment.direction.anionToward,
+    roleByInstance,
   );
-  const hasAllDirectionMarkers = markedElectronConnections.length > 0
+  const hasAllDirectionMarkers = directionMissing.length === 0
+    && markedElectronConnections.length > 0
     && cationConnections.length > 0
     && anionConnections.length > 0;
   const directionStatus: TopologyOutcome = !hasAllDirectionMarkers
@@ -279,7 +439,6 @@ export function assessBuilderTopology(
     : electronDirectionCorrect && cationCorrect && anionCorrect
       ? 'hit'
       : 'miss';
-  const directionRule = config.structuralRules.find((rule) => rule.check === 'direction-consistency')!;
   const directionConsistency: TopologyCheck = {
     status: directionStatus,
     ruleId: directionRule.id,
@@ -287,40 +446,35 @@ export function assessBuilderTopology(
       evidence(
         directionRule.id,
         electronDirectionCorrect
-          ? 'Electron arrows run from oxidation site to reduction site'
-          : 'Electron arrows do not run from oxidation site to reduction site',
-        [...oxidation, ...reduction, ...electronConductors],
+          ? `Electron arrows run from ${config.assessment.direction.electronFrom} to ${config.assessment.direction.electronTo}`
+          : 'Electron arrows are missing or contradict the configured direction',
+        [...electronStarts, ...electronTargets],
         markedElectronConnections.map((edge) => edge.id),
       ),
       evidence(
         directionRule.id,
-        cationCorrect ? 'Cation arrow targets the reduction site' : 'Cation arrow is missing or reversed',
+        cationCorrect ? 'Cation arrows target the configured role' : 'Cation arrows are missing or contradictory',
         cationConnections.flatMap((edge) => [edge.from, edge.to]),
         cationConnections.map((edge) => edge.id),
       ),
       evidence(
         directionRule.id,
-        anionCorrect ? 'Anion arrow targets the oxidation site' : 'Anion arrow is missing or reversed',
+        anionCorrect ? 'Anion arrows target the configured role' : 'Anion arrows are missing or contradictory',
         anionConnections.flatMap((edge) => [edge.from, edge.to]),
         anionConnections.map((edge) => edge.id),
       ),
     ],
   };
 
-  const concreteInstances = graph.components.filter((instance) => {
-    const component = configured.get(instance.componentId)!;
-    return !component.abstract || (
-      instance.label !== undefined
-      && labelContainsConcreteMaterial(
-        instance.label,
-        config.assessment.abstraction.concreteLabels,
-      )
-    );
-  });
+  const concreteInstances = graph.components.filter((instance) =>
+    instance.materialBinding?.specificity === 'specific');
   const abstractionRule = config.structuralRules.find((rule) => rule.check === 'abstraction')!;
-  const abstractionStatus: TopologyOutcome = concreteInstances.length === 0
-    ? 'hit'
-    : config.assessment.abstraction.concreteBindingOutcome;
+  const abstractionMissing = missingRequiredComponents(abstractionRule.requiredComponentIds, graph);
+  const abstractionStatus: TopologyOutcome = abstractionMissing.length > 0
+    ? 'miss'
+    : concreteInstances.length === 0
+      ? 'hit'
+      : config.assessment.abstraction.concreteBindingOutcome;
   const abstraction: TopologyCheck = {
     status: abstractionStatus,
     ruleId: abstractionRule.id,
@@ -328,37 +482,71 @@ export function assessBuilderTopology(
       evidence(
         abstractionRule.id,
         concreteInstances.length === 0
-          ? 'Model uses functional, material-independent components'
+          ? 'Model uses generic structured material bindings'
           : config.assessment.abstraction.feedback,
         concreteInstances.map((instance) => instance.instanceId),
       ),
     ],
   };
 
-  const decisions: Array<[string, TopologyOutcome, TopologyEvidence[]]> = [
-    [
-      'D1',
-      roleStatuses.get('oxidation-site')!,
-      fourElements.evidence.filter((item) => item.message.includes('oxidation-site')),
-    ],
-    [
-      'D2',
-      worstOutcome(roleStatuses.get('electron-conductor')!, electronConnected ? 'hit' : 'miss'),
-      [fourElements.evidence.find((item) => item.message.includes('electron-conductor'))!, closedCircuit.evidence[0]],
-    ],
-    [
-      'D3',
-      worstOutcome(roleStatuses.get('ion-conductor')!, ionConnected ? 'hit' : 'miss'),
-      [fourElements.evidence.find((item) => item.message.includes('ion-conductor'))!, closedCircuit.evidence[1]],
-    ],
-    [
-      'D4',
-      roleStatuses.get('reduction-site')!,
-      fourElements.evidence.filter((item) => item.message.includes('reduction-site')),
-    ],
-    ['D5', abstraction.status, abstraction.evidence],
-    ['P4', directionConsistency.status, directionConsistency.evidence],
-  ];
+  const fourEvidenceFor = (role: FunctionalRole) =>
+    fourElements.evidence.filter((item) => item.message.includes(role));
+  const decisionMap = new Map<string, TopologyNodeDecision>();
+  const addDecision = (
+    nodeId: string,
+    status: TopologyOutcome,
+    decisionEvidence: TopologyEvidence[],
+  ) => {
+    const current = decisionMap.get(nodeId);
+    decisionMap.set(nodeId, {
+      nodeId,
+      status: current ? worstOutcome(current.status, status) : status,
+      evidence: [...(current?.evidence ?? []), ...decisionEvidence],
+    });
+  };
+  const roleNode: Record<FunctionalRole, string> = {
+    'oxidation-site': 'D1',
+    'electron-conductor': 'D2',
+    'ion-conductor': 'D3',
+    'reduction-site': 'D4',
+  };
+  requiredRoles.forEach((role) => {
+    const nodeId = roleNode[role];
+    if (fourElementsRule.nodeIds.includes(nodeId)) {
+      addDecision(nodeId, roleStatuses.get(role)!, fourEvidenceFor(role));
+    }
+  });
+  if (circuitRule.nodeIds.includes('D2')) {
+    addDecision('D2', electronConnected && witness ? 'hit' : 'miss', [closedCircuit.evidence[0]]);
+  }
+  if (circuitRule.nodeIds.includes('D3')) {
+    addDecision('D3', ionConnected && witness ? 'hit' : 'miss', [closedCircuit.evidence[1]]);
+  }
+  directionRule.nodeIds.forEach((nodeId) =>
+    addDecision(nodeId, directionConsistency.status, directionConsistency.evidence));
+  abstractionRule.nodeIds.forEach((nodeId) =>
+    addDecision(nodeId, abstraction.status, abstraction.evidence));
+
+  graph.components.forEach((instance) => {
+    const distractor = configured.get(instance.componentId)?.distractor;
+    if (!distractor) return;
+    const byNode = new Map<string, string[]>();
+    distractor.misconceptionIds.forEach((misconceptionId) => {
+      const nodeId = misconceptionId.split('-')[0];
+      const ids = byNode.get(nodeId) ?? [];
+      ids.push(misconceptionId);
+      byNode.set(nodeId, ids);
+    });
+    byNode.forEach((misconceptionIds, nodeId) => {
+      addDecision(nodeId, 'miss', [evidence(
+        'configured-distractor',
+        distractor.reason,
+        [instance.instanceId],
+        [],
+        misconceptionIds,
+      )]);
+    });
+  });
 
   return {
     overall: worstOutcome(
@@ -366,12 +554,10 @@ export function assessBuilderTopology(
       closedCircuit.status,
       directionConsistency.status,
       abstraction.status,
+      ...[...decisionMap.values()].map((decision) => decision.status),
     ),
     checks: { fourElements, closedCircuit, directionConsistency, abstraction },
-    nodeDecisions: decisions.map(([nodeId, status, decisionEvidence]) => ({
-      nodeId,
-      status,
-      evidence: decisionEvidence,
-    })),
+    nodeDecisions: [...decisionMap.values()].sort((left, right) =>
+      left.nodeId.localeCompare(right.nodeId)),
   };
 }

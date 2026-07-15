@@ -35,6 +35,13 @@ const answerPayloadSchema = z.discriminatedUnion('format', [
                 y: z.number().finite(),
                 label: z.string().optional(),
                 assignedRole: functionalRoleSchema.optional(),
+                materialBinding: z
+                  .object({
+                    materialId: identifierSchema,
+                    specificity: z.enum(['generic', 'specific']),
+                  })
+                  .strict()
+                  .optional(),
               })
               .strict(),
           ),
@@ -44,7 +51,7 @@ const answerPayloadSchema = z.discriminatedUnion('format', [
                 id: identifierSchema.optional(),
                 from: identifierSchema,
                 to: identifierSchema,
-                kind: z.enum(['wire', 'electron-path', 'ion-path']),
+                kind: z.enum(['electron-path', 'ion-path']),
                 carrier: z.enum(['electron', 'cation', 'anion']).optional(),
               })
               .strict(),
