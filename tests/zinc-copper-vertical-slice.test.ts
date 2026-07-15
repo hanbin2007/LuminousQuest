@@ -10,7 +10,7 @@ import {
   structuredAssessmentResponseJsonSchema,
   structuredAssessmentResponseSchema,
 } from '../shared/workflows/assessment';
-import { LocalSessionStore, createSession } from '../shared/session';
+import { LocalSessionStore, createSession, sessionConfigVersions } from '../shared/session';
 import { createTemporaryDirectory } from './helpers/content-fixture';
 
 class MemoryStorage implements Pick<Storage, 'getItem' | 'setItem' | 'removeItem'> {
@@ -40,28 +40,78 @@ describe('zinc-copper M1a vertical slice', () => {
       start: answer.indexOf(quote),
       end: answer.indexOf(quote) + quote.length,
     });
+    config.cases.find((entry) => entry.id === 'zinc-copper')!.evidencePaths
+      .find((entry) => entry.nodeId === 'P2')!.factRequirements = [
+        { id: 'reducing-agent', acceptedValues: ['Zn'] },
+        { id: 'oxidizing-agent', acceptedValues: ['Cu^2+'] },
+      ];
+    config.cases.find((entry) => entry.id === 'zinc-copper')!.evidencePaths
+      .find((entry) => entry.nodeId === 'E1')!.factRequirements = [
+        { id: 'energy-from', acceptedValues: ['chemical'] },
+        { id: 'energy-to', acceptedValues: ['electric'] },
+      ];
     const extracted = {
+      anchors: [{
+        anchorId: 'case-polarity',
+        facts: [
+          { id: 'negative', value: 'Zn' },
+          { id: 'positive', value: 'Cu' },
+        ],
+        evidence: [quoted('锌是负极，铜是正极')],
+      }],
       assessments: [
         {
           nodeId: 'P2',
-          logicalOutcome: 'hit',
-          objectiveOutcome: 'hit',
+          errorIds: [],
+          facts: {
+            response: 'substantive',
+            terminology: 'model',
+            syllabus: 'within',
+            contradiction: false,
+            typo: 'none',
+            slots: [
+              { id: 'reducing-agent', value: 'Zn' },
+              { id: 'oxidizing-agent', value: 'Cu^2+' },
+            ],
+          },
           evidence: [quoted('Zn 被氧化，Cu^2+ 被还原。')],
-          assistance: 'none',
+          assistance: { kind: 'none', rounds: 0 },
         },
         {
           nodeId: 'P4',
-          logicalOutcome: 'hit',
-          objectiveOutcome: 'hit',
+          errorIds: [],
+          facts: {
+            response: 'substantive',
+            terminology: 'model',
+            syllabus: 'within',
+            contradiction: false,
+            typo: 'none',
+            slots: [
+              { id: 'electron-from', value: 'Zn' },
+              { id: 'electron-to', value: 'Cu' },
+              { id: 'anion-toward', value: 'Zn' },
+              { id: 'cation-toward', value: 'Cu' },
+            ],
+          },
           evidence: [quoted('电子由锌极经导线流向铜极；盐桥阴离子移向锌侧，阳离子移向铜侧。')],
-          assistance: 'none',
+          assistance: { kind: 'none', rounds: 0 },
         },
         {
           nodeId: 'E1',
-          logicalOutcome: 'hit',
-          objectiveOutcome: 'hit',
+          errorIds: [],
+          facts: {
+            response: 'substantive',
+            terminology: 'model',
+            syllabus: 'within',
+            contradiction: false,
+            typo: 'none',
+            slots: [
+              { id: 'energy-from', value: 'chemical' },
+              { id: 'energy-to', value: 'electric' },
+            ],
+          },
           evidence: [quoted('化学能直接转化为电能。')],
-          assistance: 'none',
+          assistance: { kind: 'none', rounds: 0 },
         },
       ],
     };
@@ -73,10 +123,10 @@ describe('zinc-copper M1a vertical slice', () => {
       prompt: {
         id: 'zinc-copper-assessment',
         version: 'prompt.v1',
-        text: 'Extract rubric outcomes and exact evidence spans.',
+        text: 'Extract closed-set facts and exact evidence spans without scoring.',
       },
-      schemaVersion: 'structured-assessment.v1',
-      configVersion: config.rubrics.version,
+      schemaVersion: 'structured-assessment.v2',
+      configVersion: config.configVersion,
       input: { answer, mockStructuredResponse: extracted },
       images: [],
       schema: structuredAssessmentResponseJsonSchema,
@@ -94,12 +144,7 @@ describe('zinc-copper M1a vertical slice', () => {
       id: 'session-zinc-slice',
       anonymousStudentId: 'anon-A1B2C3D4',
       now: '2026-07-15T12:00:00.000Z',
-      configVersions: {
-        knowledgeModel: config.knowledgeModel.version,
-        rubrics: config.rubrics.version,
-        pretest: config.pretest.version,
-        scaffoldPolicy: config.scaffoldPolicy.version,
-      },
+      configVersions: sessionConfigVersions(config),
     });
     const assessed = recordStructuredTextAssessment({
       session: initial,
@@ -124,7 +169,7 @@ describe('zinc-copper M1a vertical slice', () => {
       assessedAt: '2026-07-15T12:01:01.000Z',
     });
 
-    expect(assessed.session.events).toHaveLength(4);
+    expect(assessed.session.events).toHaveLength(5);
     expect(assessed.profile.nodes.find((node) => node.nodeId === 'P4')).toMatchObject({
       outcome: 'hit',
       earned: 2,
@@ -157,12 +202,20 @@ describe('zinc-copper M1a vertical slice', () => {
   it('rejects duplicate or unconfigured node assessments before persisting them', async () => {
     const assessment = {
       nodeId: 'P2',
-      logicalOutcome: 'hit' as const,
-      objectiveOutcome: 'hit' as const,
+      errorIds: [],
+      facts: {
+        response: 'substantive' as const,
+        terminology: 'model' as const,
+        syllabus: 'within' as const,
+        contradiction: false,
+        typo: 'none' as const,
+        slots: [{ id: 'reducing-agent', value: 'Zn' }],
+      },
       evidence: [{ quote: 'Zn', start: 0, end: 2 }],
-      assistance: 'none' as const,
+      assistance: { kind: 'none' as const, rounds: 0 },
     };
     expect(structuredAssessmentResponseSchema.safeParse({
+      anchors: [],
       assessments: [assessment, assessment],
     }).success).toBe(false);
 
@@ -171,12 +224,7 @@ describe('zinc-copper M1a vertical slice', () => {
       id: 'session-invalid-extraction',
       anonymousStudentId: 'anon-A1B2C3D4',
       now: '2026-07-15T12:00:00.000Z',
-      configVersions: {
-        knowledgeModel: config.knowledgeModel.version,
-        rubrics: config.rubrics.version,
-        pretest: config.pretest.version,
-        scaffoldPolicy: config.scaffoldPolicy.version,
-      },
+      configVersions: sessionConfigVersions(config),
     });
     expect(() => recordStructuredTextAssessment({
       session,
@@ -191,6 +239,7 @@ describe('zinc-copper M1a vertical slice', () => {
         value: 'Zn',
       },
       extraction: {
+        anchors: [],
         assessments: [{ ...assessment, nodeId: 'UNKNOWN' }],
       },
       provenance: {

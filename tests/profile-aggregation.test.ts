@@ -6,6 +6,7 @@ import {
   createSession,
   exportSession,
   importSession,
+  sessionConfigVersions,
   sessionSchema,
   type SessionEventInput,
 } from '../shared/session';
@@ -28,12 +29,7 @@ async function fixture() {
     id: 'session-profile',
     anonymousStudentId: 'anon-A1B2C3D4',
     now,
-    configVersions: {
-      knowledgeModel: config.knowledgeModel.version,
-      rubrics: config.rubrics.version,
-      pretest: config.pretest.version,
-      scaffoldPolicy: config.scaffoldPolicy.version,
-    },
+    configVersions: sessionConfigVersions(config),
   });
   return { config, session };
 }
@@ -145,8 +141,12 @@ describe('traceable rubric scoring and learner profile aggregation', () => {
       assistance,
     });
 
-    expect(decision.ruleDecision.status).toBe('hit');
-    expect(decision.score).toMatchObject({ earned: 2, annotations: ['hit-with-help'] });
+    expect(decision.ruleDecision.status).toBe('hit-with-help');
+    expect(decision.score).toMatchObject({
+      outcome: 'hit-with-help',
+      earned: 2,
+      annotations: ['hit-with-help'],
+    });
   });
 
   it('fails closed when a node rubric or requested outcome rule is missing', async () => {

@@ -2,11 +2,11 @@ import { z } from 'zod';
 
 import type { LoadedConfig } from '../config/schemas';
 import { buildLearnerProfile } from '../scoring/profile';
-import { resolveRubricDecision } from '../scoring/rubric';
+import { evaluateExtractedFacts, factsMatchRequirements } from '../scoring/policy';
+import { resolveRubricDecision, rubricPolicyEngineVersion } from '../scoring/rubric';
 import { appendSessionEvent } from '../session/session';
 import type { StudentSession } from '../session/schema';
 
-const outcomeSchema = z.enum(['hit', 'partial', 'miss']);
 const evidenceSchema = z
   .object({
     quote: z.string().min(1),
@@ -19,25 +19,61 @@ const evidenceSchema = z
     message: 'evidence end must follow start',
   });
 
+const factSlotSchema = z
+  .object({
+    id: z.string().trim().min(1),
+    value: z.string().trim().min(1),
+  })
+  .strict();
+
+const extractedFactsSchema = z
+  .object({
+    response: z.enum(['substantive', 'blank', 'non-answer']),
+    terminology: z.enum(['model', 'colloquial']),
+    syllabus: z.enum(['within', 'beyond']),
+    contradiction: z.boolean(),
+    typo: z.enum(['none', 'unambiguous', 'ambiguous']),
+    slots: z.array(factSlotSchema),
+  })
+  .strict();
+
+const assistanceSchema = z
+  .object({
+    kind: z.enum(['none', 'hint', 'socratic']),
+    rounds: z.number().int().nonnegative(),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (value.kind === 'none' && value.rounds !== 0) {
+      context.addIssue({ code: 'custom', path: ['rounds'], message: 'unassisted extraction requires zero rounds' });
+    }
+    if (value.kind !== 'none' && value.rounds === 0) {
+      context.addIssue({ code: 'custom', path: ['rounds'], message: 'assisted extraction requires at least one round' });
+    }
+  });
+
 export const structuredAssessmentResponseSchema = z
   .object({
+    anchors: z
+      .array(
+        z
+          .object({
+            anchorId: z.string().trim().min(1),
+            facts: z.array(factSlotSchema).min(1),
+            evidence: z.array(evidenceSchema).min(1),
+          })
+          .strict(),
+      )
+      .default([]),
     assessments: z
       .array(
         z
           .object({
             nodeId: z.string().trim().min(1),
-            logicalOutcome: outcomeSchema,
-            objectiveOutcome: outcomeSchema,
-            evidence: z.array(evidenceSchema).min(1),
-            assistance: z.enum(['none', 'hint', 'socratic']),
-            following: z
-              .object({
-                anchorId: z.string().trim().min(1),
-                anchorOutcome: outcomeSchema,
-                logicalChainConsistent: z.boolean(),
-              })
-              .strict()
-              .optional(),
+            errorIds: z.array(z.string().trim().min(1)),
+            facts: extractedFactsSchema,
+            evidence: z.array(evidenceSchema),
+            assistance: assistanceSchema,
           })
           .strict(),
       )
@@ -45,6 +81,17 @@ export const structuredAssessmentResponseSchema = z
   })
   .strict()
   .superRefine((value, context) => {
+    const anchorIds = new Set<string>();
+    value.anchors.forEach((anchor, index) => {
+      if (anchorIds.has(anchor.anchorId)) {
+        context.addIssue({
+          code: 'custom',
+          path: ['anchors', index, 'anchorId'],
+          message: `duplicate anchor assessment ${anchor.anchorId}`,
+        });
+      }
+      anchorIds.add(anchor.anchorId);
+    });
     const seen = new Set<string>();
     value.assessments.forEach((assessment, index) => {
       if (seen.has(assessment.nodeId)) {
@@ -61,25 +108,29 @@ export const structuredAssessmentResponseSchema = z
 export const structuredAssessmentResponseJsonSchema = {
   type: 'object',
   additionalProperties: false,
-  required: ['assessments'],
+  required: ['anchors', 'assessments'],
   properties: {
-    assessments: {
+    anchors: {
       type: 'array',
-      minItems: 1,
       items: {
         type: 'object',
         additionalProperties: false,
-        required: [
-          'nodeId',
-          'logicalOutcome',
-          'objectiveOutcome',
-          'evidence',
-          'assistance',
-        ],
+        required: ['anchorId', 'facts', 'evidence'],
         properties: {
-          nodeId: { type: 'string', minLength: 1 },
-          logicalOutcome: { enum: ['hit', 'partial', 'miss'] },
-          objectiveOutcome: { enum: ['hit', 'partial', 'miss'] },
+          anchorId: { type: 'string', minLength: 1 },
+          facts: {
+            type: 'array',
+            minItems: 1,
+            items: {
+              type: 'object',
+              additionalProperties: false,
+              required: ['id', 'value'],
+              properties: {
+                id: { type: 'string', minLength: 1 },
+                value: { type: 'string', minLength: 1 },
+              },
+            },
+          },
           evidence: {
             type: 'array',
             minItems: 1,
@@ -94,15 +145,70 @@ export const structuredAssessmentResponseJsonSchema = {
               },
             },
           },
-          assistance: { enum: ['none', 'hint', 'socratic'] },
-          following: {
+        },
+      },
+    },
+    assessments: {
+      type: 'array',
+      minItems: 1,
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: [
+          'nodeId',
+          'errorIds',
+          'facts',
+          'evidence',
+          'assistance',
+        ],
+        properties: {
+          nodeId: { type: 'string', minLength: 1 },
+          errorIds: { type: 'array', items: { type: 'string', minLength: 1 } },
+          facts: {
             type: 'object',
             additionalProperties: false,
-            required: ['anchorId', 'anchorOutcome', 'logicalChainConsistent'],
+            required: ['response', 'terminology', 'syllabus', 'contradiction', 'typo', 'slots'],
             properties: {
-              anchorId: { type: 'string', minLength: 1 },
-              anchorOutcome: { enum: ['hit', 'partial', 'miss'] },
-              logicalChainConsistent: { type: 'boolean' },
+              response: { enum: ['substantive', 'blank', 'non-answer'] },
+              terminology: { enum: ['model', 'colloquial'] },
+              syllabus: { enum: ['within', 'beyond'] },
+              contradiction: { type: 'boolean' },
+              typo: { enum: ['none', 'unambiguous', 'ambiguous'] },
+              slots: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  additionalProperties: false,
+                  required: ['id', 'value'],
+                  properties: {
+                    id: { type: 'string', minLength: 1 },
+                    value: { type: 'string', minLength: 1 },
+                  },
+                },
+              },
+            },
+          },
+          evidence: {
+            type: 'array',
+            minItems: 1,
+            items: {
+              type: 'object',
+              additionalProperties: false,
+              required: ['quote', 'start', 'end'],
+              properties: {
+                quote: { type: 'string', minLength: 1 },
+                start: { type: 'integer', minimum: 0 },
+                end: { type: 'integer', minimum: 1 },
+              },
+            },
+          },
+          assistance: {
+            type: 'object',
+            additionalProperties: false,
+            required: ['kind', 'rounds'],
+            properties: {
+              kind: { enum: ['none', 'hint', 'socratic'] },
+              rounds: { type: 'integer', minimum: 0 },
             },
           },
         },
@@ -134,8 +240,37 @@ export interface RecordStructuredTextAssessmentInput {
   assessedAt: string;
 }
 
+function parseAnchorValue(value: string) {
+  return new Map(value.split(';').map((entry) => {
+    const separator = entry.indexOf('=');
+    if (separator < 1) throw new Error(`Invalid configured anchor value ${value}`);
+    return [entry.slice(0, separator).trim(), entry.slice(separator + 1).trim()];
+  }));
+}
+
+function serializeAnchorFacts(facts: readonly { id: string; value: string }[]) {
+  return facts.map((fact) => `${fact.id}=${fact.value}`).join(';');
+}
+
+function directionRequirements(
+  facts: { slots: Array<{ id: string; value: string }> },
+  polarity: ReadonlyMap<string, string>,
+) {
+  const values: Record<string, string | undefined> = {
+    'electron-from': polarity.get('negative'),
+    'electron-to': polarity.get('positive'),
+    'cation-toward': polarity.get('positive'),
+    'anion-toward': polarity.get('negative'),
+  };
+  const present = new Set(facts.slots.map((slot) => slot.id));
+  return Object.entries(values).flatMap(([id, value]) =>
+    value !== undefined && present.has(id) ? [{ id, acceptedValues: [value] }] : []);
+}
+
 export function recordStructuredTextAssessment(input: RecordStructuredTextAssessmentInput) {
   const extraction = structuredAssessmentResponseSchema.parse(input.extraction);
+  const trainingCase = input.config.cases.find((entry) => entry.id === input.answer.caseId);
+  if (!trainingCase) throw new Error(`No case configured for ${input.answer.caseId}`);
   let session = appendSessionEvent(input.session, {
     id: input.answer.id,
     occurredAt: input.answer.occurredAt,
@@ -148,18 +283,115 @@ export function recordStructuredTextAssessment(input: RecordStructuredTextAssess
     answer: { format: 'text', value: input.answer.value },
   });
 
+  const anchorEvents = new Map<string, {
+    outcome: 'hit' | 'miss';
+    correct: Map<string, string>;
+    extracted: Map<string, string>;
+  }>();
+  extraction.anchors.forEach((anchor, index) => {
+    const configured = trainingCase.followingAnchors.find((entry) => entry.id === anchor.anchorId);
+    if (!configured) throw new Error(`No following anchor configured for ${anchor.anchorId}`);
+    const correct = parseAnchorValue(configured.correctValue);
+    const extracted = new Map(anchor.facts.map((fact) => [fact.id, fact.value]));
+    const extractedValue = serializeAnchorFacts(anchor.facts);
+    const outcome = [...correct].every(([id, value]) => extracted.get(id) === value) ? 'hit' : 'miss';
+    session = appendSessionEvent(session, {
+      id: `${input.assessmentEventIdPrefix}-anchor-${index + 1}`,
+      occurredAt: input.assessedAt,
+      kind: 'polarity.assessed',
+      pipelineStage: 'rule',
+      caseId: input.answer.caseId,
+      stageId: input.answer.stageId,
+      attemptId: input.answer.attemptId,
+      sourceAnswerEventId: input.answer.id,
+      anchorId: anchor.anchorId,
+      facts: anchor.facts,
+      extractedValue,
+      correctValue: configured.correctValue,
+      outcome,
+      evidence: anchor.evidence,
+      engine: { id: 'case-anchor-policy', version: rubricPolicyEngineVersion },
+    });
+    anchorEvents.set(anchor.anchorId, { outcome, correct, extracted });
+  });
+
+  const misconceptionNode = new Map(
+    input.config.knowledgeModel.nodes.flatMap((node) =>
+      node.misconceptions.map((misconception) => [misconception.id, node.id] as const)),
+  );
+
   extraction.assessments.forEach((assessment, index) => {
     const rubric = input.config.rubrics.rubrics.find(
       (entry) => entry.nodeId === assessment.nodeId,
     );
     if (!rubric) throw new Error(`No rubric configured for node ${assessment.nodeId}`);
+    assessment.errorIds.forEach((errorId) => {
+      if (misconceptionNode.get(errorId) !== assessment.nodeId) {
+        throw new Error(`Error ${errorId} is not configured for node ${assessment.nodeId}`);
+      }
+    });
+    const evidencePath = trainingCase.evidencePaths.find((entry) =>
+      entry.nodeId === assessment.nodeId && entry.source === 'answer');
+    const anchor = rubric.followingAnchorId
+      ? anchorEvents.get(rubric.followingAnchorId)
+      : undefined;
+    const requirements = evidencePath?.factRequirements.length
+      ? evidencePath.factRequirements
+      : assessment.nodeId === 'P4' && anchor
+        ? directionRequirements(assessment.facts, anchor.correct)
+        : [];
+    if (requirements.length === 0) {
+      throw new Error(`No deterministic fact requirements configured for node ${assessment.nodeId}`);
+    }
+    const evaluation = evaluateExtractedFacts({
+      facts: assessment.facts,
+      requirements,
+      policy: input.config.rubrics.policy,
+    });
+    if (
+      evaluation.status !== 'hit'
+      && evaluation.status !== 'partial'
+      && evaluation.status !== 'miss'
+    ) {
+      throw new Error(`Assessment status ${evaluation.status} requires a non-scoring workflow event`);
+    }
+    const logicalChainConsistent = Boolean(
+      anchor
+      && anchor.outcome === 'miss'
+      && factsMatchRequirements(
+        assessment.facts,
+        assessment.nodeId === 'P4'
+          ? directionRequirements(assessment.facts, anchor.extracted)
+          : requirements.map((requirement) => ({
+              ...requirement,
+              acceptedValues: requirement.acceptedValues.map((value) => {
+                for (const [slot, correctValue] of anchor.correct) {
+                  if (value === correctValue) return anchor.extracted.get(slot) ?? value;
+                }
+                return value;
+              }),
+            })),
+      )
+    );
     const decision = resolveRubricDecision({
       rubrics: input.config.rubrics,
+      scaffoldPolicy: input.config.scaffoldPolicy,
       nodeId: assessment.nodeId,
-      logicalOutcome: assessment.logicalOutcome,
-      objectiveOutcome: assessment.objectiveOutcome,
-      following: assessment.following,
+      logicalOutcome: logicalChainConsistent ? 'hit' : evaluation.status,
+      objectiveOutcome: evaluation.status,
+      following: anchor && rubric.followingAnchorId
+        ? {
+            anchorId: rubric.followingAnchorId,
+            anchorOutcome: anchor.outcome,
+            logicalChainConsistent,
+          }
+        : undefined,
       assistance: assessment.assistance,
+      engine: {
+        id: 'fact-policy',
+        version: rubricPolicyEngineVersion,
+        reason: `Matched ${evaluation.matchedRequirementIds.length}/${requirements.length} configured facts`,
+      },
     });
 
     session = appendSessionEvent(session, {
@@ -191,8 +423,7 @@ export function recordStructuredTextAssessment(input: RecordStructuredTextAssess
     session,
     profile: buildLearnerProfile(
       session,
-      input.config.knowledgeModel,
-      input.config.rubrics,
+      input.config,
     ),
   };
 }

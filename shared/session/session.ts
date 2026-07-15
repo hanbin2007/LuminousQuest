@@ -4,12 +4,26 @@ import {
   type StudentSession,
   sessionSchema,
 } from './schema';
+import type { LoadedConfig } from '../config/schemas';
 
 export interface CreateSessionInput {
   id?: string;
   anonymousStudentId?: string;
   now?: string;
   configVersions: StudentSession['configVersions'];
+}
+
+export function sessionConfigVersions(config: LoadedConfig): StudentSession['configVersions'] {
+  return {
+    configDigest: config.configVersion,
+    knowledgeModel: config.knowledgeModel.version,
+    rubrics: config.rubrics.version,
+    pretest: config.pretest.version,
+    scaffoldPolicy: config.scaffoldPolicy.version,
+    cases: config.runtimeVersions.cases,
+    grammar: config.runtimeVersions.grammar,
+    engines: config.runtimeVersions.engines,
+  };
 }
 
 export function createAnonymousStudentId() {

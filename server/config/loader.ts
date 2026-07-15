@@ -13,7 +13,13 @@ import {
   rubricsSchema,
   scaffoldPolicySchema,
 } from '../../shared/config/schemas';
-import { analyzeEquation } from '../../shared/chemistry/equation';
+import {
+  analyzeEquation,
+  equationGrammarVersion,
+  equationScoringEngineVersion,
+} from '../../shared/chemistry/equation';
+import { rubricPolicyEngineVersion } from '../../shared/scoring/rubric';
+import { topologyEngineVersion } from '../../shared/scoring/topology';
 
 export class ConfigValidationError extends Error {
   readonly file: string;
@@ -408,7 +414,23 @@ export async function loadAllConfig(contentRoot: string): Promise<LoadedConfig> 
 
     assertUniqueCaseIds(loadedCases);
     const cases = loadedCases.map((entry) => entry.value);
-    const config = { configVersion, knowledgeModel, rubrics, pretest, cases, scaffoldPolicy };
+    const config = {
+      configVersion,
+      runtimeVersions: {
+        cases: Object.fromEntries(cases.map((trainingCase) => [trainingCase.id, trainingCase.version])),
+        grammar: equationGrammarVersion,
+        engines: {
+          rubric: rubricPolicyEngineVersion,
+          topology: topologyEngineVersion,
+          equation: equationScoringEngineVersion,
+        },
+      },
+      knowledgeModel,
+      rubrics,
+      pretest,
+      cases,
+      scaffoldPolicy,
+    };
     await validateReferences(config, contentRoot, loadedCases.map((entry) => entry.file));
     if (await deriveConfigVersion(contentRoot) === configVersion) return config;
   }

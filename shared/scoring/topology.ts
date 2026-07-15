@@ -4,6 +4,7 @@ import type {
 } from '../config/schemas';
 
 export type BuilderConnectionKind = 'electron-path' | 'ion-path';
+export const topologyEngineVersion = 'builder-topology.v1';
 export type BuilderCarrier = 'electron' | 'cation' | 'anion';
 export type TopologyOutcome = 'hit' | 'partial' | 'miss';
 

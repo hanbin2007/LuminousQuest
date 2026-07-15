@@ -1,5 +1,6 @@
 import type {
   KnowledgeModelConfig,
+  LoadedConfig,
   RubricsConfig,
 } from '../config/schemas';
 import {
@@ -15,7 +16,7 @@ export interface LearnerNodeProfile {
   dimensionId: string;
   weight: 1 | 2;
   status: LearnerNodeStatus;
-  outcome?: 'hit' | 'partial' | 'miss';
+  outcome?: 'hit' | 'hit-with-help' | 'partial' | 'miss';
   earned?: number;
   possible?: number;
   annotations?: Array<'following' | 'hit-with-help'>;
@@ -52,10 +53,35 @@ function needsReview(event: AssessmentCompletedEvent) {
 
 export function buildLearnerProfile(
   session: unknown,
-  knowledgeModel: KnowledgeModelConfig,
-  rubrics: RubricsConfig,
+  configOrKnowledgeModel: LoadedConfig | KnowledgeModelConfig,
+  legacyRubrics?: RubricsConfig,
 ) {
+  const loadedConfig = 'knowledgeModel' in configOrKnowledgeModel ? configOrKnowledgeModel : undefined;
+  const knowledgeModel = loadedConfig?.knowledgeModel ?? configOrKnowledgeModel as KnowledgeModelConfig;
+  const rubrics = loadedConfig?.rubrics ?? legacyRubrics;
+  if (!rubrics) throw new Error('Rubric configuration is required');
   const parsed = sessionSchema.parse(session);
+  if (loadedConfig) {
+    if (parsed.configVersions.configDigest !== loadedConfig.configVersion) {
+      throw new Error('Session config digest does not match the profile configuration');
+    }
+    const expectedCases = JSON.stringify(loadedConfig.runtimeVersions.cases);
+    if (JSON.stringify(parsed.configVersions.cases) !== expectedCases) {
+      throw new Error('Session case versions do not match the profile configuration');
+    }
+    if (parsed.configVersions.grammar !== loadedConfig.runtimeVersions.grammar) {
+      throw new Error('Session equation grammar version does not match the profile configuration');
+    }
+    if (JSON.stringify(parsed.configVersions.engines) !== JSON.stringify(loadedConfig.runtimeVersions.engines)) {
+      throw new Error('Session scoring engine versions do not match the profile configuration');
+    }
+    if (parsed.configVersions.pretest !== loadedConfig.pretest.version) {
+      throw new Error('Session pretest version does not match the profile configuration');
+    }
+    if (parsed.configVersions.scaffoldPolicy !== loadedConfig.scaffoldPolicy.version) {
+      throw new Error('Session scaffold policy version does not match the profile configuration');
+    }
+  }
   if (parsed.configVersions.knowledgeModel !== knowledgeModel.version) {
     throw new Error('Session knowledge model version does not match the profile configuration');
   }
@@ -67,7 +93,7 @@ export function buildLearnerProfile(
   const latestByNode = new Map<string, AssessmentCompletedEvent>();
   for (const event of parsed.events) {
     if (event.kind === 'answer.submitted') answers.set(event.id, event);
-    else latestByNode.set(event.nodeId, event);
+    else if (event.kind === 'assessment.completed') latestByNode.set(event.nodeId, event);
   }
   const rubricById = new Map(rubrics.rubrics.map((rubric) => [rubric.id, rubric]));
 
@@ -92,7 +118,8 @@ export function buildLearnerProfile(
       throw new Error(`Rubric trace does not match node ${node.id}`);
     }
     const rule = rubric.rules.find((entry) => entry.id === ruleDecision.ruleId);
-    if (!rule || rule.outcome !== ruleDecision.status) {
+    const ruleOutcome = ruleDecision.status === 'hit-with-help' ? 'hit' : ruleDecision.status;
+    if (!rule || rule.outcome !== ruleOutcome) {
       throw new Error(`Rubric rule trace does not match node ${node.id}`);
     }
     if (event.score.earned !== rule.score || event.score.possible !== rubric.maxScore) {

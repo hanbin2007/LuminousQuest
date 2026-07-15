@@ -1,6 +1,7 @@
 import type { CaseConfig } from '../config/schemas';
 
 export const equationGrammarVersion = 'equation-grammar.v1';
+export const equationScoringEngineVersion = 'equation-scoring.v1';
 
 export type EquationTokenKind =
   | 'element'

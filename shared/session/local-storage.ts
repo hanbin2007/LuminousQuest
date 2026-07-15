@@ -35,16 +35,24 @@ export class LocalSessionStore {
     }
   }
 
-  load(id: string) {
+  load(id: string, expectedVersions?: StudentSession['configVersions']) {
     const serialized = this.storage.getItem(sessionKey(id));
-    return serialized === null ? null : importSession(serialized);
+    if (serialized === null) return null;
+    const session = importSession(serialized);
+    if (
+      expectedVersions
+      && JSON.stringify(session.configVersions) !== JSON.stringify(expectedVersions)
+    ) {
+      throw new Error('Persisted session configuration versions do not match the active content');
+    }
+    return session;
   }
 
-  restoreLatest() {
+  restoreLatest(expectedVersions?: StudentSession['configVersions']) {
     const latestId = this.storage.getItem(latestSessionKey);
     if (latestId === null) return null;
     try {
-      return this.load(latestId);
+      return this.load(latestId, expectedVersions);
     } catch {
       this.storage.removeItem(sessionKey(latestId));
       this.storage.removeItem(latestSessionKey);

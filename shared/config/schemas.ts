@@ -598,6 +598,16 @@ export const caseSchema = z
             nodeId: idSchema,
             description: z.string().trim().min(1),
             source: z.enum(['answer', 'equation', 'builder']),
+            factRequirements: z
+              .array(
+                z
+                  .object({
+                    id: idSchema,
+                    acceptedValues: z.array(z.string().trim().min(1)).min(1),
+                  })
+                  .strict(),
+              )
+              .default([]),
           })
           .strict(),
       )
@@ -708,6 +718,15 @@ export type ScaffoldPolicyConfig = z.infer<typeof scaffoldPolicySchema>;
 
 export interface LoadedConfig {
   configVersion: string;
+  runtimeVersions: {
+    cases: Record<string, string>;
+    grammar: string;
+    engines: {
+      rubric: string;
+      topology: string;
+      equation: string;
+    };
+  };
   knowledgeModel: KnowledgeModelConfig;
   rubrics: RubricsConfig;
   pretest: PretestConfig;

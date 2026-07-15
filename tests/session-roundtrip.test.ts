@@ -43,10 +43,18 @@ class MemoryStorage implements Storage {
 }
 
 const configVersions = {
+  configDigest: 'sha256:test',
   knowledgeModel: 'knowledge-model.v1',
   rubrics: 'rubrics.v1',
   pretest: 'pretest.v1',
   scaffoldPolicy: 'scaffold-policy.v1',
+  cases: { 'zinc-copper': 'case.v1' },
+  grammar: 'equation-grammar.v1',
+  engines: {
+    rubric: 'rubric-policy.v2',
+    topology: 'builder-topology.v1',
+    equation: 'equation-scoring.v1',
+  },
 };
 
 function workflow(attemptId = 'attempt-1') {

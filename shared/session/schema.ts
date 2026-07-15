@@ -97,6 +97,21 @@ const evidenceSchema = z
     message: 'evidence end cannot precede start',
   });
 
+const assistanceMetadataSchema = z
+  .object({
+    kind: z.enum(['none', 'hint', 'socratic']),
+    rounds: z.number().int().nonnegative(),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (value.kind === 'none' && value.rounds !== 0) {
+      context.addIssue({ code: 'custom', path: ['rounds'], message: 'unassisted assessment requires zero rounds' });
+    }
+    if (value.kind !== 'none' && value.rounds === 0) {
+      context.addIssue({ code: 'custom', path: ['rounds'], message: 'assisted assessment requires at least one round' });
+    }
+  });
+
 const assessedExtractionSchema = z
   .object({
     status: z.literal('assessed'),
@@ -126,11 +141,15 @@ const unassessedExtractionSchema = z
 
 const assessedRuleDecisionSchema = z
   .object({
-    status: z.enum(['hit', 'partial', 'miss']),
+    status: z.enum(['hit', 'hit-with-help', 'partial', 'miss']),
     ruleId: identifierSchema,
     reason: z.string().trim().min(1),
     engine: z
-      .object({ id: identifierSchema, version: identifierSchema })
+      .object({
+        id: identifierSchema,
+        version: identifierSchema,
+        sourceRuleId: identifierSchema.optional(),
+      })
       .strict()
       .default({ id: 'legacy-rule', version: 'legacy.v1' }),
   })
@@ -176,6 +195,7 @@ const scoredSchema = z
     earned: z.number().nonnegative(),
     possible: z.number().positive(),
     annotations: z.array(z.enum(['following', 'hit-with-help'])).default([]),
+    outcome: z.enum(['hit', 'hit-with-help', 'partial', 'miss']).optional(),
   })
   .strict()
   .refine((score) => score.earned <= score.possible, {
@@ -202,6 +222,7 @@ export const assessmentCompletedEventSchema = z
     sourceAnswerEventId: identifierSchema,
     nodeId: identifierSchema,
     rubric: z.object({ id: identifierSchema, version: identifierSchema }).strict(),
+    assistance: assistanceMetadataSchema.default({ kind: 'none', rounds: 0 }),
     extraction: z.union([
       assessedExtractionSchema,
       needsReviewExtractionSchema,
@@ -225,7 +246,7 @@ export const assessmentCompletedEventSchema = z
       context.addIssue({ code: 'custom', path: [field, 'status'], message });
     };
     const extractionAssessed = event.extraction.status === 'assessed';
-    const ruleAssessed = ['hit', 'partial', 'miss'].includes(event.ruleDecision.status);
+    const ruleAssessed = ['hit', 'hit-with-help', 'partial', 'miss'].includes(event.ruleDecision.status);
     const followingAssessed = ['followed', 'not-followed'].includes(event.following.status);
 
     if (event.pipelineStage === 'extraction') {
@@ -270,15 +291,32 @@ export const assessmentCompletedEventSchema = z
       }
       if (
         event.score.annotations.includes('hit-with-help')
-        && event.ruleDecision.status !== 'hit'
+        && !['hit', 'hit-with-help'].includes(event.ruleDecision.status)
       ) {
         issue('score', 'hit-with-help annotation requires a hit rule decision');
       }
     }
   });
 
+export const polarityAssessedEventSchema = z
+  .object({
+    ...eventBaseShape,
+    kind: z.literal('polarity.assessed'),
+    pipelineStage: z.literal('rule'),
+    sourceAnswerEventId: identifierSchema,
+    anchorId: identifierSchema,
+    facts: z.array(z.object({ id: identifierSchema, value: z.string().trim().min(1) }).strict()).min(1),
+    extractedValue: z.string().trim().min(1),
+    correctValue: z.string().trim().min(1),
+    outcome: z.enum(['hit', 'miss']),
+    evidence: z.array(evidenceSchema).min(1),
+    engine: z.object({ id: identifierSchema, version: identifierSchema }).strict(),
+  })
+  .strict();
+
 export const sessionEventSchema = z.union([
   answerSubmittedEventSchema,
+  polarityAssessedEventSchema,
   assessmentCompletedEventSchema,
 ]);
 
@@ -298,10 +336,20 @@ export const sessionSchema = z
     updatedAt: timestampSchema,
     configVersions: z
       .object({
+        configDigest: identifierSchema,
         knowledgeModel: identifierSchema,
         rubrics: identifierSchema,
         pretest: identifierSchema,
         scaffoldPolicy: identifierSchema,
+        cases: z.record(identifierSchema, identifierSchema),
+        grammar: identifierSchema,
+        engines: z
+          .object({
+            rubric: identifierSchema,
+            topology: identifierSchema,
+            equation: identifierSchema,
+          })
+          .strict(),
       })
       .strict(),
     events: z.array(sessionEventSchema),
@@ -361,7 +409,23 @@ export const sessionSchema = z
             });
           }
         }
-        if (event.extraction.status === 'assessed') {
+        if (event.kind === 'polarity.assessed') {
+          const original = answer.answer.format === 'text'
+            ? answer.answer.value
+            : JSON.stringify(answer.answer.value);
+          event.evidence.forEach((evidence, evidenceIndex) => {
+            if (
+              evidence.end > original.length
+              || original.slice(evidence.start, evidence.end) !== evidence.quote
+            ) {
+              context.addIssue({
+                code: 'custom',
+                path: ['events', index, 'evidence', evidenceIndex],
+                message: 'evidence must exactly quote the source answer',
+              });
+            }
+          });
+        } else if (event.extraction.status === 'assessed') {
           const original = answer.answer.format === 'text'
             ? answer.answer.value
             : JSON.stringify(answer.answer.value);
@@ -380,6 +444,8 @@ export const sessionSchema = z
         }
       }
 
+      if (event.kind === 'polarity.assessed') return;
+
       const progressKey =
         `${event.caseId}\u0000${event.stageId}\u0000${event.attemptId}\u0000${event.nodeId}`;
       const currentProgress = pipelineStageOrder[event.pipelineStage];
@@ -397,10 +463,12 @@ export const sessionSchema = z
 
 export type AnswerSubmittedEvent = z.infer<typeof answerSubmittedEventSchema>;
 export type AssessmentCompletedEvent = z.infer<typeof assessmentCompletedEventSchema>;
+export type PolarityAssessedEvent = z.infer<typeof polarityAssessedEventSchema>;
 export type SessionEvent = z.infer<typeof sessionEventSchema>;
 export type StudentSession = z.infer<typeof sessionSchema>;
 
 type EventManagedFields = 'schemaVersion' | 'sequence';
 export type SessionEventInput =
   | Omit<z.input<typeof answerSubmittedEventSchema>, EventManagedFields>
+  | Omit<z.input<typeof polarityAssessedEventSchema>, EventManagedFields>
   | Omit<z.input<typeof assessmentCompletedEventSchema>, EventManagedFields>;

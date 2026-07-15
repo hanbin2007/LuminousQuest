@@ -40,6 +40,8 @@ export function nextScaffoldLevel(
   }
 
   const eligible = new Set<ScaffoldOutcome>(policy.promotion.eligibleOutcomes);
+  if (policy.assistance.countsForPromotion) eligible.add('hit-with-help');
+  else eligible.delete('hit-with-help');
   let hitStreak = 0;
   for (let index = outcomes.length - 1; index >= 0; index -= 1) {
     if (!eligible.has(outcomes[index])) break;
