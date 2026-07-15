@@ -1,0 +1,92 @@
+{
+  "version": "case.v1",
+  "id": "hydrogen-oxygen",
+  "title": "酸性氢氧燃料电池",
+  "type": "analysis",
+  "medium": "acidic",
+  "materials": [
+    { "id": "apparatus", "kind": "apparatus-diagram", "materialRef": null, "status": "pending-assets" },
+    { "id": "cross-section", "kind": "cross-section", "materialRef": null, "status": "pending-assets" }
+  ],
+  "followingAnchors": [
+    { "id": "case-polarity", "statement": "通入氢气的 Pt 极为负极，通入氧气的 Pt 极为正极。", "correctValue": "negative=hydrogen-Pt;positive=oxygen-Pt" }
+  ],
+  "scaffold": [
+    {
+      "level": 1,
+      "questions": [
+        "该电极的材料（场所）是什么？",
+        "它参与反应吗？",
+        "真正的反应物是谁？",
+        "反应物从哪里来？",
+        "酸性介质下两极分别生成什么？",
+        "电子与 H^+ 分别沿什么路径移动？",
+        "消耗气体和生成水的现象怎样对应电极过程？",
+        "为什么燃料电池不是把燃料先燃烧再发电？"
+      ],
+      "answerPoints": [
+        "两极场所均为 Pt，Pt 提供导电与催化界面但不是总反应反应物；H2 和 O2 分别由外部连续通入。",
+        "负极反应为 H2 -> 2H^+ + 2e^-；正极反应为 O2 + 4H^+ + 4e^- -> 2H2O。",
+        "电子由氢气极经外电路流向氧气极，H^+ 经质子交换膜或酸性电解质趋向正极。",
+        "H2、O2 被消耗并生成水，总反应为 2H2 + O2 -> 2H2O。",
+        "反应物的化学能在电化学界面直接转化为电能，转化率高但仍有损耗。"
+      ]
+    },
+    {
+      "level": 2,
+      "questions": [
+        "装置维度：两片 Pt、外电路、酸性离子通道分别承担什么功能？",
+        "原理维度：按反应物、产物、过程、现象说明两极全惰性时的逻辑链。",
+        "能量维度：说明燃料来源、直接转化和效率限度。"
+      ],
+      "answerPoints": [
+        "两极 Pt 都是场所而非反应物，H2、O2 来自持续供气，离子通道与外电路共同闭合。",
+        "酸性介质决定 H^+ 的生成与消耗，两极电子数配平后得到生成水的总反应。",
+        "化学能直接转化为电能且不能百分之百转化。"
+      ]
+    },
+    {
+      "level": 3,
+      "questions": [
+        "请独立用装置、原理、能量三个维度分析酸性氢氧燃料电池，并写出两极反应式。"
+      ],
+      "answerPoints": [
+        "正确处理两极场所均与反应物分离的情形，并完整说明物料来源。",
+        "电极式满足三守恒、符合酸性介质，且过程、现象和能量说明相互一致。"
+      ]
+    }
+  ],
+  "equationSets": [
+    {
+      "id": "hydrogen-negative",
+      "electrode": "negative",
+      "medium": "acidic",
+      "expectedElectronSide": "product",
+      "accepted": ["H2 -> 2H^+ + 2e^-"]
+    },
+    {
+      "id": "oxygen-positive",
+      "electrode": "positive",
+      "medium": "acidic",
+      "expectedElectronSide": "reactant",
+      "accepted": ["O2 + 4H^+ + 4e^- -> 2H2O"]
+    }
+  ],
+  "evidencePaths": [
+    { "id": "ho-d1", "nodeId": "D1", "description": "指出氢气侧 Pt 是失电子场所且自身不消耗。", "source": "answer" },
+    { "id": "ho-d2", "nodeId": "D2", "description": "指出外电路由电子导体连接两片 Pt。", "source": "answer" },
+    { "id": "ho-d3", "nodeId": "D3", "description": "指出酸性电解质或质子交换膜提供离子通路。", "source": "answer" },
+    { "id": "ho-d4", "nodeId": "D4", "description": "指出氧气侧 Pt 是得电子场所且自身不消耗。", "source": "answer" },
+    { "id": "ho-d5", "nodeId": "D5", "description": "区分两片 Pt 场所与外部通入的 H2、O2 反应物。", "source": "answer" },
+    { "id": "ho-p2", "nodeId": "P2", "description": "确定 H2 为还原剂、O2 为氧化剂。", "source": "answer" },
+    { "id": "ho-p3", "nodeId": "P3", "description": "按酸性介质确定 H^+ 和 H2O 的存在位置。", "source": "equation" },
+    { "id": "ho-p4", "nodeId": "P4", "description": "说明电子和 H^+ 的通路方向。", "source": "answer" },
+    { "id": "ho-p5", "nodeId": "P5", "description": "由过程解释气体消耗和水生成。", "source": "answer" },
+    { "id": "ho-p6", "nodeId": "P6", "description": "酸性两极反应式通过守恒和等价式校验。", "source": "equation" },
+    { "id": "ho-p7", "nodeId": "P7", "description": "配平电子后合成 2H2 + O2 -> 2H2O。", "source": "equation" },
+    { "id": "ho-e1", "nodeId": "E1", "description": "指出化学能不经燃烧直接转化为电能。", "source": "answer" },
+    { "id": "ho-e2", "nodeId": "E2", "description": "把电能来源追溯到 H2 与 O2 的自发反应。", "source": "answer" },
+    { "id": "ho-e3", "nodeId": "E3", "description": "指出燃料电池转化率较高但仍存在损耗。", "source": "answer" }
+  ],
+  "targetNodeIds": ["D1", "D2", "D3", "D4", "D5", "P1", "P2", "P3", "P4", "P5", "P6", "P7", "E1", "E2", "E3"]
+}

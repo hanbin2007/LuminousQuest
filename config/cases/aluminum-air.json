@@ -1,0 +1,92 @@
+{
+  "version": "case.v1",
+  "id": "aluminum-air",
+  "title": "碱性铝-空气电池",
+  "type": "analysis",
+  "medium": "alkaline",
+  "materials": [
+    { "id": "apparatus", "kind": "apparatus-diagram", "materialRef": null, "status": "pending-assets" },
+    { "id": "cross-section", "kind": "cross-section", "materialRef": null, "status": "pending-assets" }
+  ],
+  "followingAnchors": [
+    { "id": "case-polarity", "statement": "铝极为负极，多孔碳空气极为正极。", "correctValue": "negative=Al;positive=porous-carbon" }
+  ],
+  "scaffold": [
+    {
+      "level": 1,
+      "questions": [
+        "该电极的材料（场所）是什么？",
+        "它参与反应吗？",
+        "真正的反应物是谁？",
+        "反应物从哪里来？",
+        "碱性介质会怎样影响铝极与空气极的产物？",
+        "电子和 OH^- 的迁移如何维持回路？",
+        "能观察到哪些电极或材料变化？",
+        "该装置把哪种能量转化为什么能量？"
+      ],
+      "answerPoints": [
+        "负极场所为 Al，Al 同时是还原剂；正极场所为多孔碳，真正的氧化剂 O2 来自空气。",
+        "基线负极式可写为 Al + 4OH^- -> AlO2^- + 2H2O + 3e^-，也接受以 [Al(OH)4]^- 表示铝酸根存在形式的守恒等价式。",
+        "正极反应为 O2 + 2H2O + 4e^- -> 4OH^-，不得在碱性最终式中保留游离 H^+。",
+        "电子由 Al 极经外电路流向空气极；离子在碱性电解质中迁移以维持电中性。",
+        "铝与氧气总反应释放的化学能直接转化为电能，转化不可能百分之百。"
+      ]
+    },
+    {
+      "level": 2,
+      "questions": [
+        "装置维度：Al、多孔碳、外电路和碱性电解质分别承担什么功能？",
+        "原理维度：按反应物、产物、过程、现象分析，特别说明介质影响。",
+        "能量维度：说明能量来源、方向和损耗。"
+      ],
+      "answerPoints": [
+        "Al 是失电子场所且参与反应，多孔碳只是得电子场所，O2 才是正极反应物。",
+        "碱性介质决定含铝产物表示和氧还原产物，电极式须守恒并与介质相符。",
+        "自发氧化还原反应释放的化学能直接转化为电能。"
+      ]
+    },
+    {
+      "level": 3,
+      "questions": [
+        "请独立用装置、原理、能量三个维度分析碱性铝-空气电池，并写出两极反应式。"
+      ],
+      "answerPoints": [
+        "明确 Al 场所与反应物重合，而多孔碳场所与 O2 反应物分离。",
+        "电极式满足三守恒，最终式符合碱性介质并能解释电子、离子方向。"
+      ]
+    }
+  ],
+  "equationSets": [
+    {
+      "id": "aluminum-negative",
+      "electrode": "negative",
+      "medium": "alkaline",
+      "expectedElectronSide": "product",
+      "accepted": [
+        "Al + 4OH^- -> AlO2^- + 2H2O + 3e^-",
+        "Al + 4OH^- -> [Al(OH)4]^- + 3e^-"
+      ]
+    },
+    {
+      "id": "oxygen-positive",
+      "electrode": "positive",
+      "medium": "alkaline",
+      "expectedElectronSide": "reactant",
+      "accepted": ["O2 + 2H2O + 4e^- -> 4OH^-"]
+    }
+  ],
+  "evidencePaths": [
+    { "id": "aa-d1", "nodeId": "D1", "description": "指出 Al 是氧化反应场所且能导电。", "source": "answer" },
+    { "id": "aa-d4", "nodeId": "D4", "description": "指出多孔碳是氧还原发生的场所。", "source": "answer" },
+    { "id": "aa-d5", "nodeId": "D5", "description": "区分多孔碳场所与来自空气的 O2 反应物。", "source": "answer" },
+    { "id": "aa-p2", "nodeId": "P2", "description": "确定 Al 为还原剂、O2 为氧化剂。", "source": "answer" },
+    { "id": "aa-p3", "nodeId": "P3", "description": "根据碱性介质确定铝酸根与 OH^- 相关产物。", "source": "equation" },
+    { "id": "aa-p4", "nodeId": "P4", "description": "说明电子与碱性电解质中离子过程。", "source": "answer" },
+    { "id": "aa-p5", "nodeId": "P5", "description": "由反应过程解释铝消耗等现象。", "source": "answer" },
+    { "id": "aa-p6", "nodeId": "P6", "description": "碱性两极反应式通过守恒、介质与等价式校验。", "source": "equation" },
+    { "id": "aa-p7", "nodeId": "P7", "description": "按最小公倍数配合两极电子并合成总反应。", "source": "equation" },
+    { "id": "aa-e1", "nodeId": "E1", "description": "指出化学能直接转化为电能。", "source": "answer" },
+    { "id": "aa-e2", "nodeId": "E2", "description": "把电能来源追溯到 Al 与 O2 的自发反应。", "source": "answer" }
+  ],
+  "targetNodeIds": ["D1", "D3", "D4", "D5", "P1", "P2", "P3", "P4", "P5", "P6", "P7", "E1", "E2", "E3"]
+}

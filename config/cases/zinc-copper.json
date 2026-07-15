@@ -3,19 +3,91 @@
   "id": "zinc-copper",
   "title": "锌铜原电池",
   "type": "analysis",
-  "materialRefs": [],
+  "medium": "neutral",
+  "materials": [
+    { "id": "apparatus", "kind": "apparatus-diagram", "materialRef": null, "status": "pending-assets" },
+    { "id": "cross-section", "kind": "cross-section", "materialRef": null, "status": "pending-assets" }
+  ],
+  "followingAnchors": [
+    { "id": "case-polarity", "statement": "锌极为负极，铜极为正极。", "correctValue": "negative=Zn;positive=Cu" }
+  ],
   "scaffold": [
     {
       "level": 1,
       "questions": [
-        "该电极的材料(场所)是什么?",
-        "它参与反应吗?",
-        "真正的反应物是谁?",
-        "反应物从哪里来?"
+        "该电极的材料（场所）是什么？",
+        "它参与反应吗？",
+        "真正的反应物是谁？",
+        "反应物从哪里来？",
+        "先确定两极反应物，再分别判断电极产物。",
+        "电子和盐桥中离子怎样移动？",
+        "这些过程对应哪些可观察现象？",
+        "化学能从哪个反应释放，又转化成什么能量？"
       ],
-      "answerPoints": ["锌为失电子场所且参与氧化反应", "铜为得电子场所,反应物为铜离子"]
+      "answerPoints": [
+        "负极场所为 Zn，Zn 同时是还原剂和电极反应物；正极场所为 Cu，真正的氧化剂是溶液中的 Cu^2+。",
+        "负极反应为 Zn -> Zn^2+ + 2e^-；正极反应为 Cu^2+ + 2e^- -> Cu。",
+        "电子由 Zn 极经外电路流向 Cu 极；盐桥阴离子移向 ZnSO4 侧，阳离子移向 CuSO4 侧。",
+        "锌片溶解、质量减小；铜片析出铜、质量增加。",
+        "自发反应 Zn + Cu^2+ -> Zn^2+ + Cu 释放的化学能直接转化为电能，仍有少量损耗。"
+      ]
+    },
+    {
+      "level": 2,
+      "questions": [
+        "装置维度：四个功能要素分别由什么承担？",
+        "原理维度：按反应物、产物、过程、现象组织分析。",
+        "能量维度：说明来源、方向和转化限度。"
+      ],
+      "answerPoints": [
+        "失电子场所 Zn、外电路导线、盐桥与两侧电解质、得电子场所 Cu 共同构成闭合回路。",
+        "Zn 被氧化，Cu^2+ 被还原；两条电极反应式守恒，电子与离子方向一致，现象与过程相符。",
+        "自发氧化还原反应的化学能直接转化为电能但并非百分之百。"
+      ]
+    },
+    {
+      "level": 3,
+      "questions": [
+        "请独立用装置、原理、能量三个维度分析这个电池，并写出两极反应式。"
+      ],
+      "answerPoints": [
+        "完整覆盖功能四要素、场所与反应物区分、反应物到现象的逻辑链及能量转化。",
+        "两条电极反应式满足元素、电荷和电子守恒，且符合中性盐溶液案例。"
+      ]
     }
   ],
-  "targetNodeIds": ["D1", "P1"]
+  "equationSets": [
+    {
+      "id": "zinc-negative",
+      "electrode": "negative",
+      "medium": "neutral",
+      "expectedElectronSide": "product",
+      "accepted": ["Zn -> Zn^2+ + 2e^-"]
+    },
+    {
+      "id": "copper-positive",
+      "electrode": "positive",
+      "medium": "neutral",
+      "expectedElectronSide": "reactant",
+      "accepted": ["Cu^2+ + 2e^- -> Cu"]
+    }
+  ],
+  "evidencePaths": [
+    { "id": "zc-d1", "nodeId": "D1", "description": "指出 Zn 是发生氧化反应的失电子场所。", "source": "answer" },
+    { "id": "zc-d2", "nodeId": "D2", "description": "指出导线传导电子并连接两极。", "source": "answer" },
+    { "id": "zc-d3", "nodeId": "D3", "description": "指出盐桥与电解质通过离子迁移构成内电路。", "source": "answer" },
+    { "id": "zc-d4", "nodeId": "D4", "description": "指出 Cu 是还原半反应发生的得电子场所。", "source": "answer" },
+    { "id": "zc-d5", "nodeId": "D5", "description": "区分 Cu 电极场所与 Cu^2+ 反应物。", "source": "answer" },
+    { "id": "zc-p1", "nodeId": "P1", "description": "指出总反应能自发进行且两个半反应分处两极。", "source": "answer" },
+    { "id": "zc-p2", "nodeId": "P2", "description": "确定 Zn 为还原剂、Cu^2+ 为氧化剂。", "source": "answer" },
+    { "id": "zc-p3", "nodeId": "P3", "description": "确定 Zn^2+ 与 Cu 为案例条件下的产物。", "source": "equation" },
+    { "id": "zc-p4", "nodeId": "P4", "description": "说明电子与盐桥离子方向。", "source": "answer" },
+    { "id": "zc-p5", "nodeId": "P5", "description": "由过程推出锌片溶解与铜片增重。", "source": "answer" },
+    { "id": "zc-p6", "nodeId": "P6", "description": "两条电极反应式通过守恒与等价式校验。", "source": "equation" },
+    { "id": "zc-p7", "nodeId": "P7", "description": "按电子数合并两式并得到不含电子的案例总反应。", "source": "equation" },
+    { "id": "zc-e1", "nodeId": "E1", "description": "指出化学能直接转化为电能。", "source": "answer" },
+    { "id": "zc-e2", "nodeId": "E2", "description": "把电能来源追溯到 Zn 与 Cu^2+ 的自发反应。", "source": "answer" },
+    { "id": "zc-e3", "nodeId": "E3", "description": "指出能量转化存在热等损耗。", "source": "answer" }
+  ],
+  "targetNodeIds": ["D1", "D2", "D3", "D4", "D5", "P1", "P2", "P3", "P4", "P5", "P6", "P7", "E1", "E2", "E3"]
 }
-

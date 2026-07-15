@@ -51,10 +51,10 @@ describe('configuration loading', () => {
   it('reports the file, field, and reason for an invalid field', async () => {
     const root = await createTemporaryDirectory();
     await writeValidContentTree(root);
-    await writeFile(
-      path.join(root, 'config', 'rubrics.json'),
-      JSON.stringify({ version: 'rubrics.v1', rubrics: [{ id: '', nodeId: 'D1' }] }),
-    );
+    const file = path.join(root, 'config', 'rubrics.json');
+    const rubrics = JSON.parse(await readFile(file, 'utf8'));
+    rubrics.rubrics[0].id = '';
+    await writeFile(file, JSON.stringify(rubrics));
 
     await expect(loadAllConfig(root)).rejects.toMatchObject({
       name: 'ConfigValidationError',
@@ -126,13 +126,12 @@ describe('configuration loading', () => {
       name: 'duplicate rule ids across rubrics',
       file: 'rubrics.json',
       mutate(value: any) {
-        value.rubrics.push({
-          ...value.rubrics[0],
-          id: 'rubric-second',
-          rules: [{ ...value.rubrics[0].rules[0] }],
-        });
+        const duplicate = structuredClone(value.rubrics[1]);
+        duplicate.id = 'rubric-second';
+        duplicate.rules[0].id = value.rubrics[0].rules[0].id;
+        value.rubrics.push(duplicate);
       },
-      field: 'rubrics.1.rules.0.id',
+      field: 'rubrics.15.rules.0.id',
       reason: 'duplicate id',
     },
     {
@@ -184,19 +183,22 @@ describe('configuration loading', () => {
     const root = await createTemporaryDirectory();
     await writeValidContentTree(root);
     const caseFile = path.join(root, 'config', 'cases', 'zinc-copper.json');
-    const trainingCase = JSON.parse(await readFile(caseFile, 'utf8')) as { materialRefs: string[] };
-    trainingCase.materialRefs = ['assets/missing.png'];
+    const trainingCase = JSON.parse(await readFile(caseFile, 'utf8')) as {
+      materials: Array<{ materialRef: string | null; status: string }>;
+    };
+    trainingCase.materials[0].materialRef = 'assets/missing.png';
+    trainingCase.materials[0].status = 'ready';
     await writeFile(caseFile, JSON.stringify(trainingCase));
 
     await expect(loadAllConfig(root)).rejects.toMatchObject({
-      field: 'materialRefs.0',
+      field: 'materials.0.materialRef',
       reason: expect.stringContaining('missing'),
     });
 
-    trainingCase.materialRefs = ['../outside.png'];
+    trainingCase.materials[0].materialRef = '../outside.png';
     await writeFile(caseFile, JSON.stringify(trainingCase));
     await expect(loadAllConfig(root)).rejects.toMatchObject({
-      field: 'materialRefs.0',
+      field: 'materials.0.materialRef',
       reason: expect.stringContaining('assets/'),
     });
   });

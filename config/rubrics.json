@@ -1,37 +1,300 @@
 {
   "version": "rubrics.v1",
+  "followingAnchors": [
+    {
+      "id": "case-polarity",
+      "label": "极性认定",
+      "description": "先判断具体案例的负极与正极；P4、P5 若在错误极性前提下保持逻辑自洽，按跟随性错误政策给分并标注。"
+    }
+  ],
+  "policy": {
+    "outcomeScale": {
+      "mode": "three-state",
+      "partialDefinition": "方向正确但表述不完整，或守恒正确但介质不匹配。"
+    },
+    "followingError": {
+      "strategy": "score-logical-chain",
+      "annotation": "following",
+      "anchorId": "case-polarity"
+    },
+    "terminology": {
+      "colloquialCorrectOutcome": "hit",
+      "requireModelTermsForHit": false
+    },
+    "beyondSyllabus": {
+      "correctOutcome": "hit",
+      "bonusPoints": 0
+    },
+    "contradiction": {
+      "outcome": "miss"
+    },
+    "nonResponse": {
+      "status": "unanswered",
+      "promptRetry": true,
+      "includeInDiagnosis": false
+    },
+    "typos": {
+      "unambiguousStrategy": "warn-no-penalty",
+      "ambiguousStrategy": "needs-review"
+    },
+    "equation": {
+      "mediumMismatchOutcome": "partial",
+      "feedbackNodeId": "P3",
+      "acceptEqualsSign": true,
+      "requireEquilibriumArrow": false,
+      "requireStates": false
+    },
+    "weighting": {
+      "dimensionMode": "equal",
+      "coreWeight": 2,
+      "secondaryWeight": 1,
+      "nodeOverrides": {
+        "P5": 1
+      }
+    },
+    "weakness": {
+      "threshold": 0.6,
+      "partialVisualization": "half-lit"
+    },
+    "repeatedAnswers": {
+      "strategy": "latest"
+    },
+    "dimensionAssignments": {
+      "spontaneousRedox": "principle",
+      "saltBridge": "D3",
+      "siteReactantDistinction": "D5-cross-axis"
+    },
+    "presentation": {
+      "studentRadar": "score-and-level",
+      "classSummary": [
+        "radar-distribution",
+        "node-error-ranking",
+        "misconception-top-n"
+      ]
+    }
+  },
+  "adjudications": [
+    { "id": "1", "configField": "rubrics.policy.outcomeScale.mode", "status": "teacher-confirmed", "source": "given-default", "reviewDueAt": null },
+    { "id": "2", "configField": "rubrics.policy.followingError.strategy", "status": "teacher-confirmed", "source": "given-default", "reviewDueAt": null },
+    { "id": "3", "configField": "rubrics.policy.terminology.colloquialCorrectOutcome", "status": "teacher-tuning", "source": "developer-default", "reviewDueAt": "2026-07-17T23:59:59+08:00" },
+    { "id": "4", "configField": "rubrics.policy.beyondSyllabus.correctOutcome", "status": "teacher-confirmed", "source": "given-default", "reviewDueAt": null },
+    { "id": "5", "configField": "rubrics.policy.contradiction.outcome", "status": "teacher-tuning", "source": "developer-default", "reviewDueAt": "2026-07-17T23:59:59+08:00" },
+    { "id": "6", "configField": "rubrics.policy.nonResponse.status", "status": "teacher-confirmed", "source": "given-default", "reviewDueAt": null },
+    { "id": "7", "configField": "rubrics.policy.typos.unambiguousStrategy", "status": "teacher-tuning", "source": "developer-default", "reviewDueAt": "2026-07-17T23:59:59+08:00" },
+    { "id": "8", "configField": "rubrics.policy.equation.mediumMismatchOutcome", "status": "teacher-tuning", "source": "developer-default", "reviewDueAt": "2026-07-17T23:59:59+08:00" },
+    { "id": "9", "configField": "rubrics.policy.equation.acceptEqualsSign", "status": "teacher-confirmed", "source": "given-default", "reviewDueAt": null },
+    { "id": "10", "configField": "rubrics.policy.weighting.dimensionMode", "status": "teacher-tuning", "source": "developer-default", "reviewDueAt": "2026-07-17T23:59:59+08:00" },
+    { "id": "11", "configField": "rubrics.policy.weakness.threshold", "status": "teacher-tuning", "source": "developer-default", "reviewDueAt": "2026-07-17T23:59:59+08:00" },
+    { "id": "12", "configField": "rubrics.policy.repeatedAnswers.strategy", "status": "teacher-confirmed", "source": "given-default", "reviewDueAt": null },
+    { "id": "13", "configField": "scaffoldPolicy.promotion.consecutiveHits", "status": "teacher-tuning", "source": "developer-default", "reviewDueAt": "2026-07-17T23:59:59+08:00" },
+    { "id": "14", "configField": "scaffoldPolicy.passing.minimumRatio", "status": "teacher-tuning", "source": "developer-default", "reviewDueAt": "2026-07-17T23:59:59+08:00" },
+    { "id": "15", "configField": "scaffoldPolicy.assistance.correctOutcome", "status": "teacher-tuning", "source": "developer-default", "reviewDueAt": "2026-07-17T23:59:59+08:00" },
+    { "id": "16", "configField": "scaffoldPolicy.socratic.correctedOutcome", "status": "teacher-tuning", "source": "developer-default", "reviewDueAt": "2026-07-17T23:59:59+08:00" },
+    { "id": "17", "configField": "rubrics.policy.dimensionAssignments.spontaneousRedox", "status": "teacher-tuning", "source": "developer-default", "reviewDueAt": "2026-07-17T23:59:59+08:00" },
+    { "id": "18", "configField": "rubrics.policy.dimensionAssignments.saltBridge", "status": "teacher-confirmed", "source": "model-decision", "reviewDueAt": null },
+    { "id": "18b", "configField": "rubrics.policy.dimensionAssignments.siteReactantDistinction", "status": "teacher-confirmed", "source": "model-decision", "reviewDueAt": null },
+    { "id": "18c", "configField": "rubrics.policy.weighting.nodeOverrides.P5", "status": "teacher-tuning", "source": "developer-default", "reviewDueAt": "2026-07-17T23:59:59+08:00" },
+    { "id": "19", "configField": "pretest.builder.assessment.generalModel.saltBridgeRequired", "status": "teacher-tuning", "source": "developer-default", "reviewDueAt": "2026-07-17T23:59:59+08:00" },
+    { "id": "19b", "configField": "pretest.builder.assessment.abstraction.concreteBindingOutcome", "status": "teacher-tuning", "source": "developer-default", "reviewDueAt": "2026-07-17T23:59:59+08:00" },
+    { "id": "20", "configField": "rubrics.policy.presentation.studentRadar", "status": "teacher-tuning", "source": "developer-default", "reviewDueAt": "2026-07-17T23:59:59+08:00" }
+  ],
   "rubrics": [
     {
       "id": "rubric-d1",
       "nodeId": "D1",
       "maxScore": 2,
-      "evidenceRequirements": ["指出氧化反应发生的场所与材料导电性"],
+      "evidenceRequirements": [
+        { "id": "D1-E1", "description": "指出失电子场所发生氧化反应，并识别场所材料须能导电。", "sources": ["builder", "text", "case-analysis"] }
+      ],
       "rules": [
-        { "id": "d1-hit", "outcome": "hit", "score": 2, "description": "正确说明失电子场所" },
-        { "id": "d1-partial", "outcome": "partial", "score": 1, "description": "方向正确但表述不完整" },
-        { "id": "d1-miss", "outcome": "miss", "score": 0, "description": "未建立氧化与场所的对应" }
+        { "id": "d1-hit", "outcome": "hit", "score": 2, "description": "完整建立失电子场所、氧化反应与导电材料的对应。" },
+        { "id": "d1-partial", "outcome": "partial", "score": 1, "description": "能指出负极或氧化反应，但场所功能或导电要求表述不完整。" },
+        { "id": "d1-miss", "outcome": "miss", "score": 0, "description": "未建立失电子场所与氧化反应的对应。" }
+      ]
+    },
+    {
+      "id": "rubric-d2",
+      "nodeId": "D2",
+      "maxScore": 1,
+      "evidenceRequirements": [
+        { "id": "D2-E1", "description": "用电子导体连接两个反应场所，并说明外电路传导电子。", "sources": ["builder", "text", "case-analysis"] }
+      ],
+      "rules": [
+        { "id": "d2-hit", "outcome": "hit", "score": 1, "description": "正确识别外电路电子导体及其连接功能。" },
+        { "id": "d2-partial", "outcome": "partial", "score": 0.5, "description": "连接正确但没有区分外电路载流粒子。" },
+        { "id": "d2-miss", "outcome": "miss", "score": 0, "description": "外电路缺失或误认为由离子导电。" }
+      ]
+    },
+    {
+      "id": "rubric-d3",
+      "nodeId": "D3",
+      "maxScore": 2,
+      "evidenceRequirements": [
+        { "id": "D3-E1", "description": "选择电解质或盐桥作为离子导体，形成内电路并维持电中性。", "sources": ["builder", "text", "case-analysis"] }
+      ],
+      "rules": [
+        { "id": "d3-hit", "outcome": "hit", "score": 2, "description": "正确说明离子导体、内电路和闭合回路。" },
+        { "id": "d3-partial", "outcome": "partial", "score": 1, "description": "知道需要电解质通路，但未说明离子迁移或闭合功能。" },
+        { "id": "d3-miss", "outcome": "miss", "score": 0, "description": "缺失离子通路、选择非电解质或认为盐桥传电子。" }
+      ]
+    },
+    {
+      "id": "rubric-d4",
+      "nodeId": "D4",
+      "maxScore": 2,
+      "evidenceRequirements": [
+        { "id": "D4-E1", "description": "指出得电子场所发生还原反应，并区分场所材料与被还原微粒。", "sources": ["builder", "text", "case-analysis"] }
+      ],
+      "rules": [
+        { "id": "d4-hit", "outcome": "hit", "score": 2, "description": "完整建立得电子场所、还原反应与导电材料的对应。" },
+        { "id": "d4-partial", "outcome": "partial", "score": 1, "description": "能指出正极或还原反应，但场所与反应物区分不完整。" },
+        { "id": "d4-miss", "outcome": "miss", "score": 0, "description": "未建立得电子场所与还原反应的对应。" }
+      ]
+    },
+    {
+      "id": "rubric-d5",
+      "nodeId": "D5",
+      "maxScore": 2,
+      "evidenceRequirements": [
+        { "id": "D5-E1", "description": "分别指出电极材料这一场所与真正参与得失电子的反应物。", "sources": ["builder", "text", "case-analysis"] }
+      ],
+      "rules": [
+        { "id": "d5-hit", "outcome": "hit", "score": 2, "description": "在重合与分离情形中均能区分场所和反应物。" },
+        { "id": "d5-partial", "outcome": "partial", "score": 1, "description": "能在一个电极上区分两层含义，但另一电极仍混淆。" },
+        { "id": "d5-miss", "outcome": "miss", "score": 0, "description": "把电极材料一律当作电极反应物。" }
       ]
     },
     {
       "id": "rubric-p1",
       "nodeId": "P1",
       "maxScore": 2,
-      "evidenceRequirements": ["指出自发氧化还原反应与半反应空间分离"],
+      "evidenceRequirements": [
+        { "id": "P1-E1", "description": "指出能够自发进行的氧化还原反应及两个半反应分处两个场所。", "sources": ["choice", "text", "case-analysis"] }
+      ],
       "rules": [
-        { "id": "p1-hit", "outcome": "hit", "score": 2, "description": "完整说明反应前提" },
-        { "id": "p1-miss", "outcome": "miss", "score": 0, "description": "未说明反应前提" }
+        { "id": "p1-hit", "outcome": "hit", "score": 2, "description": "完整说明自发氧化还原前提和半反应空间分离。" },
+        { "id": "p1-partial", "outcome": "partial", "score": 1, "description": "只说明氧化还原反应或只说明两个场所。" },
+        { "id": "p1-miss", "outcome": "miss", "score": 0, "description": "认为任意反应都能构成原电池。" }
+      ]
+    },
+    {
+      "id": "rubric-p2",
+      "nodeId": "P2",
+      "maxScore": 2,
+      "evidenceRequirements": [
+        { "id": "P2-E1", "description": "根据氧化性、还原性确定还原剂和氧化剂分别在哪个场所反应。", "sources": ["choice", "text", "case-analysis"] }
+      ],
+      "rules": [
+        { "id": "p2-hit", "outcome": "hit", "score": 2, "description": "正确确定两极反应物及其氧化还原角色。" },
+        { "id": "p2-partial", "outcome": "partial", "score": 1, "description": "只确定一极反应物或角色判断不完整。" },
+        { "id": "p2-miss", "outcome": "miss", "score": 0, "description": "找错氧化剂、还原剂或把两极对应颠倒。" }
+      ]
+    },
+    {
+      "id": "rubric-p3",
+      "nodeId": "P3",
+      "maxScore": 2,
+      "evidenceRequirements": [
+        { "id": "P3-E1", "description": "综合电子数、存在形式与介质确定实际电极产物。", "sources": ["text", "equation", "case-analysis"] }
+      ],
+      "rules": [
+        { "id": "p3-hit", "outcome": "hit", "score": 2, "description": "产物、电荷变化和介质均匹配案例。" },
+        { "id": "p3-partial", "outcome": "partial", "score": 1, "description": "产物方向基本正确但存在形式或介质不匹配。" },
+        { "id": "p3-miss", "outcome": "miss", "score": 0, "description": "产物或氧化还原方向错误。" }
+      ]
+    },
+    {
+      "id": "rubric-p4",
+      "nodeId": "P4",
+      "maxScore": 2,
+      "evidenceRequirements": [
+        { "id": "P4-E1", "description": "说明电子经外电路由负极流向正极，以及内电路的离子迁移方向。", "sources": ["builder", "choice", "text", "case-analysis"] }
+      ],
+      "followingAnchorId": "case-polarity",
+      "rules": [
+        { "id": "p4-hit", "outcome": "hit", "score": 2, "description": "电子与离子路径、方向均正确，或在错误极性锚点下保持完整自洽并标注跟随。" },
+        { "id": "p4-partial", "outcome": "partial", "score": 1, "description": "只正确说明电子或离子过程中的一部分。" },
+        { "id": "p4-miss", "outcome": "miss", "score": 0, "description": "电子经过溶液、回路不闭合或方向逻辑不自洽。" }
+      ]
+    },
+    {
+      "id": "rubric-p5",
+      "nodeId": "P5",
+      "maxScore": 1,
+      "evidenceRequirements": [
+        { "id": "P5-E1", "description": "由过程推出电流、电极质量、气泡或颜色等现象，或由现象反推极性。", "sources": ["choice", "text", "case-analysis"] }
+      ],
+      "followingAnchorId": "case-polarity",
+      "rules": [
+        { "id": "p5-hit", "outcome": "hit", "score": 1, "description": "能正确完成过程与现象的双向推理，或按错误极性锚点自洽并标注跟随。" },
+        { "id": "p5-partial", "outcome": "partial", "score": 0.5, "description": "只给出现象但解释不完整，或只会单向推理。" },
+        { "id": "p5-miss", "outcome": "miss", "score": 0, "description": "现象与过程矛盾或混淆电流和电子方向。" }
+      ]
+    },
+    {
+      "id": "rubric-p6",
+      "nodeId": "P6",
+      "maxScore": 2,
+      "evidenceRequirements": [
+        { "id": "P6-E1", "description": "电极反应式满足元素、电荷、电子三项守恒，且两极电子数可配平。", "sources": ["text", "equation", "case-analysis"] }
+      ],
+      "rules": [
+        { "id": "p6-hit", "outcome": "hit", "score": 2, "description": "方程式守恒、方向正确并命中案例等价式。" },
+        { "id": "p6-partial", "outcome": "partial", "score": 1, "description": "物种方向接近但有单项配平错误，或守恒但介质不匹配。" },
+        { "id": "p6-miss", "outcome": "miss", "score": 0, "description": "解析失败、多项不守恒或氧化还原方向错误。" }
+      ]
+    },
+    {
+      "id": "rubric-p7",
+      "nodeId": "P7",
+      "maxScore": 1,
+      "evidenceRequirements": [
+        { "id": "P7-E1", "description": "按电子数配合两个半反应，消去电子与两侧相同物种，得到案例总反应。", "sources": ["text", "equation", "case-analysis"] }
+      ],
+      "rules": [
+        { "id": "p7-hit", "outcome": "hit", "score": 1, "description": "正确配合并相加两个半反应，所得总反应符合案例事实。" },
+        { "id": "p7-partial", "outcome": "partial", "score": 0.5, "description": "合并思路正确，但电子倍数、约分或相同物种消去有一处错误。" },
+        { "id": "p7-miss", "outcome": "miss", "score": 0, "description": "未按电子守恒合并，或总反应仍含电子且与案例事实不符。" }
       ]
     },
     {
       "id": "rubric-e1",
       "nodeId": "E1",
       "maxScore": 2,
-      "evidenceRequirements": ["指出化学能直接转化为电能"],
+      "evidenceRequirements": [
+        { "id": "E1-EV1", "description": "指出原电池把化学能直接转化为电能，并能与电解池方向区分。", "sources": ["choice", "text", "case-analysis"] }
+      ],
       "rules": [
-        { "id": "e1-hit", "outcome": "hit", "score": 2, "description": "能量方向正确" },
-        { "id": "e1-miss", "outcome": "miss", "score": 0, "description": "能量方向错误" }
+        { "id": "e1-hit", "outcome": "hit", "score": 2, "description": "能量类型与直接转化方向均正确。" },
+        { "id": "e1-partial", "outcome": "partial", "score": 1, "description": "知道化学能转化为电能，但混入热能中转或未区分电解池。" },
+        { "id": "e1-miss", "outcome": "miss", "score": 0, "description": "能量方向错误或认为电池静态储存电。" }
+      ]
+    },
+    {
+      "id": "rubric-e2",
+      "nodeId": "E2",
+      "maxScore": 1,
+      "evidenceRequirements": [
+        { "id": "E2-EV1", "description": "把输出电能追溯到自发氧化还原反应释放的化学能。", "sources": ["choice", "text", "case-analysis"] }
+      ],
+      "rules": [
+        { "id": "e2-hit", "outcome": "hit", "score": 1, "description": "正确指出能量来源与反应自发性。" },
+        { "id": "e2-partial", "outcome": "partial", "score": 0.5, "description": "只提化学能或氧化还原反应，联系不完整。" },
+        { "id": "e2-miss", "outcome": "miss", "score": 0, "description": "不能说明能量来源或认为不自发反应可持续供电。" }
+      ]
+    },
+    {
+      "id": "rubric-e3",
+      "nodeId": "E3",
+      "maxScore": 1,
+      "evidenceRequirements": [
+        { "id": "E3-EV1", "description": "指出能量转化存在热等损耗，并理解燃料电池相对火力发电的效率优势。", "sources": ["choice", "text", "case-analysis"] }
+      ],
+      "rules": [
+        { "id": "e3-hit", "outcome": "hit", "score": 1, "description": "同时说明非百分百转化和燃料电池效率优势。" },
+        { "id": "e3-partial", "outcome": "partial", "score": 0.5, "description": "只说明损耗或只说明效率优势。" },
+        { "id": "e3-miss", "outcome": "miss", "score": 0, "description": "认为化学能完全转化为电能。" }
       ]
     }
   ]
 }
-

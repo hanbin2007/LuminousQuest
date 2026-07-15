@@ -142,8 +142,15 @@ export async function validateReferences(
   caseFiles: readonly string[] = config.cases.map((trainingCase) => `config/cases/${trainingCase.id}.json`),
 ) {
   const nodeIds = new Set(config.knowledgeModel.nodes.map((node) => node.id));
+  const misconceptionIds = new Set(
+    config.knowledgeModel.nodes.flatMap((node) =>
+      node.misconceptions.map((misconception) => misconception.id),
+    ),
+  );
   const rubricIds = new Set(config.rubrics.rubrics.map((rubric) => rubric.id));
+  const followingAnchorIds = new Set(config.rubrics.followingAnchors.map((anchor) => anchor.id));
   const scaffoldLevels = new Set(config.scaffoldPolicy.levels.map((level) => level.level));
+  const rubricNodeIds = new Set<string>();
 
   config.rubrics.rubrics.forEach((rubric, index) => {
     if (!nodeIds.has(rubric.nodeId)) {
@@ -151,6 +158,64 @@ export async function validateReferences(
         'config/rubrics.json',
         `rubrics.${index}.nodeId`,
         `unknown knowledge node ${rubric.nodeId}`,
+      );
+    }
+    if (rubricNodeIds.has(rubric.nodeId)) {
+      throw new ConfigValidationError(
+        'config/rubrics.json',
+        `rubrics.${index}.nodeId`,
+        `duplicate rubric for knowledge node ${rubric.nodeId}`,
+      );
+    }
+    rubricNodeIds.add(rubric.nodeId);
+    if (rubric.followingAnchorId && !followingAnchorIds.has(rubric.followingAnchorId)) {
+      throw new ConfigValidationError(
+        'config/rubrics.json',
+        `rubrics.${index}.followingAnchorId`,
+        `unknown following anchor ${rubric.followingAnchorId}`,
+      );
+    }
+  });
+
+  for (const nodeId of nodeIds) {
+    if (!rubricNodeIds.has(nodeId)) {
+      throw new ConfigValidationError(
+        'config/rubrics.json',
+        'rubrics',
+        `missing rubric for knowledge node ${nodeId}`,
+      );
+    }
+  }
+
+  const feedbackNodeId = config.rubrics.policy.equation.feedbackNodeId;
+  if (!nodeIds.has(feedbackNodeId)) {
+    throw new ConfigValidationError(
+      'config/rubrics.json',
+      'policy.equation.feedbackNodeId',
+      `unknown knowledge node ${feedbackNodeId}`,
+    );
+  }
+  for (const nodeId of Object.keys(config.rubrics.policy.weighting.nodeOverrides)) {
+    if (!nodeIds.has(nodeId)) {
+      throw new ConfigValidationError(
+        'config/rubrics.json',
+        `policy.weighting.nodeOverrides.${nodeId}`,
+        `unknown knowledge node ${nodeId}`,
+      );
+    }
+  }
+
+  const configFields = config as unknown as Record<string, unknown>;
+  config.rubrics.adjudications.forEach((decision, index) => {
+    const value = decision.configField.split('.').reduce<unknown>((current, segment) => {
+      if (typeof current !== 'object' || current === null || !(segment in current)) return undefined;
+      return (current as Record<string, unknown>)[segment];
+    }, configFields);
+    if (value === undefined) {
+      throw new ConfigValidationError(
+        'config/rubrics.json',
+        `adjudications.${index}.configField`,
+        `unknown config field ${decision.configField}`,
       );
     }
   });
@@ -162,6 +227,40 @@ export async function validateReferences(
           'config/pretest.json',
           `questions.${questionIndex}.rubricIds.${rubricIndex}`,
           `unknown rubric ${rubricId}`,
+        );
+      }
+    });
+    question.targetNodeIds.forEach((nodeId, nodeIndex) => {
+      if (!nodeIds.has(nodeId)) {
+        throw new ConfigValidationError(
+          'config/pretest.json',
+          `questions.${questionIndex}.targetNodeIds.${nodeIndex}`,
+          `unknown knowledge node ${nodeId}`,
+        );
+      }
+    });
+    if (question.type === 'choice') {
+      question.options.forEach((option, optionIndex) => {
+        option.misconceptionIds.forEach((misconceptionId, misconceptionIndex) => {
+          if (!misconceptionIds.has(misconceptionId)) {
+            throw new ConfigValidationError(
+              'config/pretest.json',
+              `questions.${questionIndex}.options.${optionIndex}.misconceptionIds.${misconceptionIndex}`,
+              `unknown misconception ${misconceptionId}`,
+            );
+          }
+        });
+      });
+    }
+  });
+
+  config.pretest.builder.components.forEach((component, componentIndex) => {
+    component.distractor?.misconceptionIds.forEach((misconceptionId, misconceptionIndex) => {
+      if (!misconceptionIds.has(misconceptionId)) {
+        throw new ConfigValidationError(
+          'config/pretest.json',
+          `builder.components.${componentIndex}.distractor.misconceptionIds.${misconceptionIndex}`,
+          `unknown misconception ${misconceptionId}`,
         );
       }
     });
@@ -187,18 +286,49 @@ export async function validateReferences(
         );
       }
     });
+    trainingCase.evidencePaths.forEach((evidencePath, evidenceIndex) => {
+      if (!nodeIds.has(evidencePath.nodeId)) {
+        throw new ConfigValidationError(
+          relativeCaseFile,
+          `evidencePaths.${evidenceIndex}.nodeId`,
+          `unknown knowledge node ${evidencePath.nodeId}`,
+        );
+      }
+    });
+    trainingCase.followingAnchors.forEach((anchor, anchorIndex) => {
+      if (!followingAnchorIds.has(anchor.id)) {
+        throw new ConfigValidationError(
+          relativeCaseFile,
+          `followingAnchors.${anchorIndex}.id`,
+          `unknown following anchor ${anchor.id}`,
+        );
+      }
+    });
+    trainingCase.equationSets.forEach((equationSet, equationIndex) => {
+      if (equationSet.medium !== trainingCase.medium) {
+        throw new ConfigValidationError(
+          relativeCaseFile,
+          `equationSets.${equationIndex}.medium`,
+          `must match case medium ${trainingCase.medium}`,
+        );
+      }
+    });
   });
 
   if (contentRoot) {
     await Promise.all(
       config.cases.flatMap((trainingCase, caseIndex) =>
-        trainingCase.materialRefs.map((materialRef, materialIndex) =>
-          validateMaterialRef(
-            contentRoot,
-            caseFiles[caseIndex] ?? `config/cases/${trainingCase.id}.json`,
-            `materialRefs.${materialIndex}`,
-            materialRef,
-          ),
+        trainingCase.materials.flatMap((material, materialIndex) =>
+          material.materialRef === null
+            ? []
+            : [
+                validateMaterialRef(
+                  contentRoot,
+                  caseFiles[caseIndex] ?? `config/cases/${trainingCase.id}.json`,
+                  `materials.${materialIndex}.materialRef`,
+                  material.materialRef,
+                ),
+              ],
         ),
       ),
     );

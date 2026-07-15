@@ -1,12 +1,32 @@
 {
   "version": "scaffold-policy.v1",
   "levels": [
-    { "level": 1, "label": "完整引导", "promptCount": 4 },
-    { "level": 2, "label": "部分引导", "promptCount": 2 },
-    { "level": 3, "label": "独立作答", "promptCount": 0 }
+    { "level": 1, "label": "完整引导", "promptCount": 8 },
+    { "level": 2, "label": "三维度标题", "promptCount": 3 },
+    { "level": 3, "label": "独立作答", "promptCount": 1 }
   ],
-  "promotion": { "consecutiveHits": 2 },
-  "demotion": { "consecutiveMisses": 1 },
-  "selection": { "weakNodeThreshold": 0.6, "recentCaseWindow": 3 }
+  "promotion": {
+    "consecutiveHits": 2,
+    "eligibleOutcomes": ["hit"]
+  },
+  "demotion": {
+    "consecutiveMisses": 1,
+    "levels": 1
+  },
+  "assistance": {
+    "correctOutcome": "hit-with-help",
+    "countsForPromotion": false
+  },
+  "socratic": {
+    "maxRounds": 3,
+    "correctedOutcome": "hit-with-help"
+  },
+  "passing": {
+    "minimumRatio": 0.75,
+    "requireNoCoreMiss": true
+  },
+  "selection": {
+    "weakNodeThreshold": 0.6,
+    "recentCaseWindow": 3
+  }
 }
-

@@ -1,24 +1,183 @@
 {
   "version": "pretest.v1",
   "builder": {
+    "prompt": "不用具体金属名称，搭建一个能持续工作的原电池通用模型，并标出电子、阳离子和阴离子的运动方向。",
     "components": [
-      { "id": "oxidation-site", "label": "失电子场所", "kind": "electrode" },
-      { "id": "electron-conductor", "label": "电子导体", "kind": "wire" },
-      { "id": "ion-conductor", "label": "离子导体", "kind": "ion-conductor" },
-      { "id": "reduction-site", "label": "得电子场所", "kind": "electrode" }
+      { "id": "site-a", "label": "导体棒 A", "kind": "electrode", "functionalRole": "oxidation-site", "abstract": true },
+      { "id": "electron-link", "label": "金属连接件", "kind": "electron-conductor", "functionalRole": "electron-conductor", "abstract": true },
+      { "id": "ion-medium", "label": "可导电液体或离子通道", "kind": "ion-conductor", "functionalRole": "ion-conductor", "abstract": true },
+      { "id": "site-b", "label": "导体棒 B", "kind": "electrode", "functionalRole": "reduction-site", "abstract": true },
+      { "id": "container", "label": "容器", "kind": "container", "abstract": true },
+      { "id": "electron-arrow", "label": "电子方向箭头", "kind": "direction-marker", "abstract": true },
+      { "id": "cation-arrow", "label": "阳离子方向箭头", "kind": "direction-marker", "abstract": true },
+      { "id": "anion-arrow", "label": "阴离子方向箭头", "kind": "direction-marker", "abstract": true },
+      {
+        "id": "same-material-pair",
+        "label": "同种材料电极一对",
+        "kind": "distractor",
+        "abstract": false,
+        "distractor": {
+          "misconceptionIds": ["D5-M1", "P1-M1"],
+          "reason": "用具体且相同的材料替代两个功能不同的反应场所，不能表达通用模型。"
+        }
+      },
+      {
+        "id": "sucrose-solution",
+        "label": "蔗糖水",
+        "kind": "distractor",
+        "abstract": false,
+        "distractor": {
+          "misconceptionIds": ["D3-M2"],
+          "reason": "蔗糖水不能提供足够的自由离子作为离子导体。"
+        }
+      },
+      {
+        "id": "insulated-link",
+        "label": "绝缘连接件",
+        "kind": "distractor",
+        "abstract": true,
+        "distractor": {
+          "misconceptionIds": ["D2-M1"],
+          "reason": "绝缘材料不能构成电子通路。"
+        }
+      }
     ],
     "structuralRules": [
       {
         "id": "four-functional-elements",
-        "description": "通用模型包含四个功能要素",
-        "requiredComponentIds": ["oxidation-site", "electron-conductor", "ion-conductor", "reduction-site"]
+        "description": "失电子场所、电子导体、离子导体、得电子场所四个功能要素齐全。",
+        "check": "four-elements",
+        "requiredComponentIds": ["site-a", "electron-link", "ion-medium", "site-b"],
+        "nodeIds": ["D1", "D2", "D3", "D4"]
+      },
+      {
+        "id": "closed-circuit",
+        "description": "电子通路和离子通路分别连接两个反应场所，形成闭合回路。",
+        "check": "closed-circuit",
+        "requiredComponentIds": ["site-a", "electron-link", "ion-medium", "site-b"],
+        "nodeIds": ["D2", "D3"]
+      },
+      {
+        "id": "direction-consistency",
+        "description": "电子由失电子场所经外电路到得电子场所，阳离子趋向得电子场所、阴离子趋向失电子场所。",
+        "check": "direction-consistency",
+        "requiredComponentIds": ["electron-arrow", "cation-arrow", "anion-arrow"],
+        "nodeIds": ["P4"]
+      },
+      {
+        "id": "generic-abstraction",
+        "description": "模型表达功能关系，不把两个场所绑定为 Zn、Cu 等具体实例。",
+        "check": "abstraction",
+        "requiredComponentIds": [],
+        "nodeIds": ["D5"]
       }
-    ]
+    ],
+    "assessment": {
+      "generalModel": {
+        "requiredRoles": ["oxidation-site", "electron-conductor", "ion-conductor", "reduction-site"],
+        "saltBridgeRequired": false,
+        "requireClosedElectronPath": true,
+        "requireClosedIonPath": true
+      },
+      "direction": {
+        "electronFrom": "oxidation-site",
+        "electronTo": "reduction-site",
+        "cationToward": "reduction-site",
+        "anionToward": "oxidation-site"
+      },
+      "abstraction": {
+        "concreteBindingOutcome": "partial",
+        "concreteLabels": ["Zn", "Cu", "Al", "Fe", "Ag", "锌", "铜", "铝", "铁", "银"],
+        "feedback": "通用模型应表达所有原电池共有的功能关系，而不是绑定一个具体金属组合。"
+      }
+    }
   },
   "questions": [
-    { "id": "pretest-builder", "type": "builder", "prompt": "搭建原电池通用模型。", "rubricIds": ["rubric-d1"] },
-    { "id": "pretest-principle", "type": "text", "prompt": "说明原电池反应成立的前提。", "rubricIds": ["rubric-p1"] },
-    { "id": "pretest-energy", "type": "text", "prompt": "说明原电池中的能量转化。", "rubricIds": ["rubric-e1"] }
+    {
+      "id": "pretest-principle-reactants",
+      "type": "choice",
+      "prompt": "关于锌铜原电池，下列说法哪一项同时正确区分了反应场所与反应物？",
+      "dimensionId": "principle",
+      "rubricIds": ["rubric-p1", "rubric-p2", "rubric-d5"],
+      "targetNodeIds": ["P1", "P2", "D5"],
+      "evidencePath": "选择项 -> 氧化还原前提、两极反应物与场所/反应物区分",
+      "options": [
+        {
+          "id": "A",
+          "text": "Zn 是负极场所并作为还原剂失电子；Cu 是正极场所，真正得电子的反应物是 Cu²⁺。",
+          "correct": true,
+          "misconceptionIds": []
+        },
+        {
+          "id": "B",
+          "text": "Cu 片在正极得到电子，所以 Cu 片本身是氧化剂。",
+          "correct": false,
+          "misconceptionIds": ["D4-M1", "D5-M1", "P2-M2"]
+        },
+        {
+          "id": "C",
+          "text": "只要有两根不同金属和导线，任何反应都能持续发电。",
+          "correct": false,
+          "misconceptionIds": ["P1-M1", "D3-M3"]
+        },
+        {
+          "id": "D",
+          "text": "电子由 Cu²⁺ 经盐桥移动到 Zn。",
+          "correct": false,
+          "misconceptionIds": ["D3-M1", "P4-M2"]
+        }
+      ]
+    },
+    {
+      "id": "pretest-principle-process",
+      "type": "text",
+      "prompt": "写出锌铜原电池的两个电极反应式，并说明电子、盐桥中阴阳离子的方向以及可观察到的电极现象。",
+      "dimensionId": "principle",
+      "rubricIds": ["rubric-p3", "rubric-p4", "rubric-p5", "rubric-p6", "rubric-p7"],
+      "targetNodeIds": ["P3", "P4", "P5", "P6", "P7"],
+      "evidencePath": "简答原文 -> 电极产物、电子/离子过程、现象、两条电极反应式与总反应",
+      "answerGuidance": [
+        "负极：Zn - 2e⁻ = Zn²⁺；正极：Cu²⁺ + 2e⁻ = Cu。",
+        "电子由 Zn 极经外电路流向 Cu 极，不经过盐桥。",
+        "盐桥中阴离子移向负极侧，阳离子移向正极侧。",
+        "锌片逐渐溶解，铜片上有铜析出、质量增加。",
+        "合并两式得到 Zn + Cu^2+ = Zn^2+ + Cu，总反应中不保留电子。"
+      ]
+    },
+    {
+      "id": "pretest-energy",
+      "type": "choice",
+      "prompt": "关于原电池的能量转化，下列说法正确的是哪一项？",
+      "dimensionId": "energy",
+      "rubricIds": ["rubric-e1", "rubric-e2", "rubric-e3"],
+      "targetNodeIds": ["E1", "E2", "E3"],
+      "evidencePath": "选择项 -> 能量方向、反应来源与转化限度",
+      "options": [
+        {
+          "id": "A",
+          "text": "自发氧化还原反应释放的化学能直接转化为电能，但不能百分之百转化；燃料电池通常有较高能量转化率。",
+          "correct": true,
+          "misconceptionIds": []
+        },
+        {
+          "id": "B",
+          "text": "化学能先全部变成热能，再由热能变成电能。",
+          "correct": false,
+          "misconceptionIds": ["E1-M1"]
+        },
+        {
+          "id": "C",
+          "text": "原电池内部预先储存着电子，接通后把电子释放出来。",
+          "correct": false,
+          "misconceptionIds": ["E1-M2", "E2-M1"]
+        },
+        {
+          "id": "D",
+          "text": "只要装置闭合，不自发的反应也能持续对外供电，而且能量可完全转化。",
+          "correct": false,
+          "misconceptionIds": ["E2-M2", "E3-M1"]
+        }
+      ]
+    }
   ]
 }
-

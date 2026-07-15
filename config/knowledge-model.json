@@ -9,33 +9,208 @@
     {
       "id": "D1",
       "dimensionId": "device",
-      "statement": "失电子场所是氧化半反应发生的场所,材料须导电。",
-      "misconceptions": ["认为失电子场所必须是参与反应的金属"],
+      "statement": "负极（电解池中为阳极）材料是氧化半反应发生的场所；材料须导电，可为活性材料（Zn、Al）或惰性电极。",
+      "misconceptions": [
+        { "id": "D1-M1", "statement": "不能把负极与失电子、氧化对应起来。" },
+        { "id": "D1-M2", "statement": "认为失电子场所必须是参与反应的金属。" }
+      ],
       "weight": 2,
-      "position": { "x": -1, "y": 0, "z": 0 },
+      "position": { "x": -3, "y": 0, "z": 0 },
       "dependsOn": []
+    },
+    {
+      "id": "D2",
+      "dimensionId": "device",
+      "statement": "外电路（导线与电极导体部分）传导电子，连接两个反应场所。",
+      "misconceptions": [
+        { "id": "D2-M1", "statement": "分不清外电路和内电路的边界。" },
+        { "id": "D2-M2", "statement": "认为外电路中也有离子移动。" }
+      ],
+      "weight": 1,
+      "position": { "x": -1, "y": 0, "z": 0 },
+      "dependsOn": ["D1", "D4"]
+    },
+    {
+      "id": "D3",
+      "dimensionId": "device",
+      "statement": "电解质溶液、熔融电解质或盐桥传导离子，构成内电路，与外电路共同形成闭合回路；盐桥通过离子迁移平衡两半电池电荷。",
+      "misconceptions": [
+        { "id": "D3-M1", "statement": "认为溶液或盐桥传导电子。" },
+        { "id": "D3-M2", "statement": "选用酒精、蔗糖水等非电解质作为离子导体。" },
+        { "id": "D3-M3", "statement": "认为双液原电池可以省略盐桥而回路仍然闭合。" }
+      ],
+      "weight": 2,
+      "position": { "x": 1, "y": 0, "z": 0 },
+      "dependsOn": ["D1", "D4"]
+    },
+    {
+      "id": "D4",
+      "dimensionId": "device",
+      "statement": "正极（电解池中为阴极）材料是还原半反应发生的场所；材料通常不参与反应，常为惰性电极。",
+      "misconceptions": [
+        { "id": "D4-M1", "statement": "认为正极材料自身必然被还原或溶解。" },
+        { "id": "D4-M2", "statement": "不能把正极与得电子、还原对应起来。" }
+      ],
+      "weight": 2,
+      "position": { "x": 3, "y": 0, "z": 0 },
+      "dependsOn": []
+    },
+    {
+      "id": "D5",
+      "dimensionId": "device",
+      "statement": "正极、负极同时含两层：失、得电子的场所（电极材料，装置维度）与电极反应物（参与得失电子的微粒，原理维度）。两者可重合，如锌铜电池负极的场所和反应物都是 Zn；也可分离，如锌铜电池正极场所为 Cu、反应物为 Cu²⁺，铝-空气正极场所为多孔碳、反应物为 O₂。判断反应物看氧化剂、还原剂；选择场所看导电性与稳定性，必要时用惰性电极。",
+      "misconceptions": [
+        { "id": "D5-M1", "statement": "默认电极场所必然就是电极反应物。" },
+        { "id": "D5-M2", "statement": "遇到惰性电极时找不到真正参与反应的微粒。" },
+        { "id": "D5-M3", "statement": "设计电池时误以为反应物必须直接制成电极。" }
+      ],
+      "weight": 2,
+      "position": { "x": 2.25, "y": 1.5, "z": 0.2 },
+      "dependsOn": ["D1", "D4"]
     },
     {
       "id": "P1",
       "dimensionId": "principle",
-      "statement": "原电池以自发氧化还原反应为前提,两个半反应分处两个场所。",
-      "misconceptions": ["认为任意反应均可构成原电池"],
+      "statement": "前提是一个自发的氧化还原反应，氧化、还原两个半反应被分隔在两个场所分别发生。",
+      "misconceptions": [
+        { "id": "P1-M1", "statement": "认为任意化学反应都能构成原电池。" },
+        { "id": "P1-M2", "statement": "不理解把两个半反应分置于两个场所是产生持续外电流的关键。" }
+      ],
       "weight": 2,
       "position": { "x": 0, "y": 1, "z": 0 },
       "dependsOn": []
     },
     {
+      "id": "P2",
+      "dimensionId": "principle",
+      "statement": "由物质的氧化性、还原性确定：还原剂在失电子场所被氧化，氧化剂在得电子场所被还原。",
+      "misconceptions": [
+        { "id": "P2-M1", "statement": "把氧化还原关系与正负极对应记反。" },
+        { "id": "P2-M2", "statement": "找错氧化剂或还原剂。" }
+      ],
+      "weight": 2,
+      "position": { "x": 0, "y": 2, "z": 0 },
+      "dependsOn": ["D5"]
+    },
+    {
+      "id": "P3",
+      "dimensionId": "principle",
+      "statement": "由三个因素共同确定：得失电子数（化合价变化）、物质存在形式（离子、沉淀、气体等）、环境介质的影响（酸性、碱性、盐介质下产物不同）。",
+      "misconceptions": [
+        { "id": "P3-M1", "statement": "只看化合价变化而忽略反应介质。" },
+        { "id": "P3-M2", "statement": "在碱性环境的最终电极反应式中保留游离H+。" },
+        { "id": "P3-M3", "statement": "忽略产物在给定条件下的离子、沉淀或气体存在形式。" }
+      ],
+      "weight": 2,
+      "position": { "x": 0, "y": 3, "z": 0 },
+      "dependsOn": ["P2"]
+    },
+    {
+      "id": "P4",
+      "dimensionId": "principle",
+      "statement": "电子转移：经外电路由失电子场所（负极）流向得电子场所（正极），不进入离子导体；离子转移：内电路中阳离子移向得电子场所、阴离子移向失电子场所，两者共同构成闭合回路。",
+      "misconceptions": [
+        { "id": "P4-M1", "statement": "把电子流动方向说反。" },
+        { "id": "P4-M2", "statement": "认为电子经过电解质溶液或盐桥。" },
+        { "id": "P4-M3", "statement": "把阳离子、阴离子的迁移方向说反。" }
+      ],
+      "weight": 2,
+      "position": { "x": 0, "y": 4, "z": 0 },
+      "dependsOn": ["P2", "P3"]
+    },
+    {
+      "id": "P5",
+      "dimensionId": "principle",
+      "statement": "能将内在过程与可观测现象互推：电流方向（与电子流相反，正极到负极）、电极增重或减重、气泡、颜色变化等。",
+      "misconceptions": [
+        { "id": "P5-M1", "statement": "把外电路电流方向与电子运动方向混为一谈。" },
+        { "id": "P5-M2", "statement": "不能根据电极现象反推极性或电极反应。" }
+      ],
+      "weight": 1,
+      "position": { "x": 0, "y": 5, "z": 0 },
+      "dependsOn": ["P4"]
+    },
+    {
+      "id": "P6",
+      "dimensionId": "principle",
+      "statement": "反应物到产物的符号表达：满足质量守恒、电荷守恒、两极电子转移数相等，且与电解质介质匹配。",
+      "misconceptions": [
+        { "id": "P6-M1", "statement": "元素或电荷不守恒。" },
+        { "id": "P6-M2", "statement": "两个半反应的电子数没有配平。" },
+        { "id": "P6-M3", "statement": "方程式守恒但与案例介质或产物形态不匹配。" }
+      ],
+      "weight": 2,
+      "position": { "x": 0.75, "y": 3, "z": 0.6 },
+      "dependsOn": ["P2", "P3"]
+    },
+    {
+      "id": "P7",
+      "dimensionId": "principle",
+      "statement": "将两个电极半反应按得失电子数相等配合相加，消去电子和两侧相同物种，得到符合案例事实的总反应式。",
+      "misconceptions": [
+        { "id": "P7-M1", "statement": "两极半反应电子数未配平就直接相加。" },
+        { "id": "P7-M2", "statement": "总反应式中仍保留电子或未消去两侧相同物种。" }
+      ],
+      "weight": 1,
+      "position": { "x": 1.2, "y": 3.6, "z": 0.8 },
+      "dependsOn": ["P6"]
+    },
+    {
       "id": "E1",
       "dimensionId": "energy",
-      "statement": "原电池将化学能直接转化为电能。",
-      "misconceptions": ["认为原电池先把化学能转为热能"],
+      "statement": "原电池是释能装置：化学能直接转化为电能，不经热能中转（电解池为储能：电能转化为化学能，二期）。",
+      "misconceptions": [
+        { "id": "E1-M1", "statement": "认为原电池先把化学能转成热能再发电。" },
+        { "id": "E1-M2", "statement": "认为电池内部静态储存着电能。" },
+        { "id": "E1-M3", "statement": "混淆原电池释能与电解池储能的方向。" }
+      ],
       "weight": 2,
-      "position": { "x": 0, "y": 0, "z": 1 },
+      "position": { "x": 1, "y": -1, "z": 1 },
       "dependsOn": ["P1"]
+    },
+    {
+      "id": "E2",
+      "dimensionId": "energy",
+      "statement": "电能来源于自发氧化还原反应释放的化学能。",
+      "misconceptions": [
+        { "id": "E2-M1", "statement": "说不清原电池电能的反应来源。" },
+        { "id": "E2-M2", "statement": "认为不自发的反应也能持续对外供电。" }
+      ],
+      "weight": 1,
+      "position": { "x": 2, "y": -2, "z": 2 },
+      "dependsOn": ["P1", "E1"]
+    },
+    {
+      "id": "E3",
+      "dimensionId": "energy",
+      "statement": "能量转化并非 100%，部分以热等形式损耗；燃料电池效率高于直接燃烧发电。",
+      "misconceptions": [
+        { "id": "E3-M1", "statement": "认为原电池可以把化学能完全转化为电能。" },
+        { "id": "E3-M2", "statement": "忽略燃料电池与火力发电在能量转化环节和效率上的差异。" }
+      ],
+      "weight": 1,
+      "position": { "x": 3, "y": -3, "z": 3 },
+      "dependsOn": ["E1"]
     }
   ],
   "edges": [
-    { "id": "P1-E1", "from": "P1", "to": "E1", "kind": "dependency" }
+    { "id": "D1-D2", "from": "D1", "to": "D2", "kind": "dependency" },
+    { "id": "D4-D2", "from": "D4", "to": "D2", "kind": "dependency" },
+    { "id": "D1-D3", "from": "D1", "to": "D3", "kind": "dependency" },
+    { "id": "D4-D3", "from": "D4", "to": "D3", "kind": "dependency" },
+    { "id": "D1-D5", "from": "D1", "to": "D5", "kind": "dependency" },
+    { "id": "D4-D5", "from": "D4", "to": "D5", "kind": "dependency" },
+    { "id": "D5-P2", "from": "D5", "to": "P2", "kind": "cross-axis" },
+    { "id": "P2-P3", "from": "P2", "to": "P3", "kind": "dependency" },
+    { "id": "P2-P4", "from": "P2", "to": "P4", "kind": "dependency" },
+    { "id": "P3-P4", "from": "P3", "to": "P4", "kind": "dependency" },
+    { "id": "P4-P5", "from": "P4", "to": "P5", "kind": "dependency" },
+    { "id": "P2-P6", "from": "P2", "to": "P6", "kind": "dependency" },
+    { "id": "P3-P6", "from": "P3", "to": "P6", "kind": "dependency" },
+    { "id": "P6-P7", "from": "P6", "to": "P7", "kind": "dependency" },
+    { "id": "P1-E1", "from": "P1", "to": "E1", "kind": "dependency" },
+    { "id": "P1-E2", "from": "P1", "to": "E2", "kind": "dependency" },
+    { "id": "E1-E2", "from": "E1", "to": "E2", "kind": "dependency" },
+    { "id": "E1-E3", "from": "E1", "to": "E3", "kind": "dependency" }
   ]
 }
-

@@ -2,6 +2,15 @@ import { z } from 'zod';
 
 const idSchema = z.string().trim().min(1);
 const versionSchema = z.string().trim().regex(/\.v\d+$/, 'must end with a numeric .v version');
+const outcomeSchema = z.enum(['hit', 'partial', 'miss']);
+const dimensionIdSchema = z.enum(['device', 'principle', 'energy']);
+
+export const functionalRoleSchema = z.enum([
+  'oxidation-site',
+  'electron-conductor',
+  'ion-conductor',
+  'reduction-site',
+]);
 
 function reportDuplicateIds(
   values: readonly { id: string }[],
@@ -21,11 +30,32 @@ function reportDuplicateIds(
   });
 }
 
+function reportDuplicateStrings(
+  values: readonly string[],
+  path: readonly (string | number)[],
+  context: z.RefinementCtx,
+) {
+  const seen = new Set<string>();
+  values.forEach((value, index) => {
+    if (seen.has(value)) {
+      context.addIssue({ code: 'custom', path: [...path, index], message: `duplicate reference ${value}` });
+    }
+    seen.add(value);
+  });
+}
+
 const positionSchema = z
   .object({
     x: z.number().finite(),
     y: z.number().finite(),
     z: z.number().finite(),
+  })
+  .strict();
+
+const misconceptionSchema = z
+  .object({
+    id: idSchema,
+    statement: z.string().trim().min(1),
   })
   .strict();
 
@@ -36,21 +66,21 @@ export const knowledgeModelSchema = z
       .array(
         z
           .object({
-            id: idSchema,
+            id: dimensionIdSchema,
             label: z.string().trim().min(1),
             axis: z.enum(['x', 'y', 'z']),
           })
           .strict(),
       )
-      .min(3),
+      .length(3),
     nodes: z
       .array(
         z
           .object({
             id: idSchema,
-            dimensionId: idSchema,
+            dimensionId: dimensionIdSchema,
             statement: z.string().trim().min(1),
-            misconceptions: z.array(z.string().trim().min(1)),
+            misconceptions: z.array(misconceptionSchema).min(1),
             weight: z.union([z.literal(1), z.literal(2)], {
               error: 'must be 1 (secondary) or 2 (core)',
             }),
@@ -91,6 +121,7 @@ export const knowledgeModelSchema = z
 
     const dimensionIds = new Set(value.dimensions.map((dimension) => dimension.id));
     const nodeIds = new Set(value.nodes.map((node) => node.id));
+    const misconceptionIds = new Set<string>();
 
     value.nodes.forEach((node, index) => {
       if (!dimensionIds.has(node.dimensionId)) {
@@ -100,16 +131,19 @@ export const knowledgeModelSchema = z
           message: `unknown dimension ${node.dimensionId}`,
         });
       }
-      const dependencies = new Set<string>();
-      node.dependsOn.forEach((dependency, dependencyIndex) => {
-        if (dependencies.has(dependency)) {
+      reportDuplicateIds(node.misconceptions, ['nodes', index, 'misconceptions'], context);
+      node.misconceptions.forEach((misconception, misconceptionIndex) => {
+        if (misconceptionIds.has(misconception.id)) {
           context.addIssue({
             code: 'custom',
-            path: ['nodes', index, 'dependsOn', dependencyIndex],
-            message: `duplicate node reference ${dependency}`,
+            path: ['nodes', index, 'misconceptions', misconceptionIndex, 'id'],
+            message: `duplicate id ${misconception.id}`,
           });
         }
-        dependencies.add(dependency);
+        misconceptionIds.add(misconception.id);
+      });
+      reportDuplicateStrings(node.dependsOn, ['nodes', index, 'dependsOn'], context);
+      node.dependsOn.forEach((dependency, dependencyIndex) => {
         if (!nodeIds.has(dependency)) {
           context.addIssue({
             code: 'custom',
@@ -136,15 +170,131 @@ export const knowledgeModelSchema = z
 const rubricRuleSchema = z
   .object({
     id: idSchema,
-    outcome: z.enum(['hit', 'partial', 'miss']),
+    outcome: outcomeSchema,
     score: z.number().nonnegative(),
     description: z.string().trim().min(1),
+  })
+  .strict();
+
+const evidenceRequirementSchema = z
+  .object({
+    id: idSchema,
+    description: z.string().trim().min(1),
+    sources: z
+      .array(z.enum(['builder', 'choice', 'text', 'equation', 'case-analysis']))
+      .min(1),
+  })
+  .strict();
+
+const adjudicationIds = [
+  '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12',
+  '13', '14', '15', '16', '17', '18', '18b', '18c', '19', '19b', '20',
+] as const;
+
+const adjudicationSchema = z
+  .object({
+    id: z.enum(adjudicationIds),
+    configField: z.string().trim().min(1),
+    status: z.enum(['teacher-confirmed', 'teacher-tuning']),
+    source: z.enum(['given-default', 'model-decision', 'developer-default']),
+    reviewDueAt: z.string().datetime({ offset: true }).nullable(),
+  })
+  .strict();
+
+const rubricPolicySchema = z
+  .object({
+    outcomeScale: z
+      .object({
+        mode: z.enum(['two-state', 'three-state']),
+        partialDefinition: z.string().trim().min(1),
+      })
+      .strict(),
+    followingError: z
+      .object({
+        strategy: z.enum(['score-logical-chain', 'score-objective-fact']),
+        annotation: z.string().trim().min(1),
+        anchorId: idSchema,
+      })
+      .strict(),
+    terminology: z
+      .object({
+        colloquialCorrectOutcome: outcomeSchema,
+        requireModelTermsForHit: z.boolean(),
+      })
+      .strict(),
+    beyondSyllabus: z
+      .object({ correctOutcome: outcomeSchema, bonusPoints: z.number().nonnegative() })
+      .strict(),
+    contradiction: z.object({ outcome: outcomeSchema }).strict(),
+    nonResponse: z
+      .object({
+        status: z.enum(['unanswered', 'miss']),
+        promptRetry: z.boolean(),
+        includeInDiagnosis: z.boolean(),
+      })
+      .strict(),
+    typos: z
+      .object({
+        unambiguousStrategy: z.enum(['ignore', 'warn-no-penalty', 'penalize']),
+        ambiguousStrategy: z.enum(['needs-review', 'miss']),
+      })
+      .strict(),
+    equation: z
+      .object({
+        mediumMismatchOutcome: outcomeSchema,
+        feedbackNodeId: idSchema,
+        acceptEqualsSign: z.boolean(),
+        requireEquilibriumArrow: z.boolean(),
+        requireStates: z.boolean(),
+      })
+      .strict(),
+    weighting: z
+      .object({
+        dimensionMode: z.enum(['equal', 'node-weighted']),
+        coreWeight: z.literal(2),
+        secondaryWeight: z.literal(1),
+        nodeOverrides: z.record(idSchema, z.union([z.literal(1), z.literal(2)])),
+      })
+      .strict(),
+    weakness: z
+      .object({
+        threshold: z.number().min(0).max(1),
+        partialVisualization: z.enum(['half-lit', 'dark', 'full-lit']),
+      })
+      .strict(),
+    repeatedAnswers: z.object({ strategy: z.enum(['latest', 'best', 'worst']) }).strict(),
+    dimensionAssignments: z
+      .object({
+        spontaneousRedox: dimensionIdSchema,
+        saltBridge: idSchema,
+        siteReactantDistinction: z.enum(['D5-cross-axis', 'device-only', 'principle-only']),
+      })
+      .strict(),
+    presentation: z
+      .object({
+        studentRadar: z.enum(['score', 'level', 'score-and-level']),
+        classSummary: z.array(z.enum(['radar-distribution', 'node-error-ranking', 'misconception-top-n'])).min(1),
+      })
+      .strict(),
   })
   .strict();
 
 export const rubricsSchema = z
   .object({
     version: versionSchema,
+    followingAnchors: z
+      .array(
+        z
+          .object({
+            id: idSchema,
+            label: z.string().trim().min(1),
+            description: z.string().trim().min(1),
+          })
+          .strict(),
+      )
+      .min(1),
+    policy: rubricPolicySchema,
+    adjudications: z.array(adjudicationSchema).length(adjudicationIds.length),
     rubrics: z
       .array(
         z
@@ -152,8 +302,9 @@ export const rubricsSchema = z
             id: idSchema,
             nodeId: idSchema,
             maxScore: z.number().positive(),
-            evidenceRequirements: z.array(z.string().trim().min(1)).min(1),
-            rules: z.array(rubricRuleSchema).min(1),
+            evidenceRequirements: z.array(evidenceRequirementSchema).min(1),
+            followingAnchorId: idSchema.optional(),
+            rules: z.array(rubricRuleSchema).length(3),
           })
           .strict(),
       )
@@ -161,10 +312,54 @@ export const rubricsSchema = z
   })
   .strict()
   .superRefine((value, context) => {
+    reportDuplicateIds(value.followingAnchors, ['followingAnchors'], context);
+    reportDuplicateIds(value.adjudications, ['adjudications'], context);
     reportDuplicateIds(value.rubrics, ['rubrics'], context);
+    const decisionIds = new Set(value.adjudications.map((entry) => entry.id));
+    adjudicationIds.forEach((id) => {
+      if (!decisionIds.has(id)) {
+        context.addIssue({ code: 'custom', path: ['adjudications'], message: `missing adjudication ${id}` });
+      }
+    });
+    value.adjudications.forEach((entry, index) => {
+      if (entry.status === 'teacher-confirmed' && entry.reviewDueAt !== null) {
+        context.addIssue({
+          code: 'custom',
+          path: ['adjudications', index, 'reviewDueAt'],
+          message: 'confirmed adjudication cannot have a pending review deadline',
+        });
+      }
+      if (entry.status === 'teacher-tuning' && entry.reviewDueAt === null) {
+        context.addIssue({
+          code: 'custom',
+          path: ['adjudications', index, 'reviewDueAt'],
+          message: 'teacher-tuning adjudication requires a review deadline',
+        });
+      }
+    });
+
+    const anchorIds = new Set(value.followingAnchors.map((anchor) => anchor.id));
     const ruleIds = new Set<string>();
     value.rubrics.forEach((rubric, rubricIndex) => {
+      reportDuplicateIds(rubric.evidenceRequirements, ['rubrics', rubricIndex, 'evidenceRequirements'], context);
       reportDuplicateIds(rubric.rules, ['rubrics', rubricIndex, 'rules'], context);
+      const outcomes = new Set(rubric.rules.map((rule) => rule.outcome));
+      for (const outcome of outcomeSchema.options) {
+        if (!outcomes.has(outcome)) {
+          context.addIssue({
+            code: 'custom',
+            path: ['rubrics', rubricIndex, 'rules'],
+            message: `missing ${outcome} rule`,
+          });
+        }
+      }
+      if (rubric.followingAnchorId && !anchorIds.has(rubric.followingAnchorId)) {
+        context.addIssue({
+          code: 'custom',
+          path: ['rubrics', rubricIndex, 'followingAnchorId'],
+          message: `unknown following anchor ${rubric.followingAnchorId}`,
+        });
+      }
       rubric.rules.forEach((rule, ruleIndex) => {
         if (ruleIds.has(rule.id)) {
           context.addIssue({
@@ -189,36 +384,114 @@ const builderComponentSchema = z
   .object({
     id: idSchema,
     label: z.string().trim().min(1),
-    kind: z.enum(['electrode', 'wire', 'ion-conductor', 'meter', 'distractor']),
+    kind: z.enum([
+      'electrode',
+      'electron-conductor',
+      'ion-conductor',
+      'container',
+      'direction-marker',
+      'meter',
+      'distractor',
+    ]),
+    functionalRole: functionalRoleSchema.optional(),
+    abstract: z.boolean(),
+    distractor: z
+      .object({
+        misconceptionIds: z.array(idSchema).min(1),
+        reason: z.string().trim().min(1),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 
-const pretestQuestionSchema = z
+const structuralRuleSchema = z
   .object({
     id: idSchema,
-    type: z.enum(['builder', 'text', 'canvas']),
-    prompt: z.string().trim().min(1),
-    rubricIds: z.array(idSchema).min(1),
+    description: z.string().trim().min(1),
+    check: z.enum(['four-elements', 'closed-circuit', 'direction-consistency', 'abstraction']),
+    requiredComponentIds: z.array(idSchema),
+    nodeIds: z.array(idSchema).min(1),
   })
   .strict();
+
+const questionBaseShape = {
+  id: idSchema,
+  prompt: z.string().trim().min(1),
+  dimensionId: z.enum(['principle', 'energy']),
+  rubricIds: z.array(idSchema).min(1),
+  targetNodeIds: z.array(idSchema).min(1),
+  evidencePath: z.string().trim().min(1),
+};
+
+const choiceQuestionSchema = z
+  .object({
+    ...questionBaseShape,
+    type: z.literal('choice'),
+    options: z
+      .array(
+        z
+          .object({
+            id: idSchema,
+            text: z.string().trim().min(1),
+            correct: z.boolean(),
+            misconceptionIds: z.array(idSchema),
+          })
+          .strict(),
+      )
+      .min(2),
+  })
+  .strict()
+  .refine((question) => question.options.filter((option) => option.correct).length === 1, {
+    path: ['options'],
+    message: 'choice question must have exactly one correct option',
+  });
+
+const textQuestionSchema = z
+  .object({
+    ...questionBaseShape,
+    type: z.literal('text'),
+    answerGuidance: z.array(z.string().trim().min(1)).min(1),
+  })
+  .strict();
+
+const pretestQuestionSchema = z.union([choiceQuestionSchema, textQuestionSchema]);
 
 export const pretestSchema = z
   .object({
     version: versionSchema,
     builder: z
       .object({
+        prompt: z.string().trim().min(1),
         components: z.array(builderComponentSchema).min(1),
-        structuralRules: z
-          .array(
-            z
+        structuralRules: z.array(structuralRuleSchema).length(4),
+        assessment: z
+          .object({
+            generalModel: z
               .object({
-                id: idSchema,
-                description: z.string().trim().min(1),
-                requiredComponentIds: z.array(idSchema).min(1),
+                requiredRoles: z.array(functionalRoleSchema).length(4),
+                saltBridgeRequired: z.boolean(),
+                requireClosedElectronPath: z.boolean(),
+                requireClosedIonPath: z.boolean(),
               })
               .strict(),
-          )
-          .min(1),
+            direction: z
+              .object({
+                electronFrom: functionalRoleSchema,
+                electronTo: functionalRoleSchema,
+                cationToward: functionalRoleSchema,
+                anionToward: functionalRoleSchema,
+              })
+              .strict(),
+            abstraction: z
+              .object({
+                concreteBindingOutcome: outcomeSchema,
+                concreteLabels: z.array(z.string().trim().min(1)).min(1),
+                feedback: z.string().trim().min(1),
+              })
+              .strict(),
+          })
+          .strict(),
       })
       .strict(),
     questions: z.array(pretestQuestionSchema).length(3),
@@ -228,34 +501,63 @@ export const pretestSchema = z
     reportDuplicateIds(value.builder.components, ['builder', 'components'], context);
     reportDuplicateIds(value.builder.structuralRules, ['builder', 'structuralRules'], context);
     reportDuplicateIds(value.questions, ['questions'], context);
+    reportDuplicateStrings(
+      value.builder.assessment.generalModel.requiredRoles,
+      ['builder', 'assessment', 'generalModel', 'requiredRoles'],
+      context,
+    );
     const componentIds = new Set(value.builder.components.map((component) => component.id));
     value.builder.structuralRules.forEach((rule, ruleIndex) => {
-      const references = new Set<string>();
+      reportDuplicateStrings(
+        rule.requiredComponentIds,
+        ['builder', 'structuralRules', ruleIndex, 'requiredComponentIds'],
+        context,
+      );
       rule.requiredComponentIds.forEach((componentId, componentIndex) => {
-        const path = ['builder', 'structuralRules', ruleIndex, 'requiredComponentIds', componentIndex];
-        if (references.has(componentId)) {
-          context.addIssue({ code: 'custom', path, message: `duplicate component reference ${componentId}` });
-        }
-        references.add(componentId);
         if (!componentIds.has(componentId)) {
-          context.addIssue({ code: 'custom', path, message: `unknown component ${componentId}` });
+          context.addIssue({
+            code: 'custom',
+            path: ['builder', 'structuralRules', ruleIndex, 'requiredComponentIds', componentIndex],
+            message: `unknown component ${componentId}`,
+          });
         }
       });
     });
     value.questions.forEach((question, questionIndex) => {
-      const seen = new Set<string>();
-      question.rubricIds.forEach((rubricId, rubricIndex) => {
-        if (seen.has(rubricId)) {
-          context.addIssue({
-            code: 'custom',
-            path: ['questions', questionIndex, 'rubricIds', rubricIndex],
-            message: `duplicate rubric reference ${rubricId}`,
-          });
-        }
-        seen.add(rubricId);
-      });
+      reportDuplicateStrings(question.rubricIds, ['questions', questionIndex, 'rubricIds'], context);
+      reportDuplicateStrings(question.targetNodeIds, ['questions', questionIndex, 'targetNodeIds'], context);
+      if (question.type === 'choice') {
+        reportDuplicateIds(question.options, ['questions', questionIndex, 'options'], context);
+      }
     });
   });
+
+const caseMaterialSchema = z
+  .object({
+    id: idSchema,
+    kind: z.enum(['apparatus-diagram', 'cross-section']),
+    materialRef: z.string().trim().startsWith('assets/').nullable(),
+    status: z.enum(['pending-assets', 'ready']),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (value.status === 'ready' && value.materialRef === null) {
+      context.addIssue({ code: 'custom', path: ['materialRef'], message: 'ready material requires materialRef' });
+    }
+    if (value.status === 'pending-assets' && value.materialRef !== null) {
+      context.addIssue({ code: 'custom', path: ['materialRef'], message: 'pending materialRef must be null' });
+    }
+  });
+
+const equationSetSchema = z
+  .object({
+    id: idSchema,
+    electrode: z.enum(['negative', 'positive', 'overall']),
+    medium: z.enum(['acidic', 'alkaline', 'neutral', 'molten']),
+    expectedElectronSide: z.enum(['reactant', 'product', 'none']),
+    accepted: z.array(z.string().trim().min(1)).min(1),
+  })
+  .strict();
 
 export const caseSchema = z
   .object({
@@ -263,14 +565,39 @@ export const caseSchema = z
     id: idSchema,
     title: z.string().trim().min(1),
     type: z.enum(['analysis', 'design']),
-    materialRefs: z.array(z.string().trim().min(1)),
+    medium: z.enum(['acidic', 'alkaline', 'neutral', 'molten']),
+    materials: z.array(caseMaterialSchema).min(1),
+    followingAnchors: z
+      .array(
+        z
+          .object({
+            id: idSchema,
+            statement: z.string().trim().min(1),
+            correctValue: z.string().trim().min(1),
+          })
+          .strict(),
+      )
+      .min(1),
     scaffold: z
       .array(
         z
           .object({
-            level: z.number().int().positive(),
+            level: z.number().int().min(1).max(3),
             questions: z.array(z.string().trim().min(1)).min(1),
             answerPoints: z.array(z.string().trim().min(1)).min(1),
+          })
+          .strict(),
+      )
+      .length(3),
+    equationSets: z.array(equationSetSchema).min(2),
+    evidencePaths: z
+      .array(
+        z
+          .object({
+            id: idSchema,
+            nodeId: idSchema,
+            description: z.string().trim().min(1),
+            source: z.enum(['answer', 'equation', 'builder']),
           })
           .strict(),
       )
@@ -279,18 +606,11 @@ export const caseSchema = z
   })
   .strict()
   .superRefine((value, context) => {
-    for (const [field, entries] of [
-      ['materialRefs', value.materialRefs],
-      ['targetNodeIds', value.targetNodeIds],
-    ] as const) {
-      const seen = new Set<string>();
-      entries.forEach((entry, index) => {
-        if (seen.has(entry)) {
-          context.addIssue({ code: 'custom', path: [field, index], message: `duplicate reference ${entry}` });
-        }
-        seen.add(entry);
-      });
-    }
+    reportDuplicateIds(value.materials, ['materials'], context);
+    reportDuplicateIds(value.followingAnchors, ['followingAnchors'], context);
+    reportDuplicateIds(value.equationSets, ['equationSets'], context);
+    reportDuplicateIds(value.evidencePaths, ['evidencePaths'], context);
+    reportDuplicateStrings(value.targetNodeIds, ['targetNodeIds'], context);
     const levels = new Set<number>();
     value.scaffold.forEach((entry, index) => {
       if (levels.has(entry.level)) {
@@ -302,6 +622,15 @@ export const caseSchema = z
       }
       levels.add(entry.level);
     });
+    for (const expectedLevel of [1, 2, 3]) {
+      if (!levels.has(expectedLevel)) {
+        context.addIssue({
+          code: 'custom',
+          path: ['scaffold'],
+          message: `missing scaffold level ${expectedLevel}`,
+        });
+      }
+    }
   });
 
 export const scaffoldPolicySchema = z
@@ -311,15 +640,43 @@ export const scaffoldPolicySchema = z
       .array(
         z
           .object({
-            level: z.number().int().positive(),
+            level: z.number().int().min(1).max(3),
             label: z.string().trim().min(1),
             promptCount: z.number().int().nonnegative(),
           })
           .strict(),
       )
-      .min(1),
-    promotion: z.object({ consecutiveHits: z.number().int().positive() }).strict(),
-    demotion: z.object({ consecutiveMisses: z.number().int().positive() }).strict(),
+      .length(3),
+    promotion: z
+      .object({
+        consecutiveHits: z.number().int().positive(),
+        eligibleOutcomes: z.array(z.enum(['hit', 'hit-with-help'])).min(1),
+      })
+      .strict(),
+    demotion: z
+      .object({
+        consecutiveMisses: z.number().int().positive(),
+        levels: z.number().int().positive(),
+      })
+      .strict(),
+    assistance: z
+      .object({
+        correctOutcome: z.enum(['hit', 'hit-with-help']),
+        countsForPromotion: z.boolean(),
+      })
+      .strict(),
+    socratic: z
+      .object({
+        maxRounds: z.number().int().positive(),
+        correctedOutcome: z.enum(['hit', 'hit-with-help']),
+      })
+      .strict(),
+    passing: z
+      .object({
+        minimumRatio: z.number().min(0).max(1),
+        requireNoCoreMiss: z.boolean(),
+      })
+      .strict(),
     selection: z
       .object({
         weakNodeThreshold: z.number().min(0).max(1),
@@ -342,6 +699,7 @@ export const scaffoldPolicySchema = z
     });
   });
 
+export type FunctionalRole = z.infer<typeof functionalRoleSchema>;
 export type KnowledgeModelConfig = z.infer<typeof knowledgeModelSchema>;
 export type RubricsConfig = z.infer<typeof rubricsSchema>;
 export type PretestConfig = z.infer<typeof pretestSchema>;
