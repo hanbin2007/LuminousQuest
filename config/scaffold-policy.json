@@ -1,5 +1,5 @@
 {
-  "version": "scaffold-policy.v1.4",
+  "version": "scaffold-policy.v1.5",
   "levels": [
     { "level": 1, "label": "完整引导", "promptCount": 8 },
     { "level": 2, "label": "三维度标题", "promptCount": 3 },
@@ -19,6 +19,7 @@
   },
   "extraction": {
     "retryCount": 1,
+    "temperature": 0.1,
     "maximumAnswerCharacters": 2000,
     "factValueAliases": {
       "Zn": ["锌", "锌片", "锌极", "锌电极"],

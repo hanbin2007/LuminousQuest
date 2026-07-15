@@ -109,6 +109,7 @@ export type EquationAnalysis = AnalyzedEquation | EquationUnanswered;
 export interface EquationScoreNodeDecision {
   nodeId: string;
   outcome: 'hit' | 'partial' | 'miss' | 'unanswered';
+  errorIds: string[];
   reasons: string[];
 }
 
@@ -708,6 +709,47 @@ function notationPolicyIssues(
   return issues;
 }
 
+function mediumErrorIds(analysis: ParsedEquationAnalysis) {
+  if (analysis.medium.matches) return [];
+  const ids = ['P3-M1'];
+  if (analysis.medium.forbiddenSpecies.some((species) => species === 'H^+' || species === 'H3O^+')) {
+    ids.push('P3-M2');
+  }
+  return ids;
+}
+
+function halfReactionBalanceErrorIds(
+  analysis: ParsedEquationAnalysis,
+  expected: EquationSet,
+) {
+  const ids: string[] = [];
+  if (!analysis.conservation.atoms.balanced || !analysis.conservation.charge.balanced) {
+    ids.push('P6-M1');
+  }
+  const acceptedElectronCounts = new Set(expected.accepted.map((candidate) => {
+    const parsed = analyzeEquation(candidate, {
+      kind: 'half',
+      medium: expected.medium,
+      expectedElectronSide: expected.expectedElectronSide,
+    });
+    return parsed.status === 'parsed' ? parsed.conservation.electrons.count : -1;
+  }));
+  if (
+    !analysis.conservation.electrons.balanced
+    || !acceptedElectronCounts.has(analysis.conservation.electrons.count)
+  ) ids.push('P6-M2');
+  return ids;
+}
+
+function balanceErrorIds(
+  analysis: ParsedEquationAnalysis,
+  expected: EquationSet,
+  kind: 'half' | 'overall',
+) {
+  if (kind === 'half') return halfReactionBalanceErrorIds(analysis, expected);
+  return analysis.conservation.electrons.count > 0 ? ['P7-M2'] : ['P7-M1'];
+}
+
 export function scoreEquation(
   source: string,
   expected: EquationSet,
@@ -727,6 +769,7 @@ export function scoreEquation(
       nodeDecisions: [{
         nodeId: 'P6',
         outcome: configuredStatus,
+        errorIds: [],
         reasons: ['blank or explicit non-answer'],
       }],
     };
@@ -742,7 +785,12 @@ export function scoreEquation(
       outcome: 'miss',
       ruleId: 'equation-parse-miss',
       analysis,
-      nodeDecisions: [{ nodeId: 'P6', outcome: 'miss', reasons: [analysis.error.message] }],
+      nodeDecisions: [{
+        nodeId: 'P6',
+        outcome: 'miss',
+        errorIds: ['P6-M1'],
+        reasons: [analysis.error.message],
+      }],
     };
   }
 
@@ -763,8 +811,13 @@ export function scoreEquation(
       analysis,
       matchedCanonical: exact.canonical,
       nodeDecisions: [
-        { nodeId: 'P3', outcome: 'hit', reasons: ['medium matches the configured case'] },
-        { nodeId: balanceNodeId, outcome: 'hit', reasons: ['canonical form matches an accepted equation'] },
+        { nodeId: 'P3', outcome: 'hit', errorIds: [], reasons: ['medium matches the configured case'] },
+        {
+          nodeId: balanceNodeId,
+          outcome: 'hit',
+          errorIds: [],
+          reasons: ['canonical form matches an accepted equation'],
+        },
       ],
     };
   }
@@ -776,8 +829,8 @@ export function scoreEquation(
       analysis,
       matchedCanonical: exact.canonical,
       nodeDecisions: [
-        { nodeId: 'P3', outcome: 'hit', reasons: ['species and medium match the configured case'] },
-        { nodeId: balanceNodeId, outcome: 'miss', reasons: notationIssues },
+        { nodeId: 'P3', outcome: 'hit', errorIds: [], reasons: ['species and medium match the configured case'] },
+        { nodeId: balanceNodeId, outcome: 'miss', errorIds: [], reasons: notationIssues },
       ],
     };
   }
@@ -806,9 +859,17 @@ export function scoreEquation(
         {
           nodeId: feedbackNodeId,
           outcome: mediumOutcome,
+          errorIds: mediumErrorIds(analysis),
           reasons: [`forbidden in ${expected.medium}: ${analysis.medium.forbiddenSpecies.join(', ')}`],
         },
-        { nodeId: balanceNodeId, outcome: 'hit', reasons: ['atom, charge, and electron checks pass'] },
+        {
+          nodeId: balanceNodeId,
+          outcome: kind === 'half' ? mediumOutcome : 'hit',
+          errorIds: kind === 'half' ? ['P6-M3'] : [],
+          reasons: kind === 'half'
+            ? [`conserved equation uses species forbidden in ${expected.medium}`]
+            : ['atom, charge, and electron checks pass'],
+        },
       ],
     };
   }
@@ -827,8 +888,13 @@ export function scoreEquation(
       ruleId: 'equation-balance-partial',
       analysis,
       nodeDecisions: [
-        { nodeId: 'P3', outcome: 'hit', reasons: ['species and medium match the configured case'] },
-        { nodeId: balanceNodeId, outcome: 'partial', reasons: ['one conservation check failed'] },
+        { nodeId: 'P3', outcome: 'hit', errorIds: [], reasons: ['species and medium match the configured case'] },
+        {
+          nodeId: balanceNodeId,
+          outcome: 'partial',
+          errorIds: balanceErrorIds(analysis, expected, kind),
+          reasons: ['one conservation check failed'],
+        },
       ],
     };
   }
@@ -841,9 +907,15 @@ export function scoreEquation(
       {
         nodeId: 'P3',
         outcome: 'miss',
+        errorIds: analysis.medium.matches ? ['P3-M3'] : mediumErrorIds(analysis),
         reasons: ['products or medium do not match a configured target-reaction family'],
       },
-      { nodeId: balanceNodeId, outcome: 'miss', reasons: ['equation is not an accepted conserved equivalent'] },
+      {
+        nodeId: balanceNodeId,
+        outcome: 'miss',
+        errorIds: balanceErrorIds(analysis, expected, kind),
+        reasons: ['equation is not an accepted conserved equivalent'],
+      },
     ],
   };
 }

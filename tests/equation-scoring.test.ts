@@ -159,6 +159,34 @@ describe('electrode equation grammar and scoring', () => {
     });
   });
 
+  it('emits closed-set misconception ids for orthogonal equation diagnostics', async () => {
+    const copper = await equationSet('zinc-copper', 'copper-positive');
+    const alkalineOxygen = await equationSet('aluminum-air', 'oxygen-positive');
+    const acidicOxygen = await equationSet('hydrogen-oxygen', 'oxygen-positive');
+    const overall = await equationSet('zinc-copper', 'zinc-copper-overall');
+
+    expect(scoreEquation('Cu^2+ + 2e^- -> 2Cu', copper).nodeDecisions)
+      .toContainEqual(expect.objectContaining({ nodeId: 'P6', errorIds: ['P6-M1'] }));
+    expect(scoreEquation('Cu^2+ + e^- -> Cu', copper).nodeDecisions)
+      .toContainEqual(expect.objectContaining({
+        nodeId: 'P6',
+        errorIds: ['P6-M1', 'P6-M2'],
+      }));
+    expect(scoreEquation('O2 + 4H^+ + 4e^- -> 2H2O', alkalineOxygen).nodeDecisions)
+      .toEqual(expect.arrayContaining([
+        expect.objectContaining({ nodeId: 'P3', errorIds: ['P3-M1', 'P3-M2'] }),
+        expect.objectContaining({ nodeId: 'P6', errorIds: ['P6-M3'] }),
+      ]));
+    expect(scoreEquation('O2 + 2H2O + 4e^- -> 4OH^-', acidicOxygen).nodeDecisions)
+      .toContainEqual(expect.objectContaining({
+        nodeId: 'P3',
+        outcome: 'partial',
+        errorIds: ['P3-M1'],
+      }));
+    expect(scoreEquation('Zn + Cu^2+ -> Zn^2+ + Cu + e^-', overall).nodeDecisions)
+      .toContainEqual(expect.objectContaining({ nodeId: 'P7', errorIds: ['P7-M2'] }));
+  });
+
   it('rejects alkaline and aqueous balancing species in acidic and molten media', () => {
     const acidic = analyzeEquation('O2 + 2H2O + 4e^- -> 4OH^-', {
       kind: 'half',
@@ -242,7 +270,7 @@ describe('electrode equation grammar and scoring', () => {
 
     expect(related.nodeDecisions).toEqual(expect.arrayContaining([
       expect.objectContaining({ nodeId: 'P3', outcome: 'partial' }),
-      expect.objectContaining({ nodeId: 'P6', outcome: 'hit' }),
+      expect.objectContaining({ nodeId: 'P6', outcome: 'partial', errorIds: ['P6-M3'] }),
     ]));
     expect(unrelated).toMatchObject({ outcome: 'miss' });
     expect(unrelated.nodeDecisions).not.toEqual(expect.arrayContaining([

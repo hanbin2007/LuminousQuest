@@ -146,6 +146,7 @@ describe('server-owned assessment and tutor routes', () => {
     expect(requests[0]).toMatchObject({
       prompt: { id: 'structured-assessment' },
       schemaVersion: 'structured-assessment.v4',
+      temperature: 0.1,
       input: {
         answer,
         caseId: 'zinc-copper',

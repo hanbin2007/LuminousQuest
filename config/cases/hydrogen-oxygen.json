@@ -69,7 +69,13 @@
       "electrode": "positive",
       "medium": "acidic",
       "expectedElectronSide": "reactant",
-      "accepted": ["O2 + 4H^+ + 4e^- -> 2H2O"]
+      "accepted": ["O2 + 4H^+ + 4e^- -> 2H2O"],
+      "crossMediumAccepted": [
+        {
+          "medium": "alkaline",
+          "accepted": ["O2 + 2H2O + 4e^- -> 4OH^-"]
+        }
+      ]
     },
     {
       "id": "hydrogen-oxygen-overall",

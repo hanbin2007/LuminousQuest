@@ -125,7 +125,8 @@ describe('M1a external teaching configuration', () => {
     expect(config.knowledgeModel.version).toBe('knowledge-model.v1.1');
     expect(config.rubrics.version).toBe('rubrics.v1.1');
     expect(config.pretest.version).toBe('pretest.v1.1');
-    expect(config.scaffoldPolicy.version).toBe('scaffold-policy.v1.4');
+    expect(config.scaffoldPolicy.version).toBe('scaffold-policy.v1.5');
+    expect(config.scaffoldPolicy.extraction.temperature).toBe(0.1);
     expect(config.cases.every((entry) => entry.version === 'case.v1.3')).toBe(true);
     expect(config.knowledgeModel.nodes.find((node) => node.id === 'D4')?.statement)
       .toContain('惰性电极');

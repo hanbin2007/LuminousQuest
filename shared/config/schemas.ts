@@ -801,6 +801,7 @@ export const scaffoldPolicySchema = z
     extraction: z
       .object({
         retryCount: z.literal(1),
+        temperature: z.literal(0.1),
         maximumAnswerCharacters: z.number().int().positive().max(10_000),
         factValueAliases: z.record(
           z.string().trim().min(1),
