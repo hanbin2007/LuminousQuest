@@ -10,3 +10,14 @@ Checklist:透明底✅ 色板✅ 描边一致✅ 造型语言一致✅ 无文字
 2. 电流表表盘左上有轻微噪点,批量注意 alpha/噪点清理。
 3. 电极顶部蓝色接线柱造型定为全系电极统一接口语义。
 4. 本批 5 件中 beaker-electrolyte 指定为后续批次的 style anchor 参考图。
+
+## Batch 2(2026-07-15)—— ✅ 有条件通过(Fable 5)
+
+范围:组件 8 件(copper/aluminum/porous-carbon/gas-tube/bulb/membrane/wire/sucrose-beaker)+ 案例图 6 张。机检 14/14 PASS(校青 34.9% 达注记要求,蔗糖水零校青像素)。
+**组件 8 件全部通过**;案例图 3 张通过(zinc-copper 构图与化学正确性优秀、aluminum-air/hydrogen-oxygen 剖面合格),3 项修图(Batch 2R):
+
+1. **zinc-copper/schematic**:CuSO₄ 侧溶液按化学事实着稀蓝(新增色板条目 CuSO₄ 蓝 #8FBBE8)——"物质存在形式/颜色"本身是 P3/P5 考点,双杯同色丢失教学信息。
+2. **hydrogen-oxygen、methane-fuel、aluminum-air 三张 schematic**:灯泡底座为铜橙,与 zinc-copper(蓝)不一致——统一为蓝色接口语义。
+3. **aluminum-air/schematic**:右上空气管管口与气泡画在罐体之外,易误读为漏气;改为管口朝向正极区域、气泡置于液内管口下方(或去除罐外气泡)。
+
+注记:methane-fuel 图的产物表达(CO₂ 逸出+膜)隐含酸性/质子膜介质——M3 编写 methane-fuel.json 时介质必须定为 acidic,否则需改图(碱性介质 CO₂ 被吸收不得冒泡,经典考点)。CH₄ 用铜橙气泡与 O₂ 白泡区分,批准为气体区分惯例并沿用。

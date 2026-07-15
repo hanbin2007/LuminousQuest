@@ -44,6 +44,132 @@
         "height": 512
       },
       "purpose": "拖拽组件：模拟指针式电流表"
+    },
+    {
+      "id": "copper",
+      "file": "assets/components/copper@2x.png",
+      "dimensions": {
+        "width": 512,
+        "height": 512
+      },
+      "purpose": "拖拽组件：铜片电极"
+    },
+    {
+      "id": "aluminum",
+      "file": "assets/components/aluminum@2x.png",
+      "dimensions": {
+        "width": 512,
+        "height": 512
+      },
+      "purpose": "拖拽组件：铝片电极"
+    },
+    {
+      "id": "porous-carbon",
+      "file": "assets/components/porous-carbon@2x.png",
+      "dimensions": {
+        "width": 512,
+        "height": 512
+      },
+      "purpose": "拖拽组件：多孔碳电极"
+    },
+    {
+      "id": "gas-tube",
+      "file": "assets/components/gas-tube@2x.png",
+      "dimensions": {
+        "width": 512,
+        "height": 512
+      },
+      "purpose": "拖拽组件：向下开口的通气导管"
+    },
+    {
+      "id": "bulb",
+      "file": "assets/components/bulb@2x.png",
+      "dimensions": {
+        "width": 512,
+        "height": 512
+      },
+      "purpose": "拖拽组件：琥珀灯丝灯泡"
+    },
+    {
+      "id": "membrane",
+      "file": "assets/components/membrane@2x.png",
+      "dimensions": {
+        "width": 512,
+        "height": 512
+      },
+      "purpose": "拖拽组件：竖置半透明隔膜"
+    },
+    {
+      "id": "wire",
+      "file": "assets/components/wire@2x.png",
+      "dimensions": {
+        "width": 512,
+        "height": 512
+      },
+      "purpose": "拖拽组件：两端接头柔性导线"
+    },
+    {
+      "id": "sucrose-beaker",
+      "file": "assets/components/sucrose-beaker@2x.png",
+      "dimensions": {
+        "width": 512,
+        "height": 512
+      },
+      "purpose": "拖拽组件：无色蔗糖水烧杯干扰项"
+    },
+    {
+      "id": "zinc-copper-schematic",
+      "file": "assets/cases/zinc-copper/schematic.png",
+      "dimensions": {
+        "width": 3200,
+        "height": 2400
+      },
+      "purpose": "案例图：双液盐桥锌铜电池装置简图"
+    },
+    {
+      "id": "aluminum-air-schematic",
+      "file": "assets/cases/aluminum-air/schematic.png",
+      "dimensions": {
+        "width": 3200,
+        "height": 2400
+      },
+      "purpose": "案例图：铝-空气电池装置简图"
+    },
+    {
+      "id": "aluminum-air-cross-section",
+      "file": "assets/cases/aluminum-air/cross-section.png",
+      "dimensions": {
+        "width": 3200,
+        "height": 2400
+      },
+      "purpose": "案例图：铝-空气电池结构剖面"
+    },
+    {
+      "id": "hydrogen-oxygen-schematic",
+      "file": "assets/cases/hydrogen-oxygen/schematic.png",
+      "dimensions": {
+        "width": 3200,
+        "height": 2400
+      },
+      "purpose": "案例图：氢氧燃料电池装置简图"
+    },
+    {
+      "id": "hydrogen-oxygen-cross-section",
+      "file": "assets/cases/hydrogen-oxygen/cross-section.png",
+      "dimensions": {
+        "width": 3200,
+        "height": 2400
+      },
+      "purpose": "案例图：质子交换膜氢氧燃料电池结构剖面"
+    },
+    {
+      "id": "methane-fuel-schematic",
+      "file": "assets/cases/methane-fuel/schematic.png",
+      "dimensions": {
+        "width": 3200,
+        "height": 2400
+      },
+      "purpose": "案例图：甲烷燃料电池冷迁移装置简图"
     }
   ]
 }
