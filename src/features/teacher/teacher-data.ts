@@ -81,16 +81,12 @@ function selectedAssessmentForNode(
   session: StudentSession,
   node: Profile['nodes'][number],
 ) {
-  if (!node.trace) return undefined;
-  // TODO(m4-3d-merge): use profile.nodes[].selectedAssessment after its additive field lands.
-  return [...session.events].reverse().find((event): event is AssessmentCompletedEvent =>
+  if (!node.selectedAssessment) return undefined;
+  return session.events.find((event): event is AssessmentCompletedEvent =>
     event.kind === 'assessment.completed'
     && event.nodeId === node.nodeId
-    && event.sourceAnswerEventId === node.trace!.sourceAnswerEventId
-    && event.ruleDecision.status !== 'unassessed'
-    && event.ruleDecision.status !== 'unanswered'
-    && event.ruleDecision.status !== 'needs-review'
-    && event.ruleDecision.ruleId === node.trace!.ruleId);
+    && event.id === node.selectedAssessment!.eventId
+    && event.sequence === node.selectedAssessment!.sequence);
 }
 
 export function buildTeacherStudentReport(sessionInput: unknown, config: LoadedConfig) {
