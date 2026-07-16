@@ -40,7 +40,7 @@ describe('Hono server responsibilities', () => {
 
   it('serves a public config view without grading keys while preserving the server config', async () => {
     const root = await createTemporaryDirectory();
-    await writeValidContentTree(root);
+    await writeValidContentTree(root, { includeTransfer: true });
     const app = createServerApp({ contentRoot: root, clientRoot: path.join(root, 'client'), apiToken });
 
     const response = await app.request('/api/config');
@@ -65,7 +65,7 @@ describe('Hono server responsibilities', () => {
 
     expect(response.headers.get('x-lq-api-token')).toBe(apiToken);
     expect(payload).not.toHaveProperty('prompts');
-    expect(payload.cases.map((trainingCase) => trainingCase.id)).toEqual(['zinc-copper']);
+    expect(payload.cases.map((trainingCase) => trainingCase.id)).toEqual(['zinc-copper', 'methane-fuel']);
     expect(payload.cases[0]?.materials).toEqual([
       expect.objectContaining({
         kind: 'apparatus-diagram',
@@ -73,7 +73,32 @@ describe('Hono server responsibilities', () => {
         status: 'ready',
       }),
     ]);
-    expect(payload.cases[0]).not.toHaveProperty('followingAnchors');
+    const publicCaseKeys = [
+      'caseType',
+      'equationSets',
+      'evidencePaths',
+      'id',
+      'materials',
+      'medium',
+      'scaffold',
+      'sequence',
+      'targetNodeIds',
+      'title',
+      'tutoring',
+      'type',
+      'version',
+    ];
+    for (const trainingCase of payload.cases) {
+      expect(Object.keys(trainingCase).sort()).toEqual(publicCaseKeys);
+      expect(trainingCase).not.toHaveProperty('followingAnchors');
+      for (const material of trainingCase.materials) {
+        expect(Object.keys(material).sort()).toEqual([
+          'id', 'kind', 'materialRef', 'revealAfterNodeIds', 'status',
+        ]);
+      }
+    }
+    expect(payload.cases.find((entry) => entry.id === 'methane-fuel'))
+      .not.toHaveProperty('followingAnchors');
     expect(payload.cases[0]?.evidencePaths.length).toBeGreaterThan(0);
     for (const evidencePath of payload.cases[0]?.evidencePaths ?? []) {
       expect(evidencePath).toEqual(expect.objectContaining({

@@ -13,15 +13,20 @@ async function copyRepositoryFile(relativeSource: string, destination: string) {
   await writeFile(destination, source);
 }
 
-export async function writeValidContentTree(root: string) {
+export async function writeValidContentTree(
+  root: string,
+  options: { includeTransfer?: boolean } = {},
+) {
   const configRoot = path.join(root, 'config');
   const casesRoot = path.join(configRoot, 'cases');
   const promptsRoot = path.join(root, 'prompts');
   const assetsRoot = path.join(root, 'assets');
   const zincAssetsRoot = path.join(assetsRoot, 'cases', 'zinc-copper');
+  const methaneAssetsRoot = path.join(assetsRoot, 'cases', 'methane-fuel');
   await mkdir(casesRoot, { recursive: true });
   await mkdir(promptsRoot, { recursive: true });
   await mkdir(zincAssetsRoot, { recursive: true });
+  if (options.includeTransfer) await mkdir(methaneAssetsRoot, { recursive: true });
 
   await Promise.all([
     ...['knowledge-model.json', 'rubrics.json', 'pretest.json', 'scaffold-policy.json'].map((file) =>
@@ -35,6 +40,16 @@ export async function writeValidContentTree(root: string) {
       path.join('assets', 'cases', 'zinc-copper', 'schematic.png'),
       path.join(zincAssetsRoot, 'schematic.png'),
     ),
+    ...(options.includeTransfer ? [
+      copyRepositoryFile(
+        path.join('config', 'cases', 'methane-fuel.json'),
+        path.join(casesRoot, 'methane-fuel.json'),
+      ),
+      copyRepositoryFile(
+        path.join('assets', 'cases', 'methane-fuel', 'schematic.png'),
+        path.join(methaneAssetsRoot, 'schematic.png'),
+      ),
+    ] : []),
     copyRepositoryFile(
       path.join('prompts', 'structured-assessment.md'),
       path.join(promptsRoot, 'structured-assessment.md'),

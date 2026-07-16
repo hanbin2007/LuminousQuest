@@ -195,5 +195,11 @@ export function createTrainingRuntime(
     reviewDrawing: vi.fn(async () => 'unused'),
   };
 
-  return { runtime, extractAssessment, assessEquation, tutorTurn };
+  return {
+    runtime,
+    extractAssessment,
+    assessEquation,
+    tutorTurn,
+    getSession: () => serverSession,
+  };
 }
