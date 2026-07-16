@@ -94,7 +94,7 @@ export interface CaseScoreInput {
   nodeId: string;
   earned?: number;
   possible?: number;
-  outcome: 'hit' | 'hit-with-help' | 'partial' | 'miss' | 'unanswered' | 'needs-review';
+  outcome: 'hit' | 'hit-with-help' | 'partial' | 'miss' | 'unanswered' | 'needs-review' | 'unassessed';
   assistance: {
     kind: 'none' | 'hint' | 'socratic';
     rounds: number;
@@ -130,7 +130,11 @@ export function evaluateCasePass(
     const node = nodeById.get(score.nodeId)!;
     const rubric = rubricByNodeId.get(score.nodeId);
     if (!rubric) throw new Error(`No rubric configured for case target ${score.nodeId}`);
-    if (score.outcome === 'unanswered' || score.outcome === 'needs-review') {
+    if (
+      score.outcome === 'unanswered'
+      || score.outcome === 'needs-review'
+      || score.outcome === 'unassessed'
+    ) {
       incompleteTargetNodeIds.push(score.nodeId);
       continue;
     }

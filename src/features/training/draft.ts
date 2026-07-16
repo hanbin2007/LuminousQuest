@@ -1,17 +1,17 @@
-import type { ScaffoldScoreInput } from '../../../shared/scoring/scaffold';
+import type { ScaffoldHistoryEntry } from './scaffold-adapter';
 
 export interface TrainingDraft {
-  schemaVersion: 'training-draft.v1';
+  schemaVersion: 'training-draft.v2';
   activeCaseId: string;
   currentLevel: number;
   answers: Record<string, Record<string, string>>;
   equations: Record<string, Record<string, string>>;
-  scaffoldHistory: ScaffoldScoreInput[];
+  scaffoldHistory: ScaffoldHistoryEntry[];
 }
 
 export function emptyTrainingDraft(activeCaseId: string, currentLevel: number): TrainingDraft {
   return {
-    schemaVersion: 'training-draft.v1',
+    schemaVersion: 'training-draft.v2',
     activeCaseId,
     currentLevel,
     answers: {},
@@ -20,11 +20,15 @@ export function emptyTrainingDraft(activeCaseId: string, currentLevel: number): 
   };
 }
 
-function isScaffoldHistory(value: unknown): value is ScaffoldScoreInput[] {
+function isScaffoldHistory(value: unknown): value is ScaffoldHistoryEntry[] {
   return Array.isArray(value) && value.every((entry) => {
     if (!entry || typeof entry !== 'object') return false;
-    const score = entry as Partial<ScaffoldScoreInput>;
-    return typeof score.outcome === 'string'
+    const historyEntry = entry as Partial<ScaffoldHistoryEntry>;
+    const score = historyEntry.score;
+    return typeof historyEntry.caseId === 'string'
+      && typeof historyEntry.attemptKey === 'string'
+      && score !== undefined
+      && typeof score.outcome === 'string'
       && typeof score.earned === 'number'
       && typeof score.possible === 'number'
       && score.assistance !== null
@@ -41,11 +45,11 @@ export function loadTrainingDraft(
   const fallback = emptyTrainingDraft(caseIds[0] ?? '', initialLevel);
   if (!storage) return fallback;
   try {
-    const raw = storage.getItem(`luminous-quest:training-draft.v1:${sessionId}`);
+    const raw = storage.getItem(`luminous-quest:training-draft.v2:${sessionId}`);
     if (!raw) return fallback;
     const value = JSON.parse(raw) as Partial<TrainingDraft>;
     if (
-      value.schemaVersion !== 'training-draft.v1'
+      value.schemaVersion !== 'training-draft.v2'
       || typeof value.activeCaseId !== 'string'
       || !caseIds.includes(value.activeCaseId)
       || typeof value.currentLevel !== 'number'
@@ -66,5 +70,5 @@ export function saveTrainingDraft(
   sessionId: string,
   draft: TrainingDraft,
 ) {
-  storage?.setItem(`luminous-quest:training-draft.v1:${sessionId}`, JSON.stringify(draft));
+  storage?.setItem(`luminous-quest:training-draft.v2:${sessionId}`, JSON.stringify(draft));
 }

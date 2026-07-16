@@ -17,7 +17,9 @@ import {
 import {
   advanceScaffold,
   deriveCaseScaffoldScore,
+  deriveCasePassEvaluation,
   initialScaffold,
+  upsertScaffoldHistory,
   type ScaffoldViewState,
 } from './scaffold-adapter';
 import { TransferRadarComparison } from './TransferRadarComparison';
@@ -40,6 +42,7 @@ interface CompletedRound {
   attemptIds: string[];
   scaffoldScore: ScaffoldScoreInput | null;
   transition: ScaffoldViewState | null;
+  casePass: ReturnType<typeof deriveCasePassEvaluation>;
 }
 
 interface TutorNote {
@@ -407,13 +410,25 @@ export function TrainingPage() {
       }
 
       const scaffoldScore = deriveCaseScaffoldScore(merged.events, trainingCase.id, attemptIds);
+      const casePass = deriveCasePassEvaluation(merged.events, trainingCase, attemptIds, config);
       let transition: ScaffoldViewState | null = null;
       if (trainingCase.caseType === 'training') {
-        const history = scaffoldScore ? [...draft.scaffoldHistory, scaffoldScore] : draft.scaffoldHistory;
-        transition = advanceScaffold('training', draft.currentLevel, history, config.scaffoldPolicy);
+        const history = scaffoldScore
+          ? upsertScaffoldHistory(draft.scaffoldHistory, {
+            caseId: trainingCase.id,
+            attemptIds,
+            score: scaffoldScore,
+          })
+          : draft.scaffoldHistory;
+        transition = advanceScaffold(
+          'training',
+          draft.currentLevel,
+          history.map((entry) => entry.score),
+          config.scaffoldPolicy,
+        );
         setDraft((current) => ({ ...current, scaffoldHistory: history }));
       }
-      const completedRound = { caseId: trainingCase.id, attemptIds, scaffoldScore, transition };
+      const completedRound = { caseId: trainingCase.id, attemptIds, scaffoldScore, transition, casePass };
       setRound(completedRound);
 
       if (trainingCase.caseType === 'transfer') {
@@ -431,7 +446,7 @@ export function TrainingPage() {
 
   const nextCase = () => {
     const next = cases[activeIndex + 1];
-    if (!next || !round) return;
+    if (!next || !round || !round.casePass.passed) return;
     const nextLevel = next.caseType === 'transfer'
       ? 3
       : round.transition?.level ?? draft.currentLevel;
@@ -513,7 +528,7 @@ export function TrainingPage() {
     : [];
   const next = cases[activeIndex + 1];
   const normalTrainingComplete = trainingCase.caseType === 'training'
-    && Boolean(round)
+    && Boolean(round?.casePass.passed)
     && completedTrainingCount === cases.filter((entry) => entry.caseType === 'training').length;
   const tutorNodeIds = new Set(trainingCase.tutoring.map((entry) => entry.nodeId));
 
@@ -573,6 +588,12 @@ export function TrainingPage() {
               : '本轮没有可用于调整脚手架的已测证据。'}</span>
           </div>
 
+          <p className="training-case-pass" data-passed={round.casePass.passed}>
+            {round.casePass.passed
+              ? '本案例达到过关条件'
+              : '尚未达到本案例过关条件'}
+          </p>
+
           <div className="annotation-list training-feedback__list">
             {feedbackEvents.map((event) => {
               const status = annotationStatus(event);
@@ -624,7 +645,7 @@ export function TrainingPage() {
               <strong>三个训练案例已完成</strong>
             </div>
           ) : null}
-          {next ? (
+          {next && round.casePass.passed ? (
             <button className="primary-button training-next" type="button" onClick={nextCase}>
               进入下一案例<ArrowRight aria-hidden="true" />
             </button>

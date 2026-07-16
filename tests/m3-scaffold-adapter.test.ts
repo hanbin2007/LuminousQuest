@@ -1,12 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
+import { loadAllConfig } from '../server/config/loader';
 import type { ScaffoldPolicyConfig } from '../shared/config/schemas';
 import { assessmentCompletedEventSchema } from '../shared/session';
 import {
   advanceScaffold,
   deriveCaseScaffoldScore,
+  deriveCasePassEvaluation,
   deriveAttemptScores,
   initialScaffold,
+  upsertScaffoldHistory,
 } from '../src/features/training/scaffold-adapter';
 
 const policy: ScaffoldPolicyConfig = {
@@ -277,5 +280,64 @@ describe('M3 scaffold UI adapter', () => {
     });
     expect(deriveCaseScaffoldScore([unassessedEvent(13, 'P2')], 'zinc-copper', ['attempt-a']))
       .toBeNull();
+  });
+
+  it('deduplicates scaffold history by case and the complete attempt set', () => {
+    const first = upsertScaffoldHistory([], {
+      caseId: 'zinc-copper',
+      attemptIds: ['analysis-a', 'negative-a', 'positive-a', 'overall-a'],
+      score: score('hit'),
+    });
+    const retry = upsertScaffoldHistory(first, {
+      caseId: 'zinc-copper',
+      attemptIds: ['overall-a', 'positive-a', 'negative-a', 'analysis-a'],
+      score: score('hit'),
+    });
+    const revision = upsertScaffoldHistory(retry, {
+      caseId: 'zinc-copper',
+      attemptIds: ['analysis-b', 'negative-a', 'positive-a', 'overall-a'],
+      score: score('miss'),
+    });
+
+    expect(retry).toEqual(first);
+    expect(revision).toHaveLength(2);
+    expect(revision.map((entry) => entry.score.outcome)).toEqual(['hit', 'miss']);
+  });
+
+  it('feeds a complete current-round target set into evaluateCasePass', async () => {
+    const config = await loadAllConfig(process.cwd());
+    const trainingCase = structuredClone(config.cases.find((entry) => entry.id === 'zinc-copper')!);
+    trainingCase.targetNodeIds = ['P2', 'P3'];
+    const p2 = scoredEvent({
+      id: 'case-pass-p2',
+      sequence: 1,
+      attemptId: 'analysis-a',
+      nodeId: 'P2',
+      outcome: 'hit',
+      earned: 2,
+      possible: 2,
+    });
+    const p3 = scoredEvent({
+      id: 'case-pass-p3',
+      sequence: 2,
+      attemptId: 'equation-a',
+      nodeId: 'P3',
+      outcome: 'hit',
+      earned: 2,
+      possible: 2,
+    });
+
+    expect(deriveCasePassEvaluation(
+      [p2],
+      trainingCase,
+      ['analysis-a', 'equation-a'],
+      config,
+    )).toMatchObject({ passed: false, incompleteTargetNodeIds: ['P3'] });
+    expect(deriveCasePassEvaluation(
+      [p3, p2],
+      trainingCase,
+      ['analysis-a', 'equation-a'],
+      config,
+    )).toMatchObject({ passed: true, ratio: 1, incompleteTargetNodeIds: [] });
   });
 });

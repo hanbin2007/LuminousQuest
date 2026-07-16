@@ -1,5 +1,6 @@
-import type { CaseConfig, ScaffoldPolicyConfig } from '../../../shared/config/schemas';
+import type { CaseConfig, LoadedConfig, ScaffoldPolicyConfig } from '../../../shared/config/schemas';
 import {
+  evaluateCasePass,
   nextScaffoldLevel,
   type CaseScoreInput,
   type ScaffoldScoreInput,
@@ -24,6 +25,12 @@ export interface AttemptScores {
     possible: number;
     ratio: number | null;
   };
+}
+
+export interface ScaffoldHistoryEntry {
+  caseId: string;
+  attemptKey: string;
+  score: ScaffoldScoreInput;
 }
 
 function configuredLevel(policy: ScaffoldPolicyConfig, level: number) {
@@ -153,6 +160,65 @@ function scaffoldScoreOf(event: ScoredAssessmentEvent): ScaffoldScoreInput {
     possible: event.score.possible,
     assistance: event.assistance,
   };
+}
+
+function normalizedAttemptKey(attemptIds: readonly string[]) {
+  return [...new Set(attemptIds)].sort().join('\0');
+}
+
+export function upsertScaffoldHistory(
+  history: readonly ScaffoldHistoryEntry[],
+  input: {
+    caseId: string;
+    attemptIds: readonly string[];
+    score: ScaffoldScoreInput;
+  },
+): ScaffoldHistoryEntry[] {
+  const attemptKey = normalizedAttemptKey(input.attemptIds);
+  if (history.some((entry) => entry.caseId === input.caseId && entry.attemptKey === attemptKey)) {
+    return [...history];
+  }
+  return [...history, { caseId: input.caseId, attemptKey, score: input.score }];
+}
+
+export function deriveCasePassEvaluation(
+  events: readonly SessionEvent[],
+  trainingCase: CaseConfig,
+  attemptIds: readonly string[],
+  config: LoadedConfig,
+) {
+  const includedAttemptIds = new Set(attemptIds);
+  const latestByNodeId = new Map<string, AssessmentCompletedEvent>();
+  for (const event of events) {
+    if (
+      event.kind !== 'assessment.completed'
+      || event.caseId !== trainingCase.id
+      || !includedAttemptIds.has(event.attemptId)
+      || !trainingCase.targetNodeIds.includes(event.nodeId)
+    ) continue;
+    const current = latestByNodeId.get(event.nodeId);
+    if (!current || event.sequence > current.sequence) latestByNodeId.set(event.nodeId, event);
+  }
+
+  const scores: CaseScoreInput[] = trainingCase.targetNodeIds.map((nodeId) => {
+    const event = latestByNodeId.get(nodeId);
+    if (!event) {
+      return { nodeId, outcome: 'unassessed', assistance: { kind: 'none', rounds: 0 } };
+    }
+    if (event.score.status === 'scored') return caseScoreOf(event as ScoredAssessmentEvent);
+    const outcome = event.score.status === 'unanswered'
+      ? 'unanswered'
+      : event.score.status === 'needs-review' ? 'needs-review' : 'unassessed';
+    return { nodeId, outcome, assistance: event.assistance };
+  });
+
+  return evaluateCasePass(
+    scores,
+    trainingCase,
+    config.knowledgeModel,
+    config.rubrics,
+    config.scaffoldPolicy,
+  );
 }
 
 export function deriveAttemptScores(

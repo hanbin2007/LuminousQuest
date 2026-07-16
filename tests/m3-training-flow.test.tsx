@@ -97,4 +97,17 @@ describe('M3 training flow', () => {
     expect(extractAssessment).toHaveBeenCalledTimes(3);
     expect(assessEquation).toHaveBeenCalledTimes(9);
   });
+
+  it('does not expose the next case until the shared case-pass policy passes', async () => {
+    const user = userEvent.setup();
+    const config = await loadAllConfig(process.cwd());
+    const { runtime } = createTrainingRuntime(config, { outcome: 'miss' });
+    render(<App initialConfig={config} runtime={runtime} />);
+
+    expect(await screen.findByRole('heading', { name: '锌铜原电池' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '提交案例作答' }));
+
+    expect(await screen.findByText('尚未达到本案例过关条件')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '进入下一案例' })).not.toBeInTheDocument();
+  });
 });
