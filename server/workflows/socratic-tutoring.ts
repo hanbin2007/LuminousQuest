@@ -35,6 +35,7 @@ export interface SocraticTurnInput {
   provider: string;
   model: string;
   stepId?: string;
+  referenceCaseId?: string;
 }
 
 type Assistance =
@@ -96,8 +97,9 @@ function eventTime(session: StudentSession, milliseconds: number) {
 }
 
 function configuredTutor(input: SocraticTurnInput, assessment: AssessmentCompletedEvent) {
-  const trainingCase = input.config.cases.find((entry) => entry.id === assessment.caseId);
-  if (!trainingCase) throw new Error(`Unknown case ${assessment.caseId}`);
+  const caseId = input.referenceCaseId ?? assessment.caseId;
+  const trainingCase = input.config.cases.find((entry) => entry.id === caseId);
+  if (!trainingCase) throw new Error(`Unknown case ${caseId}`);
   if (!trainingCase.tutoring.some((entry) => entry.nodeId === input.nodeId)) return null;
   const evidencePath = trainingCase.evidencePaths.find((entry) =>
     entry.nodeId === input.nodeId && entry.source === 'answer');
@@ -201,7 +203,17 @@ export async function runSocraticTurn(input: SocraticTurnInput): Promise<Socrati
       session: input.session,
     };
   }
-  const tutor = configuredTutor(input, assessment);
+  const sourceAnswer = input.session.events.find((event) =>
+    event.kind === 'answer.submitted' && event.id === assessment.sourceAnswerEventId);
+  const pretestQuestion = sourceAnswer?.kind === 'answer.submitted'
+    ? input.config.pretest.questions.find((question) =>
+        question.id === sourceAnswer.questionId && question.type === 'text')
+    : undefined;
+  const referenceCaseId = input.referenceCaseId
+    ?? (pretestQuestion?.type === 'text' ? pretestQuestion.referenceEquations[0]?.caseId : undefined)
+    ?? assessment.caseId;
+  const configuredInput = { ...input, referenceCaseId };
+  const tutor = configuredTutor(configuredInput, assessment);
   if (!tutor) {
     return {
       status: 'none',
@@ -263,7 +275,7 @@ export async function runSocraticTurn(input: SocraticTurnInput): Promise<Socrati
     schemaVersion: 'socratic-action.v2',
     configVersion: input.config.configVersion,
     input: {
-      caseId: assessment.caseId,
+      caseId: referenceCaseId,
       nodeId: input.nodeId,
       studentAnswer: input.studentAnswer,
       conversation: state.turns.map((turn) => ({

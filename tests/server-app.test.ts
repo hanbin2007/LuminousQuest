@@ -4,6 +4,7 @@ import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 
 import { createServerApp } from '../server/app';
+import { loadAllConfig } from '../server/config/loader';
 import type { LLMProvider, LLMRequest } from '../server/llm/types';
 import { createTemporaryDirectory, writeValidContentTree } from './helpers/content-fixture';
 
@@ -35,6 +36,41 @@ describe('Hono server responsibilities', () => {
     expect(firstConfig.knowledgeModel.version).toBe('knowledge-model.v1.1');
     expect(secondConfig.knowledgeModel.version).toBe('knowledge-model.v2');
     expect(secondConfig.configVersion).toMatch(/^sha256:[a-f0-9]{64}$/);
+  });
+
+  it('serves a public config view without grading keys while preserving the server config', async () => {
+    const root = await createTemporaryDirectory();
+    await writeValidContentTree(root);
+    const app = createServerApp({ contentRoot: root, clientRoot: path.join(root, 'client'), apiToken });
+
+    const response = await app.request('/api/config');
+    const payload = await response.json() as {
+      pretest: {
+        builder: { components: Array<Record<string, unknown>> };
+        questions: Array<Record<string, unknown>>;
+      };
+      prompts?: unknown;
+    };
+    const choice = payload.pretest.questions.find((question) => question.type === 'choice')!;
+    const text = payload.pretest.questions.find((question) => question.type === 'text')!;
+    const full = await loadAllConfig(root);
+
+    expect(response.headers.get('x-lq-api-token')).toBe(apiToken);
+    expect(payload).not.toHaveProperty('prompts');
+    for (const option of choice.options as Array<Record<string, unknown>>) {
+      expect(option).not.toHaveProperty('correct');
+      expect(option).not.toHaveProperty('misconceptionIds');
+    }
+    expect(text).not.toHaveProperty('answerGuidance');
+    expect(text).not.toHaveProperty('referenceEquations');
+    for (const component of payload.pretest.builder.components) {
+      expect(component).not.toHaveProperty('functionalRole');
+      expect(component).not.toHaveProperty('distractor');
+    }
+    expect(full.pretest.questions.find((question) => question.type === 'choice'))
+      .toHaveProperty('options.0.correct');
+    expect(full.pretest.questions.find((question) => question.type === 'text'))
+      .toHaveProperty('answerGuidance');
   });
 
   it('provides a no-key mock LLM flow through the proxy route', async () => {
@@ -262,4 +298,3 @@ it('serves built client bundles under /assets when not an external content asset
   const missing = await app.request('/assets/definitely-missing.js');
   expect(missing.status).toBe(404);
 });
-

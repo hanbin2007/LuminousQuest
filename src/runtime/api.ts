@@ -3,13 +3,22 @@ import type { StudentSession } from '../../shared/session/schema';
 
 export interface ExtractAssessmentInput {
   sessionId: string;
-  caseId: string;
-  nodeId: string;
+  questionId: string;
+  targetNodeIds: string[];
   studentAnswer: string;
+  submissionId: string;
+}
+
+export interface ChoiceAssessmentInput {
+  sessionId: string;
+  questionId: string;
+  optionId: string;
+  submissionId: string;
 }
 
 export interface AppRuntime {
   loadConfig: () => Promise<LoadedConfig>;
+  assessChoice: (input: ChoiceAssessmentInput) => Promise<{ session: StudentSession | null }>;
   extractAssessment: (input: ExtractAssessmentInput) => Promise<{ session: StudentSession | null }>;
   reviewDrawing: (imageData: string) => Promise<string>;
 }
@@ -35,11 +44,14 @@ async function jsonResponse<T>(response: Response) {
 
 export const defaultRuntime: AppRuntime = {
   async loadConfig() {
-    return jsonResponse<LoadedConfig>(await fetch('/api/config'));
+    const response = await fetch('/api/config');
+    const token = response.headers.get('x-lq-api-token');
+    if (token) globalThis.__LQ_API_TOKEN__ = token;
+    return jsonResponse<LoadedConfig>(response);
   },
 
-  async extractAssessment(input) {
-    const response = await fetch('/api/assessment/extract', {
+  async assessChoice(input) {
+    const response = await fetch('/api/assessment/choice', {
       method: 'POST',
       headers: protectedHeaders(),
       body: JSON.stringify(input),
@@ -47,25 +59,34 @@ export const defaultRuntime: AppRuntime = {
     return jsonResponse<{ session: StudentSession }>(response);
   },
 
+  async extractAssessment(input) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 20_000);
+    try {
+      const response = await fetch('/api/assessment/extract', {
+        method: 'POST',
+        headers: protectedHeaders(),
+        body: JSON.stringify(input),
+        signal: controller.signal,
+      });
+      return jsonResponse<{ session: StudentSession }>(response);
+    } catch (error) {
+      if (controller.signal.aborted || (error instanceof DOMException && error.name === 'AbortError')) {
+        throw new Error('判分请求超时，请重试；重试不会重复记录本次作答。');
+      }
+      throw error;
+    } finally {
+      clearTimeout(timeout);
+    }
+  },
+
   async reviewDrawing(imageData) {
-    const response = await fetch('/api/llm', {
+    const response = await fetch('/api/drawing/review', {
       method: 'POST',
       headers: protectedHeaders(),
-      body: JSON.stringify({
-        executionMode: 'development',
-        capability: 'vision',
-        provider: 'mock',
-        model: 'mock-v1',
-        prompt: { id: 'hand-drawing-feedback' },
-        schemaVersion: 'hand-drawing-feedback.v1',
-        input: { task: '只用自然语言点评手绘表达，不判分，不写入学习者画像。' },
-        images: [{ mediaType: 'image/png', data: imageData }],
-      }),
+      body: JSON.stringify({ imageData }),
     });
-    const result = await jsonResponse<{ response: { content: string } }>(response);
-    if (result.response.content.startsWith('Mock vision extraction')) {
-      return '已收到手绘表达。请再检查电子路径与离子路径是否分别闭合，方向标注是否彼此一致。';
-    }
-    return result.response.content;
+    const result = await jsonResponse<{ feedback: string }>(response);
+    return result.feedback;
   },
 };

@@ -268,6 +268,7 @@ export interface RecordStructuredTextAssessmentInput {
   };
   assessmentEventIdPrefix: string;
   assessedAt: string;
+  referenceCaseId?: string;
 }
 
 export interface RecordNeedsReviewTextAssessmentInput {
@@ -282,22 +283,42 @@ export interface RecordNeedsReviewTextAssessmentInput {
   assessedAt: string;
 }
 
-export function recordNeedsReviewTextAssessment(input: RecordNeedsReviewTextAssessmentInput) {
-  const rubric = input.config.rubrics.rubrics.find((entry) => entry.nodeId === input.nodeId);
-  if (!rubric) throw new Error(`No rubric configured for node ${input.nodeId}`);
-  let session = appendSessionEvent(input.session, {
-    id: input.answer.id,
-    occurredAt: input.answer.occurredAt,
+export interface RecordNeedsReviewTextAssessmentsInput {
+  session: StudentSession;
+  config: LoadedConfig;
+  answer: RecordStructuredTextAssessmentInput['answer'];
+  nodeIds: readonly string[];
+  assistance: AssistanceMetadata;
+  reason: string;
+  provenance: RecordStructuredTextAssessmentInput['provenance'];
+  assessmentEventIdPrefix: string;
+  assessedAt: string;
+}
+
+function appendTextAnswer(session: StudentSession, answer: RecordStructuredTextAssessmentInput['answer']) {
+  return appendSessionEvent(session, {
+    id: answer.id,
+    occurredAt: answer.occurredAt,
     kind: 'answer.submitted',
     pipelineStage: 'answer',
-    caseId: input.answer.caseId,
-    stageId: input.answer.stageId,
-    attemptId: input.answer.attemptId,
-    questionId: input.answer.questionId,
-    answer: { format: 'text', value: input.answer.value },
+    caseId: answer.caseId,
+    stageId: answer.stageId,
+    attemptId: answer.attemptId,
+    questionId: answer.questionId,
+    answer: { format: 'text', value: answer.value },
   });
-  session = appendSessionEvent(session, {
-    id: input.assessmentEventId,
+}
+
+function appendNeedsReviewAssessment(
+  session: StudentSession,
+  input: Omit<RecordNeedsReviewTextAssessmentInput, 'session' | 'nodeId' | 'assessmentEventId'>,
+  nodeId: string,
+  assessmentEventId: string,
+) {
+  const rubric = input.config.rubrics.rubrics.find((entry) => entry.nodeId === nodeId);
+  if (!rubric) throw new Error(`No rubric configured for node ${nodeId}`);
+  return appendSessionEvent(session, {
+    id: assessmentEventId,
     occurredAt: input.assessedAt,
     kind: 'assessment.completed',
     pipelineStage: 'extraction',
@@ -305,7 +326,7 @@ export function recordNeedsReviewTextAssessment(input: RecordNeedsReviewTextAsse
     stageId: input.answer.stageId,
     attemptId: input.answer.attemptId,
     sourceAnswerEventId: input.answer.id,
-    nodeId: input.nodeId,
+    nodeId,
     rubric: { id: rubric.id, version: input.config.rubrics.version },
     assistance: input.assistance,
     extraction: {
@@ -321,6 +342,30 @@ export function recordNeedsReviewTextAssessment(input: RecordNeedsReviewTextAsse
     ruleDecision: { status: 'unassessed', reason: 'awaiting extraction review' },
     following: { status: 'unassessed' },
     score: { status: 'unassessed' },
+  });
+}
+
+export function recordNeedsReviewTextAssessment(input: RecordNeedsReviewTextAssessmentInput) {
+  let session = appendTextAnswer(input.session, input.answer);
+  session = appendNeedsReviewAssessment(session, input, input.nodeId, input.assessmentEventId);
+  return {
+    session,
+    profile: buildLearnerProfile(session, input.config),
+  };
+}
+
+export function recordNeedsReviewTextAssessments(input: RecordNeedsReviewTextAssessmentsInput) {
+  if (input.nodeIds.length === 0 || new Set(input.nodeIds).size !== input.nodeIds.length) {
+    throw new Error('Needs-review target node ids must be non-empty and unique');
+  }
+  let session = appendTextAnswer(input.session, input.answer);
+  input.nodeIds.forEach((nodeId, index) => {
+    session = appendNeedsReviewAssessment(
+      session,
+      input,
+      nodeId,
+      `${input.assessmentEventIdPrefix}-${index + 1}`,
+    );
   });
   return {
     session,
@@ -357,19 +402,10 @@ function directionRequirements(
 
 export function recordStructuredTextAssessment(input: RecordStructuredTextAssessmentInput) {
   const extraction = structuredAssessmentResponseSchema.parse(input.extraction);
-  const trainingCase = input.config.cases.find((entry) => entry.id === input.answer.caseId);
-  if (!trainingCase) throw new Error(`No case configured for ${input.answer.caseId}`);
-  let session = appendSessionEvent(input.session, {
-    id: input.answer.id,
-    occurredAt: input.answer.occurredAt,
-    kind: 'answer.submitted',
-    pipelineStage: 'answer',
-    caseId: input.answer.caseId,
-    stageId: input.answer.stageId,
-    attemptId: input.answer.attemptId,
-    questionId: input.answer.questionId,
-    answer: { format: 'text', value: input.answer.value },
-  });
+  const referenceCaseId = input.referenceCaseId ?? input.answer.caseId;
+  const trainingCase = input.config.cases.find((entry) => entry.id === referenceCaseId);
+  if (!trainingCase) throw new Error(`No case configured for ${referenceCaseId}`);
+  let session = appendTextAnswer(input.session, input.answer);
 
   const anchorEvents = new Map<string, {
     outcome: 'hit' | 'miss';

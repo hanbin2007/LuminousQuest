@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { recordBuilderAssessment } from '../../../shared/workflows/engine-assessment';
 import { appendSessionEvent } from '../../../shared/session/session';
@@ -7,43 +7,20 @@ import { useAppContext } from '../../app/AppContext';
 import type { BuilderAnswer } from '../builder/TopologyBuilder';
 import { TopologyBuilder } from '../builder/TopologyBuilder';
 import { DiagnosisView } from '../diagnosis/DiagnosisView';
-import { recordChoiceAssessment } from './choice-assessment';
 import { HandDrawingPanel } from './HandDrawingPanel';
 import { QuestionCard } from './QuestionCard';
 import { mergeServerSession } from './session-merge';
-
-interface PretestDraft {
-  step: number;
-  builder: BuilderAnswer;
-  answers: Record<string, string>;
-}
-
-const emptyDraft: PretestDraft = {
-  step: 0,
-  builder: { components: [], connections: [] },
-  answers: {},
-};
+import {
+  loadPretestDraft,
+  savePretestDraft,
+  type PretestDraft,
+} from './draft';
 
 function draftStorage() {
   try {
     return window.localStorage;
   } catch {
     return null;
-  }
-}
-
-function loadDraft(sessionId: string): PretestDraft {
-  try {
-    const source = draftStorage()?.getItem(`luminous-quest:pretest-ui.v1:${sessionId}`);
-    if (!source) return emptyDraft;
-    const value = JSON.parse(source) as Partial<PretestDraft>;
-    return {
-      step: typeof value.step === 'number' ? value.step : 0,
-      builder: value.builder ?? emptyDraft.builder,
-      answers: value.answers ?? {},
-    };
-  } catch {
-    return emptyDraft;
   }
 }
 
@@ -59,7 +36,7 @@ function appendUnassessedTextAnswer(
     occurredAt: new Date().toISOString(),
     kind: 'answer.submitted',
     pipelineStage: 'answer',
-    caseId: 'zinc-copper',
+    caseId: 'pretest',
     stageId: 'assessment-local',
     attemptId: `${questionId}-${count + 1}`,
     questionId,
@@ -75,9 +52,11 @@ export function PretestPage() {
     setSession,
     setPretestComplete,
   } = useAppContext();
-  const [draft, setDraft] = useState<PretestDraft>(() => loadDraft(session.id));
+  const [draft, setDraft] = useState<PretestDraft>(() =>
+    loadPretestDraft(draftStorage(), session.id, config.pretest));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const submissionIds = useRef(new Map<string, string>());
   const questionCount = config.pretest.questions.length;
   const drawingStep = questionCount + 1;
   const diagnosisStep = questionCount + 2;
@@ -87,11 +66,15 @@ export function PretestPage() {
     : null;
 
   useEffect(() => {
-    setDraft(loadDraft(session.id));
-  }, [session.id]);
+    setDraft(loadPretestDraft(draftStorage(), session.id, config.pretest));
+  }, [config.pretest, session.id]);
 
   useEffect(() => {
-    draftStorage()?.setItem(`luminous-quest:pretest-ui.v1:${session.id}`, JSON.stringify(draft));
+    try {
+      savePretestDraft(draftStorage(), session.id, draft);
+    } catch {
+      setError('草稿保存失败，请导出会话。');
+    }
     setPretestComplete(draft.step >= diagnosisStep);
   }, [diagnosisStep, draft, session.id, setPretestComplete]);
 
@@ -107,39 +90,37 @@ export function PretestPage() {
   const submitQuestion = async (answer: string) => {
     if (!activeQuestion) return;
     setError(null);
-    if (activeQuestion.type === 'choice') {
-      const result = recordChoiceAssessment({
-        session,
-        config,
-        question: activeQuestion,
-        optionId: answer,
-      });
-      setSession(result.session);
-      advance();
-      return;
-    }
-
+    const submissionKey = `${activeQuestion.id}\0${answer}`;
+    const submissionId = submissionIds.current.get(submissionKey) ?? crypto.randomUUID();
+    submissionIds.current.set(submissionKey, submissionId);
     setBusy(true);
     try {
-      let merged = session;
-      let receivedServerEvents = false;
-      for (const nodeId of activeQuestion.targetNodeIds) {
+      if (activeQuestion.type === 'choice') {
+        const result = await runtime.assessChoice({
+          sessionId: session.id,
+          questionId: activeQuestion.id,
+          optionId: answer,
+          submissionId,
+        });
+        if (result.session) setSession(mergeServerSession(session, result.session));
+      } else {
         const result = await runtime.extractAssessment({
           sessionId: session.id,
-          caseId: activeQuestion.referenceEquations[0]?.caseId ?? 'zinc-copper',
-          nodeId,
+          questionId: activeQuestion.id,
+          targetNodeIds: [...activeQuestion.targetNodeIds],
           studentAnswer: answer,
+          submissionId,
         });
         if (result.session) {
-          merged = mergeServerSession(merged, result.session);
-          receivedServerEvents = true;
+          setSession(mergeServerSession(session, result.session));
+        } else {
+          setSession(appendUnassessedTextAnswer(session, activeQuestion.id, answer));
         }
       }
-      if (!receivedServerEvents) merged = appendUnassessedTextAnswer(merged, activeQuestion.id, answer);
-      setSession(merged);
+      submissionIds.current.delete(submissionKey);
       advance();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : '简答提取失败');
+      setError(caught instanceof Error ? caught.message : '判分请求失败，请重试');
     } finally {
       setBusy(false);
     }
@@ -218,6 +199,8 @@ export function PretestPage() {
         <QuestionCard
           key={activeQuestion.id}
           question={activeQuestion}
+          dimensionLabel={config.knowledgeModel.dimensions.find((dimension) =>
+            dimension.id === activeQuestion.dimensionId)?.label ?? activeQuestion.dimensionId}
           answer={draft.answers[activeQuestion.id]}
           busy={busy}
           onAnswerChange={(value) => setDraft((current) => ({

@@ -29,31 +29,22 @@ describe('hand drawing easter egg', () => {
     expect(screen.queryByText(/hit|partial|miss/i)).not.toBeInTheDocument();
   });
 
-  it('runs the isolated hand-drawing prompt through the existing mock vision provider', async () => {
+  it('keeps drawing workflow configuration on the server and marks mock feedback', async () => {
     const apiToken = 'm2-hand-drawing-test';
     const app = createServerApp({
       contentRoot: process.cwd(),
       clientRoot: path.join(process.cwd(), 'dist', 'client'),
       apiToken,
     });
-    const response = await app.request('/api/llm', {
+    const response = await app.request('/api/drawing/review', {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-lq-api-token': apiToken },
-      body: JSON.stringify({
-        executionMode: 'development',
-        capability: 'vision',
-        provider: 'mock',
-        model: 'mock-v1',
-        prompt: { id: 'hand-drawing-feedback' },
-        schemaVersion: 'hand-drawing-feedback.v1',
-        input: { task: '只做自然语言点评' },
-        images: [{ mediaType: 'image/png', data: 'hand-drawing' }],
-      }),
+      body: JSON.stringify({ imageData: 'hand-drawing' }),
     });
 
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({
-      response: { content: 'Mock vision extraction for 1 image(s)' },
+      feedback: expect.stringContaining('演示占位'),
     });
   });
 });

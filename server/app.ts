@@ -9,17 +9,20 @@ import {
   sessionConfigVersions,
 } from '../shared/session/session';
 import {
-  recordNeedsReviewTextAssessment,
+  recordNeedsReviewTextAssessments,
   recordStructuredTextAssessment,
 } from '../shared/workflows/assessment';
+import { recordChoiceAssessment } from '../shared/workflows/choice-assessment';
 import { ExtractionValidationError } from '../shared/workflows/extraction-validation';
+import { recordPretestEquationAssessments } from '../shared/workflows/pretest-equation-assessment';
 import { loadAllConfig, ConfigValidationError } from './config/loader';
+import { createPublicConfigView } from './config/public-view';
 import { EvalCandidateStore } from './llm/eval-candidate-store';
 import { RecordingStore } from './llm/recording-store';
 import { createProviderRegistry } from './llm/providers';
 import { LLMService } from './llm/service';
 import type { LLMExecutionMode, LLMProvider, LLMRequest } from './llm/types';
-import { loadAllPrompts, loadPrompt, PromptValidationError } from './prompts/loader';
+import { loadPrompt, PromptValidationError } from './prompts/loader';
 import { InMemorySessionStore, type ServerSessionStore } from './session/store';
 import { loadExternalAsset, loadStaticAsset } from './static-assets';
 import {
@@ -78,10 +81,28 @@ const llmRequestSchema = z
 const assessmentRouteRequestSchema = z
   .object({
     sessionId: z.string().trim().min(1).max(128),
-    caseId: z.string().trim().min(1).max(128),
-    nodeId: z.string().trim().min(1).max(128),
+    questionId: z.string().trim().min(1).max(128),
+    targetNodeIds: z.array(z.string().trim().min(1).max(128)).min(1).max(32),
     studentAnswer: z.string(),
+    submissionId: z.string().trim().min(1).max(128),
   })
+  .strict()
+  .refine((value) => new Set(value.targetNodeIds).size === value.targetNodeIds.length, {
+    path: ['targetNodeIds'],
+    message: 'must contain unique node ids',
+  });
+
+const choiceRouteRequestSchema = z
+  .object({
+    sessionId: z.string().trim().min(1).max(128),
+    questionId: z.string().trim().min(1).max(128),
+    optionId: z.string().trim().min(1).max(128),
+    submissionId: z.string().trim().min(1).max(128),
+  })
+  .strict();
+
+const drawingReviewRequestSchema = z
+  .object({ imageData: z.string().min(1) })
   .strict();
 
 const tutorRouteRequestSchema = z
@@ -241,13 +262,11 @@ export function createServerApp(options: ServerAppOptions) {
 
   app.get('/api/config', async (context) => {
     try {
-      const [config, prompts] = await Promise.all([
-        loadAllConfig(options.contentRoot),
-        loadAllPrompts(options.contentRoot),
-      ]);
-      return context.json({ ...config, prompts });
+      const config = await loadAllConfig(options.contentRoot);
+      context.header('x-lq-api-token', apiToken);
+      return context.json(createPublicConfigView(config));
     } catch (error) {
-      if (error instanceof ConfigValidationError || error instanceof PromptValidationError) {
+      if (error instanceof ConfigValidationError) {
         return context.json(externalDataError(error), 500);
       }
       throw error;
@@ -261,7 +280,8 @@ export function createServerApp(options: ServerAppOptions) {
     if (!parsed.success) {
       return invalidRequest(context, 'LLM', parsed.error);
     }
-    if (['structured-assessment', 'socratic-tutoring'].includes(parsed.data.prompt.id)) {
+    if (['structured-assessment', 'socratic-tutoring', 'hand-drawing-feedback']
+      .includes(parsed.data.prompt.id)) {
       return context.json({ error: 'Protected workflow prompt requires its dedicated API route' }, 403);
     }
 
@@ -284,6 +304,99 @@ export function createServerApp(options: ServerAppOptions) {
     }
   });
 
+  app.post('/api/assessment/choice', async (context) => {
+    const requestBody = await readProtectedJson(context, apiToken, maxRequestBodyBytes);
+    if (!requestBody.ok) return requestBody.response;
+    const parsed = choiceRouteRequestSchema.safeParse(requestBody.body);
+    if (!parsed.success) return invalidRequest(context, 'choice assessment', parsed.error);
+
+    try {
+      const config = await loadAllConfig(options.contentRoot);
+      const question = config.pretest.questions.find((entry) =>
+        entry.id === parsed.data.questionId && entry.type === 'choice');
+      if (!question || question.type !== 'choice') {
+        return context.json({ error: 'Unknown choice question' }, 400);
+      }
+      const option = question.options.find((entry) => entry.id === parsed.data.optionId);
+      if (!option) return context.json({ error: 'Unknown choice option' }, 400);
+      const nowMs = workflow.now?.() ?? Date.now();
+      let session = sessions.get(parsed.data.sessionId) ?? createSession({
+        id: parsed.data.sessionId,
+        now: new Date(nowMs).toISOString(),
+        configVersions: sessionConfigVersions(config),
+      });
+      if (session.configVersions.configDigest !== config.configVersion) {
+        return context.json({ error: 'Session config version does not match the current server config' }, 409);
+      }
+      const existing = session.events.find((event) =>
+        event.kind === 'answer.submitted' && event.attemptId === parsed.data.submissionId);
+      if (existing?.kind === 'answer.submitted') {
+        const matches = existing.questionId === question.id
+          && existing.answer.format === 'text'
+          && existing.answer.value === option.text;
+        return matches
+          ? context.json({ status: 'already-recorded', session })
+          : context.json({ error: 'Submission id was already used for different content' }, 409);
+      }
+
+      const operationId = randomUUID();
+      let idIndex = 0;
+      const occurredAt = new Date(Math.max(nowMs, Date.parse(session.updatedAt))).toISOString();
+      const recorded = recordChoiceAssessment({
+        session,
+        config,
+        question,
+        optionId: option.id,
+        occurredAt,
+        attemptId: parsed.data.submissionId,
+        idFactory: (prefix) => `${prefix}-${operationId}-${idIndex++}`,
+      });
+      session = recorded.session;
+      sessions.set(session);
+      return context.json({ status: 'recorded', session });
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      console.error(`[choice-assessment] request failed: ${detail}`);
+      return context.json({ error: 'Choice assessment failed' }, 500);
+    }
+  });
+
+  app.post('/api/drawing/review', async (context) => {
+    const requestBody = await readProtectedJson(context, apiToken, maxRequestBodyBytes);
+    if (!requestBody.ok) return requestBody.response;
+    const parsed = drawingReviewRequestSchema.safeParse(requestBody.body);
+    if (!parsed.success) return invalidRequest(context, 'drawing review', parsed.error);
+
+    try {
+      const [config, prompt] = await Promise.all([
+        loadAllConfig(options.contentRoot),
+        loadPrompt(options.contentRoot, 'hand-drawing-feedback'),
+      ]);
+      if (!prompt) throw new Error('Required prompt hand-drawing-feedback is missing');
+      const result = await llmService.execute({
+        executionMode: workflow.executionMode,
+        capability: 'vision',
+        provider: workflow.provider,
+        model: workflow.model,
+        prompt,
+        schemaVersion: 'hand-drawing-feedback.v1',
+        configVersion: config.configVersion,
+        input: { task: '只用自然语言点评手绘表达，不判分，不写入学习者画像。' },
+        images: [{ mediaType: 'image/png', data: parsed.data.imageData }],
+        ...(workflow.executionMode === 'demo' ? { stepId: 'hand-drawing-feedback' } : {}),
+      });
+      const content = result.response.content;
+      const feedback = workflow.provider === 'mock' || content.startsWith('Mock vision extraction')
+        ? '演示占位：已收到手绘表达。请检查电子路径、离子路径与方向标注是否一致。'
+        : content;
+      return context.json({ feedback });
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      console.error(`[drawing-review] request failed: ${detail}`);
+      return context.json({ error: 'Drawing review failed' }, 500);
+    }
+  });
+
   app.post('/api/assessment/extract', async (context) => {
     const requestBody = await readProtectedJson(context, apiToken, maxRequestBodyBytes);
     if (!requestBody.ok) return requestBody.response;
@@ -296,6 +409,26 @@ export function createServerApp(options: ServerAppOptions) {
         loadPrompt(options.contentRoot, 'structured-assessment'),
       ]);
       if (!prompt) throw new Error('Required prompt structured-assessment is missing');
+      const question = config.pretest.questions.find((entry) =>
+        entry.id === parsed.data.questionId && entry.type === 'text');
+      if (!question || question.type !== 'text') {
+        return context.json({ error: 'Unknown text question' }, 400);
+      }
+      const configuredTargets = new Set(question.targetNodeIds);
+      if (parsed.data.targetNodeIds.some((nodeId) => !configuredTargets.has(nodeId))) {
+        return context.json({ error: 'Target node is not configured for this question' }, 400);
+      }
+      const referenceCaseId = question.referenceEquations[0].caseId;
+      const trainingCase = config.cases.find((entry) => entry.id === referenceCaseId);
+      if (!trainingCase) throw new Error(`Required case ${referenceCaseId} is missing`);
+      const sourceByNode = new Map(trainingCase.evidencePaths.map((path) => [path.nodeId, path.source]));
+      const answerTargetNodeIds = parsed.data.targetNodeIds.filter((nodeId) =>
+        sourceByNode.get(nodeId) === 'answer');
+      const equationTargetNodeIds = parsed.data.targetNodeIds.filter((nodeId) =>
+        sourceByNode.get(nodeId) === 'equation');
+      if (answerTargetNodeIds.length + equationTargetNodeIds.length !== parsed.data.targetNodeIds.length) {
+        return context.json({ error: 'Target node has no supported assessment path for this question' }, 400);
+      }
       const nowMs = workflow.now?.() ?? Date.now();
       // Local single-process limitation: changing the client-supplied sessionId resets assistance counts.
       let session = sessions.get(parsed.data.sessionId) ?? createSession({
@@ -306,65 +439,99 @@ export function createServerApp(options: ServerAppOptions) {
       if (session.configVersions.configDigest !== config.configVersion) {
         return context.json({ error: 'Session config version does not match the current server config' }, 409);
       }
-      const assistance = derivedAssistance(session, parsed.data.nodeId);
-      const result = await runAssessmentExtraction({
-        service: llmService,
-        evalCandidates,
-        config,
-        prompt,
-        answer: parsed.data.studentAnswer,
-        caseId: parsed.data.caseId,
-        targetNodeIds: [parsed.data.nodeId],
-        assistance,
-        executionMode: workflow.executionMode,
-        provider: workflow.provider,
-        model: workflow.model,
-        ...(workflow.extractionStepId ? { stepId: workflow.extractionStepId } : {}),
-      });
+      const existing = session.events.find((event) =>
+        event.kind === 'answer.submitted' && event.attemptId === parsed.data.submissionId);
+      if (existing?.kind === 'answer.submitted') {
+        const matches = existing.questionId === question.id
+          && existing.answer.format === 'text'
+          && existing.answer.value === parsed.data.studentAnswer;
+        return matches
+          ? context.json({ status: 'already-recorded', session })
+          : context.json({ error: 'Submission id was already used for different content' }, 409);
+      }
+      const assistanceByNode = answerTargetNodeIds.map((nodeId) =>
+        derivedAssistance(session, nodeId));
+      const assistance = assistanceByNode.reduce<AssistanceMetadata>((selected, candidate) =>
+        candidate.rounds > selected.rounds ? candidate : selected, { kind: 'none', rounds: 0 });
       const operationId = randomUUID();
       const occurredAt = new Date(Math.max(nowMs, Date.parse(session.updatedAt))).toISOString();
-      const questionId = `${parsed.data.caseId}:${parsed.data.nodeId}`;
-      const attemptNumber = session.events.filter((event) =>
-        event.kind === 'answer.submitted' && event.questionId === questionId).length + 1;
       const answer = {
         id: `answer-${operationId}`,
         occurredAt,
-        caseId: parsed.data.caseId,
+        caseId: 'pretest' as const,
         stageId: 'assessment',
-        attemptId: `${parsed.data.nodeId.toLowerCase()}-${attemptNumber}`,
-        questionId,
+        attemptId: parsed.data.submissionId,
+        questionId: question.id,
         value: parsed.data.studentAnswer,
       };
-      const provenance = {
-        promptId: prompt.id,
-        promptVersion: prompt.version,
-        cacheKey: result.cacheKey,
-        model: result.model,
-      };
-      const recorded = result.status === 'extracted'
-        ? recordStructuredTextAssessment({
-            session,
-            config,
-            answer,
-            extraction: result.extraction,
-            provenance,
-            assessmentEventIdPrefix: `assessment-${operationId}`,
-            assessedAt: occurredAt,
-          })
-        : recordNeedsReviewTextAssessment({
-            session,
-            config,
-            answer,
-            nodeId: parsed.data.nodeId,
-            assistance,
-            reason: result.reason,
-            provenance,
-            assessmentEventId: `assessment-${operationId}`,
-            assessedAt: occurredAt,
-          });
-      session = recorded.session;
+      let extractionResult: Awaited<ReturnType<typeof runAssessmentExtraction>> | null = null;
+      let profile: ReturnType<typeof recordPretestEquationAssessments>['profile'] | undefined;
+      if (answerTargetNodeIds.length > 0) {
+        extractionResult = await runAssessmentExtraction({
+          service: llmService,
+          evalCandidates,
+          config,
+          prompt,
+          answer: parsed.data.studentAnswer,
+          caseId: referenceCaseId,
+          targetNodeIds: answerTargetNodeIds,
+          assistance,
+          executionMode: workflow.executionMode,
+          provider: workflow.provider,
+          model: workflow.model,
+          ...(workflow.extractionStepId ? { stepId: workflow.extractionStepId } : {}),
+        });
+        const provenance = {
+          promptId: prompt.id,
+          promptVersion: prompt.version,
+          cacheKey: extractionResult.cacheKey,
+          model: extractionResult.model,
+        };
+        const recorded = extractionResult.status === 'extracted'
+          ? recordStructuredTextAssessment({
+              session,
+              config,
+              answer,
+              extraction: extractionResult.extraction,
+              provenance,
+              assessmentEventIdPrefix: `assessment-${operationId}-text`,
+              assessedAt: occurredAt,
+              referenceCaseId,
+            })
+          : recordNeedsReviewTextAssessments({
+              session,
+              config,
+              answer,
+              nodeIds: answerTargetNodeIds,
+              assistance,
+              reason: extractionResult.reason,
+              provenance,
+              assessmentEventIdPrefix: `assessment-${operationId}-text`,
+              assessedAt: occurredAt,
+            });
+        session = recorded.session;
+        profile = recorded.profile;
+      }
+      if (equationTargetNodeIds.length > 0) {
+        const recorded = recordPretestEquationAssessments({
+          session,
+          config,
+          answer,
+          referenceCaseId,
+          targetNodeIds: equationTargetNodeIds,
+          assessmentEventIdPrefix: `assessment-${operationId}-equation`,
+          assessedAt: occurredAt,
+        });
+        session = recorded.session;
+        profile = recorded.profile;
+      }
       sessions.set(session);
-      return context.json({ ...result, ...recorded });
+      return context.json({
+        ...(extractionResult ?? { status: 'deterministic' as const }),
+        session,
+        profile,
+        recordingStatus: 'recorded',
+      });
     } catch (error) {
       if (error instanceof ExtractionValidationError && error.category === 'answer-too-long') {
         return context.json({ error: error.message }, 413);

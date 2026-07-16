@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useId } from 'react';
 
 import type { PretestConfig } from '../../../shared/config/schemas';
 import { EquationToolbar } from './EquationToolbar';
@@ -7,42 +7,29 @@ type Question = PretestConfig['questions'][number];
 
 interface QuestionCardProps {
   question: Question;
+  dimensionLabel: string;
   answer?: string;
   busy?: boolean;
   onAnswerChange: (value: string) => void;
   onSubmit: (value: string) => void;
 }
 
-function tokenDuration(name: string) {
-  const value = window.getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-  const amount = Number.parseFloat(value);
-  if (!Number.isFinite(amount)) return 0;
-  return value.endsWith('ms') ? amount : value.endsWith('s') ? amount * 1000 : 0;
-}
-
 export function QuestionCard({
   question,
+  dimensionLabel,
   answer = '',
   busy = false,
   onAnswerChange,
   onSubmit,
 }: QuestionCardProps) {
   const textareaId = useId();
-  const [submittedCorrect, setSubmittedCorrect] = useState(false);
-  const [feedbackPending, setFeedbackPending] = useState(false);
-  const feedbackTimer = useRef<number | null>(null);
   const isChoice = question.type === 'choice';
-  const isJudgment = isChoice && question.options.length === 2;
-
-  useEffect(() => () => {
-    if (feedbackTimer.current !== null) window.clearTimeout(feedbackTimer.current);
-  }, []);
 
   return (
-    <article className={`question-card${submittedCorrect ? ' question-card--correct' : ''}`}>
+    <article className="question-card">
       <header>
-        <span>{isJudgment ? '判断题' : isChoice ? '选择题' : '简答题'}</span>
-        <span>{question.dimensionId === 'principle' ? '原理' : '能量'}</span>
+        <span>{isChoice ? '选择题' : '简答题'}</span>
+        <span>{dimensionLabel}</span>
       </header>
       <h2>{question.prompt}</h2>
       {isChoice ? (
@@ -77,23 +64,8 @@ export function QuestionCard({
       )}
       <button
         className="primary-button question-submit"
-        disabled={busy || feedbackPending || answer.trim().length === 0}
-        onClick={() => {
-          const correct = isChoice && question.options.find((option) => option.id === answer)?.correct === true;
-          setSubmittedCorrect(correct);
-          if (correct) {
-            setFeedbackPending(true);
-            const duration = tokenDuration('--delay-eflow-answer') + tokenDuration('--dur-eflow-answer');
-            if (duration > 0) {
-              feedbackTimer.current = window.setTimeout(() => {
-                feedbackTimer.current = null;
-                onSubmit(answer);
-              }, duration);
-              return;
-            }
-          }
-          onSubmit(answer);
-        }}
+        disabled={busy || answer.trim().length === 0}
+        onClick={() => onSubmit(answer)}
         type="button"
       >
         {busy ? '正在提取' : '提交作答'}
