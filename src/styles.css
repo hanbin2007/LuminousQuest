@@ -1188,6 +1188,398 @@ p {
   color: var(--annotate-blue);
 }
 
+.training-page__heading,
+.training-case-heading,
+.training-workspace > header,
+.training-feedback > header,
+.transfer-comparison > header {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: var(--space-5);
+}
+
+.training-page__heading > p,
+.training-case-heading > p,
+.training-workspace > header small {
+  margin: 0;
+  color: var(--ink-faint);
+  font-size: var(--text-sm);
+}
+
+.training-case-heading {
+  align-items: baseline;
+  padding: var(--space-4) 0;
+  margin-bottom: var(--space-5);
+  border-top: 1px solid var(--hairline);
+  border-bottom: 1px solid var(--hairline);
+}
+
+.training-case-heading > span,
+.training-material > header span,
+.training-workspace > header span,
+.training-feedback > header span,
+.transfer-comparison > header span {
+  color: var(--ink-soft);
+  font-size: var(--text-xs);
+  font-weight: 700;
+}
+
+.training-case-heading h2 {
+  margin: 0;
+  font-size: var(--text-xl);
+}
+
+.training-case-heading > p {
+  max-width: 480px;
+  text-align: right;
+}
+
+.training-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  align-items: start;
+  gap: var(--space-6);
+}
+
+.training-material,
+.training-workspace {
+  min-width: 0;
+}
+
+.training-material {
+  position: sticky;
+  top: 150px;
+}
+
+.training-material > header h3,
+.training-workspace > header h3,
+.training-feedback > header h2,
+.transfer-comparison > header h2 {
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-xl);
+}
+
+.training-material__switch {
+  margin: var(--space-4) 0 var(--space-3);
+}
+
+.training-material figure {
+  margin: var(--space-4) 0 0;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  background: var(--paper-raised);
+  overflow: hidden;
+}
+
+.training-material figure img {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  display: block;
+  padding: var(--space-3);
+  object-fit: contain;
+  background: var(--paper-raised);
+}
+
+.training-material figcaption {
+  padding: var(--space-2) var(--space-3);
+  color: var(--ink-faint);
+  border-top: 1px solid var(--hairline);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+.training-material__pending {
+  min-height: 320px;
+  display: grid;
+  place-items: center;
+  color: var(--status-unassessed);
+  border: 1px dashed var(--hairline);
+}
+
+.training-workspace > header {
+  align-items: baseline;
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--hairline);
+}
+
+.training-answer-fields {
+  display: grid;
+  gap: var(--space-4);
+  padding-top: var(--space-4);
+}
+
+.training-answer-field {
+  display: grid;
+  gap: var(--space-2);
+  padding-left: var(--space-3);
+  border-left: 3px solid var(--hairline);
+}
+
+.training-answer-field[data-dimension='device'] { border-left-color: var(--dim-device); }
+.training-answer-field[data-dimension='principle'] { border-left-color: var(--dim-principle); }
+.training-answer-field[data-dimension='energy'] { border-left-color: var(--dim-energy); }
+
+.training-answer-field > span {
+  display: grid;
+  gap: var(--space-1);
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+  line-height: var(--leading-body);
+}
+
+.training-answer-field > span strong {
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+.training-answer-field textarea,
+.training-equations textarea {
+  width: 100%;
+  resize: vertical;
+  padding: var(--space-3);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  background: var(--paper-sunken);
+  line-height: var(--leading-body);
+}
+
+.training-equations {
+  display: grid;
+  gap: var(--space-4);
+  padding: var(--space-5) 0 0;
+  margin: var(--space-5) 0 0;
+  border: 0;
+  border-top: 1px solid var(--hairline);
+}
+
+.training-equations legend {
+  padding: 0;
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: 700;
+}
+
+.training-equations label {
+  display: grid;
+}
+
+.training-equations label > span {
+  margin-bottom: var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: 700;
+}
+
+.training-equations .equation-toolbar {
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+}
+
+.training-equations textarea {
+  border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+  font-family: var(--font-mono);
+}
+
+.training-submit {
+  margin-top: var(--space-5);
+}
+
+.training-spinner {
+  animation: training-spin 800ms linear infinite;
+}
+
+@keyframes training-spin {
+  to { transform: rotate(360deg); }
+}
+
+.training-error {
+  margin-top: var(--space-5);
+}
+
+.training-feedback {
+  padding-top: var(--space-7);
+  margin-top: var(--space-7);
+  border-top: 1px solid var(--hairline);
+}
+
+.training-electron-flow {
+  position: relative;
+  width: 180px;
+  height: 6px;
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+  background: var(--eflow-track);
+}
+
+.training-electron-flow i {
+  position: absolute;
+  top: 0;
+  left: -12px;
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--eflow);
+  animation: training-electron-pass var(--dur-eflow-answer) var(--ease-out) var(--delay-eflow-answer) both;
+}
+
+.training-electron-flow i:nth-child(2) { animation-delay: calc(var(--delay-eflow-answer) + 90ms); }
+.training-electron-flow i:nth-child(3) { animation-delay: calc(var(--delay-eflow-answer) + 180ms); }
+
+@keyframes training-electron-pass {
+  to { transform: translateX(198px); }
+}
+
+.training-scaffold-state {
+  display: grid;
+  grid-template-columns: minmax(190px, 1fr) minmax(0, 2fr);
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  margin: var(--space-5) 0;
+  border-left: 3px solid var(--dim-principle);
+  background: var(--paper-sunken);
+  font-size: var(--text-sm);
+}
+
+.training-scaffold-state span {
+  color: var(--ink-soft);
+}
+
+.training-feedback__list {
+  max-width: 930px;
+}
+
+.training-feedback-item {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-3);
+}
+
+.training-feedback-item .annotation-card {
+  width: 100%;
+}
+
+.training-tutor-trigger {
+  min-height: 34px;
+  margin-left: var(--space-5);
+  border-color: var(--annotate-blue);
+  color: var(--annotate-blue);
+}
+
+.training-tutor-note {
+  width: min(100% - var(--space-5), 760px);
+  padding: var(--space-4) var(--space-5);
+  margin-left: var(--space-5);
+  border-left: 3px solid var(--annotate-blue);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  background: var(--annotate-blue-soft);
+  transform: rotate(-1deg);
+  animation: annotation-in var(--dur-base) var(--ease-out) both;
+}
+
+.training-tutor-note header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  color: var(--annotate-blue);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+.training-tutor-note p {
+  margin: var(--space-3) 0;
+}
+
+.training-tutor-note small {
+  color: var(--ink-soft);
+  font-family: var(--font-mono);
+}
+
+.training-complete {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-4) 0;
+  margin-top: var(--space-5);
+  color: var(--status-hit);
+  border-top: 1px solid var(--hairline);
+}
+
+.training-next {
+  margin-top: var(--space-5);
+}
+
+.transfer-comparison > header {
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--hairline);
+}
+
+.transfer-comparison__notice {
+  margin: 0;
+  color: var(--status-unassessed);
+  font-size: var(--text-sm);
+  font-weight: 700;
+}
+
+.transfer-comparison__layout {
+  display: grid;
+  grid-template-columns: minmax(0, 7fr) minmax(260px, 5fr);
+  align-items: center;
+  gap: var(--space-6);
+  padding-top: var(--space-5);
+}
+
+.transfer-comparison__radar {
+  width: 100%;
+  height: 430px;
+}
+
+.transfer-comparison__scores {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0;
+}
+
+.transfer-comparison__scores > div {
+  display: grid;
+  grid-template-columns: minmax(80px, 1fr) minmax(90px, 1fr) minmax(90px, 1fr);
+  gap: var(--space-2) var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-left: 3px solid var(--hairline);
+  background: var(--paper-raised);
+}
+
+.transfer-comparison__scores > div[data-dimension='device'] { border-left-color: var(--dim-device); }
+.transfer-comparison__scores > div[data-dimension='principle'] { border-left-color: var(--dim-principle); }
+.transfer-comparison__scores > div[data-dimension='energy'] { border-left-color: var(--dim-energy); }
+
+.transfer-comparison__scores dt {
+  grid-row: 1 / span 2;
+  align-self: center;
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: 700;
+}
+
+.transfer-comparison__scores dd {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+}
+
+.transfer-comparison__scores dd span,
+.transfer-comparison__scores small {
+  color: var(--ink-faint);
+  font-size: var(--text-xs);
+}
+
+.transfer-comparison__scores dd strong {
+  font-family: var(--font-mono);
+}
+
+.transfer-comparison__scores small {
+  grid-column: 2 / -1;
+}
+
 .placeholder-page {
   min-height: 70vh;
 }
@@ -1270,8 +1662,14 @@ p {
   }
 
   .builder-layout,
-  .diagnosis-overview {
+  .diagnosis-overview,
+  .training-layout,
+  .transfer-comparison__layout {
     grid-template-columns: 1fr;
+  }
+
+  .training-material {
+    position: static;
   }
 
   .component-tray {
@@ -1285,6 +1683,10 @@ p {
   }
 
   .diagnosis-chart-column {
+    order: 2;
+  }
+
+  .transfer-comparison__radar {
     order: 2;
   }
 
@@ -1370,6 +1772,37 @@ p {
   .evidence-group > header,
   .annotation-card dl > div {
     grid-template-columns: 1fr;
+  }
+
+  .training-page__heading,
+  .training-case-heading,
+  .training-workspace > header,
+  .training-feedback > header,
+  .transfer-comparison > header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .training-case-heading > p {
+    max-width: none;
+    text-align: left;
+  }
+
+  .training-scaffold-state,
+  .transfer-comparison__scores > div {
+    grid-template-columns: 1fr;
+  }
+
+  .transfer-comparison__scores dt,
+  .transfer-comparison__scores small {
+    grid-row: auto;
+    grid-column: auto;
+  }
+
+  .training-tutor-trigger,
+  .training-tutor-note {
+    width: 100%;
+    margin-left: 0;
   }
 }
 

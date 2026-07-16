@@ -14,6 +14,7 @@ export function AppShell() {
     persistenceError,
     historicalSessions,
     pretestComplete,
+    trainingComplete,
   } = useAppContext();
 
   return (
@@ -24,7 +25,10 @@ export function AppShell() {
             <span>LQ</span>
             <strong>LuminousQuest</strong>
           </NavLink>
-          <ElectronFlowProgress pretestComplete={pretestComplete} />
+          <ElectronFlowProgress
+            pretestComplete={pretestComplete}
+            trainingComplete={trainingComplete}
+          />
           <NavLink className="teacher-link" to="/teacher">
             <GraduationCap aria-hidden="true" />教师视图
           </NavLink>

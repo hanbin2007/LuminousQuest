@@ -12,6 +12,7 @@ import { AppErrorBoundary } from './app/AppErrorBoundary';
 import { AppShell } from './app/AppShell';
 import { PlaceholderPage } from './app/PlaceholderPage';
 import { PretestPage } from './features/pretest/PretestPage';
+import { TrainingPage } from './features/training/TrainingPage';
 import { defaultRuntime, type AppRuntime } from './runtime/api';
 import { useLocalSession } from './session/useLocalSession';
 
@@ -30,29 +31,45 @@ function ConfiguredApp({ config, runtime }: { config: LoadedConfig; runtime: App
     persistenceError,
     historicalSessions,
   } = useLocalSession(config);
-  const progressKey = `luminous-quest:pretest-complete.v1:${session.id}`;
-  const readProgress = () => {
+  const pretestProgressKey = `luminous-quest:pretest-complete.v1:${session.id}`;
+  const trainingProgressKey = `luminous-quest:training-complete.v1:${session.id}`;
+  const readProgress = (key: string) => {
     try {
-      return window.localStorage.getItem(progressKey) === 'true';
+      return window.localStorage.getItem(key) === 'true';
     } catch {
       return false;
     }
   };
-  const [pretestComplete, setStoredPretestComplete] = useState(readProgress);
+  const [pretestComplete, setStoredPretestComplete] = useState(() => readProgress(pretestProgressKey));
+  const [trainingComplete, setStoredTrainingComplete] = useState(() => readProgress(trainingProgressKey));
 
   useEffect(() => {
-    setStoredPretestComplete(readProgress());
-  }, [progressKey]);
+    setStoredPretestComplete(readProgress(pretestProgressKey));
+  }, [pretestProgressKey]);
+
+  useEffect(() => {
+    setStoredTrainingComplete(readProgress(trainingProgressKey));
+  }, [trainingProgressKey]);
 
   const setPretestComplete = useCallback((complete: boolean) => {
     setStoredPretestComplete(complete);
     try {
-      if (complete) window.localStorage.setItem(progressKey, 'true');
-      else window.localStorage.removeItem(progressKey);
+      if (complete) window.localStorage.setItem(pretestProgressKey, 'true');
+      else window.localStorage.removeItem(pretestProgressKey);
     } catch {
       // Session persistence already exposes the primary storage failure state.
     }
-  }, [progressKey]);
+  }, [pretestProgressKey]);
+
+  const setTrainingComplete = useCallback((complete: boolean) => {
+    setStoredTrainingComplete(complete);
+    try {
+      if (complete) window.localStorage.setItem(trainingProgressKey, 'true');
+      else window.localStorage.removeItem(trainingProgressKey);
+    } catch {
+      // Session persistence already exposes the primary storage failure state.
+    }
+  }, [trainingProgressKey]);
 
   return (
     <AppContext.Provider value={{
@@ -64,6 +81,8 @@ function ConfiguredApp({ config, runtime }: { config: LoadedConfig; runtime: App
       historicalSessions,
       pretestComplete,
       setPretestComplete,
+      trainingComplete,
+      setTrainingComplete,
     }}>
       <AppErrorBoundary session={session} onReset={resetSession}>
         <BrowserRouter>
@@ -71,13 +90,7 @@ function ConfiguredApp({ config, runtime }: { config: LoadedConfig; runtime: App
           <Route element={<AppShell />}>
             <Route index element={<Navigate replace to="/pretest" />} />
             <Route path="pretest" element={<PretestPage />} />
-            <Route path="training" element={(
-              <PlaceholderPage
-                module="模块二"
-                title="思维模型训练"
-                terms="失电子场所 · 电子导体 · 离子导体 · 得电子场所"
-              />
-            )} />
+            <Route path="training" element={<TrainingPage />} />
             <Route path="model" element={(
               <PlaceholderPage
                 module="模块三"

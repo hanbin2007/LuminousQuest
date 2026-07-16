@@ -13,6 +13,8 @@ export interface AppContextValue {
   historicalSessions: StudentSession[];
   pretestComplete: boolean;
   setPretestComplete: (complete: boolean) => void;
+  trainingComplete: boolean;
+  setTrainingComplete: (complete: boolean) => void;
 }
 
 export const AppContext = createContext<AppContextValue | null>(null);

@@ -2,6 +2,7 @@ import { NavLink, useLocation } from 'react-router-dom';
 
 interface ElectronFlowProgressProps {
   pretestComplete: boolean;
+  trainingComplete: boolean;
 }
 
 const stages = [
@@ -10,12 +11,12 @@ const stages = [
   { path: '/model', label: '外显' },
 ] as const;
 
-export function ElectronFlowProgress({ pretestComplete }: ElectronFlowProgressProps) {
+export function ElectronFlowProgress({ pretestComplete, trainingComplete }: ElectronFlowProgressProps) {
   const { pathname } = useLocation();
   const routeIndex = Math.max(0, stages.findIndex((stage) => pathname.startsWith(stage.path)));
-  const completed = pretestComplete ? 1 : 0;
+  const completed = trainingComplete ? 2 : pretestComplete ? 1 : 0;
   const progress = Math.min(100, completed * 50);
-  const flowing = pretestComplete && completed === 1;
+  const flowing = completed > 0 && completed < stages.length;
 
   return (
     <nav className="electron-progress" aria-label="电子流进度">
