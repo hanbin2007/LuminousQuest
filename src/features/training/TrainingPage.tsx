@@ -57,8 +57,10 @@ interface TutorNote {
 
 function tutorSourceLabel(source: TutorNote['source']) {
   if (source === 'provider') return '实时辅导';
+  if (source === 'demo-recording') return '演示回放';
+  if (source === 'development-cache') return '回放降级';
   if (source === 'preset') return '预设回退';
-  return '回放降级';
+  return '辅导记录';
 }
 
 function storage() {

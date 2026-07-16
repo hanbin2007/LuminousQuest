@@ -1,5 +1,5 @@
-import { GraduationCap } from 'lucide-react';
-import { NavLink, Outlet } from 'react-router-dom';
+import { Clapperboard, GraduationCap } from 'lucide-react';
+import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 
 import { useAppContext } from './AppContext';
 import { ElectronFlowProgress } from './ElectronFlowProgress';
@@ -7,6 +7,7 @@ import { buildLearnerProfile } from '../../shared/scoring/profile';
 import { SessionControls } from '../session/SessionControls';
 
 export function AppShell() {
+  const navigate = useNavigate();
   const {
     config,
     session,
@@ -15,6 +16,10 @@ export function AppShell() {
     historicalSessions,
     pretestComplete,
     trainingComplete,
+    executionMode,
+    demoModePending,
+    demoModeError,
+    toggleDemoMode,
   } = useAppContext();
 
   return (
@@ -53,6 +58,30 @@ export function AppShell() {
               setSession(imported);
             }}
           />
+          <div className="demo-mode-control">
+            <button
+              aria-checked={executionMode === 'demo'}
+              aria-label="演示回放"
+              className="demo-mode-switch"
+              disabled={demoModePending}
+              onClick={async () => {
+                try {
+                  const mode = await toggleDemoMode();
+                  if (mode === 'demo') navigate('/training');
+                } catch {
+                  // The contextual error remains visible beside the control.
+                }
+              }}
+              role="switch"
+              type="button"
+            >
+              <Clapperboard aria-hidden="true" />
+              <span>演示回放</span>
+              <i aria-hidden="true" />
+            </button>
+            {executionMode === 'demo' ? <small>executionMode=demo</small> : null}
+            {demoModeError ? <small className="demo-mode-error" role="alert">{demoModeError}</small> : null}
+          </div>
           {persistenceError ? (
             <span className="session-persistence-error" role="alert">{persistenceError}</span>
           ) : null}

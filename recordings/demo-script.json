@@ -5,11 +5,42 @@
       "id": "m0-health-check",
       "recording": "demo/m0-health-check.json",
       "resourceRefs": [],
-      "configVersion": "sha256:afbf9c51d5393eafafcbe77d073c8fb4d642672da4bb269008ea1ec28dd3b62e",
+      "configVersion": "sha256:1b49a6fac91ab7cf1fc708b0d766e647030077d51613c991171b010ead4f757d",
       "schemaVersion": "chat-response.v1",
       "prompt": {
         "id": "chat-system",
         "version": "sha256:b309e7063494540ff07461b4a8dd289f86162fde52324f84c95a3cf642f75cd6"
+      }
+    },
+    {
+      "id": "demo-tutor-p4",
+      "recording": "demo/tutor-p4.json",
+      "resourceRefs": ["recordings/demo/session.json"],
+      "configVersion": "sha256:1b49a6fac91ab7cf1fc708b0d766e647030077d51613c991171b010ead4f757d",
+      "schemaVersion": "socratic-action.v2",
+      "schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["action", "content"],
+        "properties": {
+          "action": { "enum": ["probe", "hint", "check"] },
+          "content": { "type": "string", "minLength": 1 }
+        }
+      },
+      "prompt": {
+        "id": "socratic-tutoring",
+        "version": "sha256:8bf74a618ee0145f4a1f13778cad6ea194ac9f6894fbfba789bb6123a2ba3c12"
+      }
+    },
+    {
+      "id": "hand-drawing-feedback",
+      "recording": "demo/hand-drawing-feedback.json",
+      "resourceRefs": [],
+      "configVersion": "sha256:1b49a6fac91ab7cf1fc708b0d766e647030077d51613c991171b010ead4f757d",
+      "schemaVersion": "hand-drawing-feedback.v1",
+      "prompt": {
+        "id": "hand-drawing-feedback",
+        "version": "sha256:4587416f26a728ff1955761fc4220180f346be5056ab1ce02a7876bc76bee461"
       }
     }
   ]

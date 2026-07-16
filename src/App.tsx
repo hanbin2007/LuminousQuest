@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   BrowserRouter,
   Navigate,
@@ -14,7 +14,7 @@ import { PlaceholderPage } from './app/PlaceholderPage';
 import { PretestPage } from './features/pretest/PretestPage';
 import { TrainingPage } from './features/training/TrainingPage';
 import TeacherPage from './features/teacher/TeacherPage';
-import { defaultRuntime, type AppRuntime } from './runtime/api';
+import { defaultRuntime, type AppRuntime, type LLMExecutionMode } from './runtime/api';
 import { useLocalSession } from './session/useLocalSession';
 
 export type { AppRuntime } from './runtime/api';
@@ -43,6 +43,19 @@ function ConfiguredApp({ config, runtime }: { config: LoadedConfig; runtime: App
   };
   const [pretestComplete, setStoredPretestComplete] = useState(() => readProgress(pretestProgressKey));
   const [trainingComplete, setStoredTrainingComplete] = useState(() => readProgress(trainingProgressKey));
+  const [executionMode, setExecutionModeState] = useState<LLMExecutionMode>('development');
+  const [demoModePending, setDemoModePending] = useState(false);
+  const [demoModeError, setDemoModeError] = useState<string | null>(null);
+  const previousMode = useRef<LLMExecutionMode>('development');
+  const previousSession = useRef<typeof session | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    runtime.getRuntimeState?.()
+      .then((state) => { if (active) setExecutionModeState(state.executionMode); })
+      .catch(() => undefined);
+    return () => { active = false; };
+  }, [runtime]);
 
   useEffect(() => {
     setStoredPretestComplete(readProgress(pretestProgressKey));
@@ -72,6 +85,49 @@ function ConfiguredApp({ config, runtime }: { config: LoadedConfig; runtime: App
     }
   }, [trainingProgressKey]);
 
+  const toggleDemoMode = useCallback(async () => {
+    setDemoModePending(true);
+    setDemoModeError(null);
+    try {
+      if (executionMode === 'demo') {
+        const target = previousMode.current === 'demo' ? 'development' : previousMode.current;
+        const state = runtime.setExecutionMode
+          ? await runtime.setExecutionMode(target)
+          : { executionMode: target };
+        if (previousSession.current) {
+          setSession(previousSession.current);
+          previousSession.current = null;
+        }
+        setExecutionModeState(state.executionMode);
+        return state.executionMode;
+      }
+      previousMode.current = executionMode;
+      previousSession.current = session;
+      if (!runtime.activateDemo) throw new Error('当前运行环境未提供演示回放。');
+      const activated = await runtime.activateDemo();
+      try {
+        const pretestKey = `luminous-quest:pretest-complete.v1:${activated.session.id}`;
+        const trainingKey = `luminous-quest:training-complete.v1:${activated.session.id}`;
+        if (activated.progress.pretestComplete) window.localStorage.setItem(pretestKey, 'true');
+        else window.localStorage.removeItem(pretestKey);
+        if (activated.progress.trainingComplete) window.localStorage.setItem(trainingKey, 'true');
+        else window.localStorage.removeItem(trainingKey);
+      } catch {
+        // The in-memory demo remains usable when browser persistence is unavailable.
+      }
+      setSession(activated.session);
+      setExecutionModeState(activated.executionMode);
+      return activated.executionMode;
+    } catch (error) {
+      previousSession.current = null;
+      const message = error instanceof Error ? error.message : '演示模式切换失败';
+      setDemoModeError(message);
+      throw error;
+    } finally {
+      setDemoModePending(false);
+    }
+  }, [executionMode, runtime, session, setSession]);
+
   return (
     <AppContext.Provider value={{
       config,
@@ -84,6 +140,10 @@ function ConfiguredApp({ config, runtime }: { config: LoadedConfig; runtime: App
       setPretestComplete,
       trainingComplete,
       setTrainingComplete,
+      executionMode,
+      demoModePending,
+      demoModeError,
+      toggleDemoMode,
     }}>
       <AppErrorBoundary session={session} onReset={resetSession}>
         <BrowserRouter>

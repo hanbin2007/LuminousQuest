@@ -1,10 +1,14 @@
 import { randomBytes, randomUUID } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
 
 import { Hono, type Context } from 'hono';
 import { z } from 'zod';
 
 import { type AssistanceMetadata } from '../shared/scoring/rubric';
+import { buildLearnerProfile } from '../shared/scoring/profile';
 import type { AssessmentCompletedEvent } from '../shared/session/schema';
+import { sessionSchema } from '../shared/session/schema';
 import {
   createSession,
   sessionConfigVersions,
@@ -125,6 +129,12 @@ const tutorRouteRequestSchema = z
     studentAnswer: z.string(),
   })
   .strict();
+
+const executionModeRequestSchema = z
+  .object({ executionMode: z.enum(['live', 'development', 'demo']) })
+  .strict();
+
+const emptyRequestSchema = z.object({}).strict();
 
 export interface ServerWorkflowOptions {
   executionMode: LLMExecutionMode;
@@ -268,6 +278,7 @@ export function createServerApp(options: ServerAppOptions) {
   const evalCandidates = new EvalCandidateStore(options.contentRoot);
   const sessions = options.sessions ?? new InMemorySessionStore();
   const workflow = configuredWorkflow(options);
+  const startupWorkflow = { ...workflow };
   const llmService = new LLMService({
     providers: options.providers ?? createProviderRegistry(),
     recordings,
@@ -283,6 +294,52 @@ export function createServerApp(options: ServerAppOptions) {
         return context.json(externalDataError(error), 500);
       }
       throw error;
+    }
+  });
+
+  app.get('/api/runtime', (context) => {
+    context.header('cache-control', 'no-store');
+    return context.json({ executionMode: workflow.executionMode });
+  });
+
+  app.post('/api/runtime/execution-mode', async (context) => {
+    const requestBody = await readProtectedJson(context, apiToken, maxRequestBodyBytes);
+    if (!requestBody.ok) return requestBody.response;
+    const parsed = executionModeRequestSchema.safeParse(requestBody.body);
+    if (!parsed.success) return invalidRequest(context, 'execution mode', parsed.error);
+    workflow.executionMode = parsed.data.executionMode;
+    if (workflow.executionMode !== 'demo') {
+      workflow.extractionStepId = startupWorkflow.extractionStepId;
+      workflow.tutorStepId = startupWorkflow.tutorStepId;
+    }
+    return context.json({ executionMode: workflow.executionMode });
+  });
+
+  app.post('/api/runtime/demo', async (context) => {
+    const requestBody = await readProtectedJson(context, apiToken, maxRequestBodyBytes);
+    if (!requestBody.ok) return requestBody.response;
+    const parsed = emptyRequestSchema.safeParse(requestBody.body);
+    if (!parsed.success) return invalidRequest(context, 'demo activation', parsed.error);
+
+    try {
+      const [config, source] = await Promise.all([
+        loadAllConfig(options.contentRoot),
+        readFile(path.join(options.contentRoot, 'recordings', 'demo', 'session.json'), 'utf8'),
+      ]);
+      const demoSession = sessionSchema.parse(JSON.parse(source) as unknown);
+      buildLearnerProfile(demoSession, config);
+      sessions.set(demoSession);
+      workflow.executionMode = 'demo';
+      workflow.extractionStepId = 'demo-extraction';
+      workflow.tutorStepId = 'demo-tutor-p4';
+      return context.json({
+        executionMode: workflow.executionMode,
+        session: demoSession,
+        progress: { pretestComplete: true, trainingComplete: false },
+      });
+    } catch (error) {
+      console.error(`[demo] activation failed: ${error instanceof Error ? error.message : String(error)}`);
+      return context.json({ error: 'Demo session is unavailable or incompatible with current content' }, 500);
     }
   });
 

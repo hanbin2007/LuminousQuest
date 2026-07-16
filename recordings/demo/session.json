@@ -1,0 +1,122 @@
+{
+  "schemaVersion": "session.v2",
+  "id": "teacher-fixture-session-a",
+  "anonymousStudentId": "anon-TEACH001",
+  "startedAt": "2026-07-16T01:00:00.000Z",
+  "updatedAt": "2026-07-16T01:02:30.000Z",
+  "configVersions": {
+    "configDigest": "sha256:1b49a6fac91ab7cf1fc708b0d766e647030077d51613c991171b010ead4f757d",
+    "knowledgeModel": "knowledge-model.v1.1",
+    "rubrics": "rubrics.v1.1",
+    "pretest": "pretest.v1.1",
+    "scaffoldPolicy": "scaffold-policy.v1.5",
+    "cases": {
+      "zinc-copper": "case.v1.5",
+      "aluminum-air": "case.v1.5",
+      "hydrogen-oxygen": "case.v1.5",
+      "methane-fuel": "case.v1.5"
+    },
+    "grammar": "equation-grammar.v2",
+    "engines": {
+      "rubric": "rubric-policy.v2",
+      "topology": "builder-topology.v2",
+      "equation": "equation-scoring.v3"
+    }
+  },
+  "events": [
+    {
+      "schemaVersion": "event.v2",
+      "id": "demo-answer-p4",
+      "sequence": 0,
+      "occurredAt": "2026-07-16T01:01:00.000Z",
+      "caseId": "zinc-copper",
+      "stageId": "training",
+      "attemptId": "demo-p4-1",
+      "kind": "answer.submitted",
+      "pipelineStage": "answer",
+      "questionId": "zinc-copper:analysis",
+      "answer": { "format": "text", "value": "电子从铜极经导线流向锌极。" }
+    },
+    {
+      "schemaVersion": "event.v2",
+      "id": "demo-assessment-p4",
+      "sequence": 1,
+      "occurredAt": "2026-07-16T01:01:01.000Z",
+      "caseId": "zinc-copper",
+      "stageId": "training",
+      "attemptId": "demo-p4-1",
+      "kind": "assessment.completed",
+      "pipelineStage": "score",
+      "sourceAnswerEventId": "demo-answer-p4",
+      "nodeId": "P4",
+      "misconceptionIds": ["P4-M1"],
+      "rubric": { "id": "rubric-p4", "version": "rubrics.v1.1" },
+      "assistance": { "kind": "none", "rounds": 0 },
+      "objectiveOutcome": "miss",
+      "extraction": {
+        "status": "assessed",
+        "evidence": [{ "quote": "电子从铜极经导线流向锌极。", "start": 0, "end": 13 }],
+        "model": "recorded-demo.v1",
+        "provenance": {
+          "promptId": "structured-assessment",
+          "promptVersion": "sha256:9dcd57069e230fd7dc0040f4fba304badd9efa9749469b6532f90c868964eb79",
+          "cacheKey": "demo-p4-assessment"
+        }
+      },
+      "ruleDecision": {
+        "status": "miss",
+        "ruleId": "p4-miss",
+        "reason": "P4-M1：电子流向写反。",
+        "engine": { "id": "rubric-policy", "version": "rubric-policy.v2" }
+      },
+      "following": {
+        "status": "not-followed",
+        "anchorNodeId": null,
+        "anchorOutcome": null,
+        "policy": "score-logical-chain"
+      },
+      "score": {
+        "status": "scored",
+        "earned": 0,
+        "possible": 2,
+        "annotations": [],
+        "outcome": "miss"
+      }
+    },
+    {
+      "schemaVersion": "event.v2",
+      "id": "demo-tutor-start-p4",
+      "sequence": 2,
+      "occurredAt": "2026-07-16T01:02:00.000Z",
+      "caseId": "zinc-copper",
+      "stageId": "training",
+      "attemptId": "demo-p4-1",
+      "kind": "tutor.cycle.started",
+      "pipelineStage": "tutor",
+      "sourceAnswerEventId": "demo-answer-p4",
+      "sourceAssessmentEventId": "demo-assessment-p4",
+      "nodeId": "P4",
+      "cycleId": "tutor-demo-assessment-p4"
+    },
+    {
+      "schemaVersion": "event.v2",
+      "id": "demo-tutor-turn-p4-1",
+      "sequence": 3,
+      "occurredAt": "2026-07-16T01:02:30.000Z",
+      "caseId": "zinc-copper",
+      "stageId": "training",
+      "attemptId": "demo-p4-1",
+      "kind": "tutor.turn.completed",
+      "pipelineStage": "tutor",
+      "sourceAnswerEventId": "demo-answer-p4",
+      "sourceAssessmentEventId": "demo-assessment-p4",
+      "nodeId": "P4",
+      "cycleId": "tutor-demo-assessment-p4",
+      "studentAnswer": "铜更活泼，所以电子从铜出发。",
+      "turn": { "action": "probe", "content": "先定位发生氧化的场所，再沿外电路检查你写的方向。" },
+      "source": "demo-recording",
+      "degraded": false,
+      "activeElapsedMs": 1000
+    }
+  ]
+}
