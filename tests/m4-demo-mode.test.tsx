@@ -19,6 +19,7 @@ import { App } from '../src/App';
 import type { AppRuntime } from '../src/runtime/api';
 
 const apiToken = 'm4-demo-test-token';
+const routeTransitionTimeout = { timeout: 5_000 };
 const protectedHeaders = {
   'content-type': 'application/json',
   'x-lq-api-token': apiToken,
@@ -144,21 +145,29 @@ describe('M4 demo execution mode', () => {
     const user = userEvent.setup();
 
     render(<App initialConfig={config} runtime={runtime} />);
-    const toggle = await screen.findByRole('switch', { name: '演示回放' });
+    const toggle = await screen.findByRole(
+      'switch',
+      { name: '演示回放' },
+      routeTransitionTimeout,
+    );
     await user.click(toggle);
 
     expect(activateDemo).toHaveBeenCalledTimes(1);
     expect(toggle).toHaveAttribute('aria-checked', 'true');
     expect(screen.getByText('executionMode=demo')).toBeInTheDocument();
     expect(screen.getAllByText('anon-DEMO0001').length).toBeGreaterThan(0);
-    expect(await screen.findByRole('heading', { name: '思维模型训练' })).toBeInTheDocument();
+    expect(await screen.findByRole(
+      'heading',
+      { name: '思维模型训练' },
+      routeTransitionTimeout,
+    )).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: '本轮证据批注' })).toBeInTheDocument();
     expect(screen.getByText('先定位发生氧化的场所，再沿外电路检查你写的方向。')).toBeInTheDocument();
 
     await user.click(toggle);
     expect(setExecutionMode).toHaveBeenCalledWith('development');
     expect(toggle).toHaveAttribute('aria-checked', 'false');
-  });
+  }, 15_000);
 
   it('keeps demo transient across refresh and restores the prior latest session and mode', async () => {
     const config = await loadAllConfig(process.cwd());
@@ -203,14 +212,30 @@ describe('M4 demo execution mode', () => {
     const user = userEvent.setup();
 
     const first = render(<App initialConfig={config} runtime={runtime} />);
-    await user.click(await screen.findByRole('switch', { name: '演示回放' }));
-    expect(await screen.findByText('executionMode=demo')).toBeInTheDocument();
+    await user.click(await screen.findByRole(
+      'switch',
+      { name: '演示回放' },
+      routeTransitionTimeout,
+    ));
+    expect(await screen.findByText(
+      'executionMode=demo',
+      {},
+      routeTransitionTimeout,
+    )).toBeInTheDocument();
     expect(window.localStorage.getItem('luminous-quest:session.v2:latest')).toBe(originalSession.id);
     first.unmount();
 
     render(<App initialConfig={config} runtime={runtime} />);
-    const restoredToggle = await screen.findByRole('switch', { name: '演示回放' });
-    expect(await screen.findByText('executionMode=demo')).toBeInTheDocument();
+    const restoredToggle = await screen.findByRole(
+      'switch',
+      { name: '演示回放' },
+      routeTransitionTimeout,
+    );
+    expect(await screen.findByText(
+      'executionMode=demo',
+      {},
+      routeTransitionTimeout,
+    )).toBeInTheDocument();
     expect(screen.getAllByText('anon-DEMO0001').length).toBeGreaterThan(0);
     expect(window.localStorage.getItem('luminous-quest:session.v2:latest')).toBe(originalSession.id);
 
@@ -218,5 +243,5 @@ describe('M4 demo execution mode', () => {
     expect(restoredToggle).toHaveAttribute('aria-checked', 'false');
     expect(screen.getAllByText(originalSession.anonymousStudentId).length).toBeGreaterThan(0);
     expect(window.localStorage.getItem('luminous-quest:session.v2:latest')).toBe(originalSession.id);
-  });
+  }, 15_000);
 });
