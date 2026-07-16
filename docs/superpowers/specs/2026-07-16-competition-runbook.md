@@ -9,6 +9,7 @@
 在仓库根目录执行:
 
 ```bash
+test "$(node -p "require('./release/darwin-arm64/RELEASE.json').sourceCommit")" = "$(git rev-parse HEAD)"
 shasum -a 256 -c dist/client.sha256
 shasum -a 256 -c dist/release-darwin-arm64.sha256
 codesign --verify --deep --strict release/darwin-arm64/LuminousQuest
@@ -38,7 +39,7 @@ cd release/darwin-arm64
 
 **0:00-0:25，问题。** LuminousQuest 面向高中化学电化学学习。它不把一次答案压成一个总分，而是把“装置理解、原理解释、能量判断”拆成可追溯的知识节点，让教师知道学生错在哪里、依据是什么、下一步如何训练。
 
-**0:25-0:55，学生侧。** 学生先完成多模态前测，再进入案例训练。规则引擎负责正式判分，AI 只做结构化抽取和苏格拉底式提示；每条结果都保留量表条目、学生原文和证据位置。即使模型不可用，预置脚手架和 `needs-review` 机制也不会伪造高置信结论。
+**0:25-0:55，学生侧。** 学生先完成多模态前测，再进入案例训练。规则引擎负责正式判分，AI 只做结构化抽取和苏格拉底式提示；每条结果都保留量表条目、学生原文和引用区间。模块三再把同一画像映射成可交互 3D 知识场景，而不是另算一套分数。
 
 **0:55-1:25，教师侧。** 单生视图串起诊断、训练和脚手架轨迹，待复核项单独列出。班级视图批量导入匿名会话，给出三维均值与分布带、节点错误率和高频误区，且明确拒绝损坏、重复或量表版本不一致的文件。
 
@@ -52,13 +53,13 @@ cd release/darwin-arm64
 
 | 时间 | 主路径与点击 | 讲解证据 | 备用跳转或处置 |
 | --- | --- | --- | --- |
-| 0:00-0:25 | 页头打开“演示回放” | 指出 `executionMode=demo`；会话切换为匿名演示会话并进入训练 | 若开关报错，刷新后再开；仍失败则直接 `/teacher` 展示已载入本机会话，并说明录制版本校验阻止陈旧数据 |
-| 0:25-1:25 | `/training` 查看锌铜案例、维度作答区和一级脚手架 | 正式结果来自共享规则；AI 不改分，只提示下一步 | 页面状态不合适时关闭再打开演示开关，恢复固定起点 |
-| 1:25-2:05 | P4 辅导处点击继续提示 | 第二轮内容来自 `recordings/demo/tutor-p4.json`；断网且在线 provider 调用为零 | 回放缺失时系统只给确定性预设，不回落在线模型；转 `/teacher` 查看既有辅导轨迹 |
-| 2:05-2:40 | `/pretest` 展示手绘输入和点评边界 | 手绘识别只给表达建议，不能写入正式判分；隐藏指令会被安全反馈替代 | 不现场重画，直接说明红队用例并跳 `/teacher` |
+| 0:00-0:25 | 页头打开“演示回放” | `start-state.json` 一键恢复训练反馈轮次，显示 `executionMode=demo` | 若开关报错，刷新后再开；仍失败则直接 `/teacher` 展示本地会话 |
+| 0:25-1:25 | `/training` 查看“本轮证据批注” | 正式结果来自共享规则；AI 不改分，第一轮蓝笔追问已可见 | 页面状态不合适时关闭再打开演示开关 |
+| 1:25-2:05 | P4 辅导处点“请老师提示一下” | 第二轮内容来自 `recordings/demo/tutor-p4.json`；在线 provider 调用为零 | 回放缺失时只给确定性预设，不回落在线模型 |
+| 2:05-2:40 | 点页头“前测”，再点“提交手绘点评” | 固定起点直达手绘页；结构化响应只允许 `comment`，不可携带分数字段 | 不现场重画，直接说明真实 PNG 红队用例并跳教师视图 |
 | 2:40-3:45 | `/teacher` 的“单生证据” | 展开 P4:量表条目、学生原文、证据、误区、训练记录、脚手架轨迹、待复核 | 若当前会话为空，重新打开演示开关；也可导入 `recordings/demo/session.json` |
-| 3:45-4:40 | 切换“班级汇总”，批量导入三份会话 | 展示三维均值和四分位带、按维度着色的错误率、高频误区 Top N、匿名编号；同时演示无效文件提示 | 发布包赛前放入三份真实匿名导出；源码彩排可用 `tests/fixtures/teacher/*.json` |
-| 4:40-5:00 | `/model` | 明确该路由保留独立模块占位，本交付线未抢做 3D；回扣“诊断到训练到教师决策” | 直接在地址栏输入 `/model`；不等待 3D 资源 |
+| 3:45-4:40 | 切换“班级汇总”，导入 `recordings/demo/class/` 三份会话 | 以学生为统计单位：同一匿名 ID 取最新会话，均值、错误率、人数和 Top N 同口径 | 文件名不会出现在错误提示中；只显示“批次文件 N” |
+| 4:40-5:00 | 点页头“外显” | 展示实装 3D 知识场景：节点点亮、依赖边、节点详情与三维雷达同源 | WebGL 不可用时页面自动显示同一 scene 的节点清单 |
 
 精确的录制 step ID、文件映射与失败边界见 `docs/README.md`（发布包内由 `recordings/demo/README.md` 复制而来）。
 
@@ -78,7 +79,7 @@ cd release/darwin-arm64
 
 ### Q4:班级数据如何保护隐私和避免脏数据？
 
-界面只展示匿名编号；导入逐份做 schema 和深度校验，重复会话去重，量表版本不同拒绝合并，并逐文件给出原因。数据只在本机浏览器和本地服务流转。证据:`src/features/teacher/teacher-data.ts`、`tests/fixtures/teacher/`、`tests/m4-teacher-page.test.tsx`。
+界面只展示匿名编号；单次最多 24 份、每份最大 512 KiB，`Promise.allSettled` 保证单份失败不阻断其余文件。错误只显示匿名批次序号，不回显原文件名或 session ID。同一匿名 ID 只取最新会话。证据:`src/features/teacher/teacher-data.ts`、`recordings/demo/class/`、`tests/m4-teacher-page.test.tsx`。
 
 ### Q5:为什么发布包还保留外置目录？
 
@@ -90,19 +91,19 @@ cd release/darwin-arm64
 
 ### Q7:3D 模块在哪里？
 
-`/model` 保留稳定占位和路由分包接口，3D 由独立交付线负责。本分支没有实现替代品，也没有改动共享判分，以免并行交付互相污染。证据:`src/App.tsx` 和构建产物中的独立 model 路由 chunk。
+`/model` 已实装为独立路由 chunk。`ModelPage.tsx` 从当前会话和配置生成 scene，`lighting.ts` 将同一学习者画像映射为节点点亮状态与边，`KnowledgeScene.tsx` 负责 Three.js 交互渲染；WebGL 不可用时保留同源节点清单。证据:`src/features/model/ModelPage.tsx`、`KnowledgeScene.tsx`、`lighting.ts`。
 
 ## 五、证据索引
 
 | 主张 | 一手证据 | 自动化证据 |
 | --- | --- | --- |
 | 单生诊断证据链与待复核 | `src/features/teacher/TeacherPage.tsx` | `tests/m4-teacher-data.test.ts` |
-| 班级雷达、分布带、错误率、误区 | `src/features/teacher/teacher-data.ts`、`ClassRadar.tsx` | `tests/m4-teacher-page.test.tsx` |
-| 离线演示与录制校验 | `recordings/demo/`、`server/app.ts` | `tests/m4-demo-mode.test.tsx` |
+| 班级雷达、分布带、错误率、误区 | `src/features/teacher/teacher-data.ts`、`ClassRadar.tsx` | `tests/m4-teacher-data.test.ts`、`tests/m4-teacher-page.test.tsx` |
+| 离线演示与录制校验 | `recordings/demo/start-state.json`、`recordings/demo/class/`、`server/app.ts` | `tests/m4-demo-mode.test.tsx`、`tests/m4-runbook-e2e.test.tsx` |
 | LAN 默认关闭与令牌门禁 | `server/runtime/launch-options.ts`、`server/app.ts` | `tests/m4-lan-mode.test.ts` |
 | SEA 与冻结 manifest | `scripts/package.mjs`、`RELEASE.json` | `tests/m4-package-manifest.test.ts` |
-| 三类红队防线 | `server/app.ts`、事实接地与辅导工作流 | `tests/m4-red-team.test.ts` |
-| 路由代码分割和 3D 占位 | `src/App.tsx`、`src/features/model/ModelPlaceholderPage.tsx` | `dist/client/assets/*Page-*.js` |
+| 三类红队防线 | `tests/fixtures/red-team/*.png`、`eval/cases/synthetic/red-team-variants.json`、`server/app.ts` | `tests/m4-red-team.test.ts`、`tests/eval-data.test.ts` |
+| 3D 实装、知识场景与点亮裁量 | `src/features/model/ModelPage.tsx`、`KnowledgeScene.tsx`、`lighting.ts` | `tests/m4-model-lighting.test.ts`、`dist/client/assets/ModelPage-*.js` |
 
 ## 六、故障处置
 
@@ -139,7 +140,7 @@ cd release/darwin-arm64
 - [ ] P4 回放、手绘安全边界、单生证据链均能在各自时间窗出现。
 - [ ] 批量导入三份匿名会话，班级雷达、分布带、错误率和 Top N 均有数据。
 - [ ] 追加一个重复或损坏 JSON，确认提示清楚且有效数据仍保留。
-- [ ] `/model` 只显示占位，不承诺本交付线未实现的 3D 功能。
+- [ ] `/model` 显示 3D 节点场景；无 WebGL 时显示同源节点清单。
 
 ### 7:00-9:00 备用路径
 

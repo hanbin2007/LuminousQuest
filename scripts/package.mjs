@@ -15,7 +15,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { build } from 'esbuild';
-import { writeSha256Manifest } from './release-manifest.mjs';
+import { assertReleaseSourceCommit, writeSha256Manifest } from './release-manifest.mjs';
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const seaRoot = path.join(projectRoot, 'dist', 'sea');
@@ -253,14 +253,8 @@ async function copyExternalContent() {
   }
 }
 
-async function writeReleaseMetadata() {
+async function writeReleaseMetadata(sourceCommit) {
   const packageJson = JSON.parse(await readFile(path.join(projectRoot, 'package.json'), 'utf8'));
-  let sourceCommit = 'unknown';
-  try {
-    sourceCommit = run('git', ['rev-parse', 'HEAD']).stdout.trim();
-  } catch {
-    // Source archives without .git remain packageable but identify the commit as unknown.
-  }
   await writeFile(path.join(releaseRoot, 'RELEASE.json'), `${JSON.stringify({
     format: 'luminous-quest-release.v1',
     name: packageJson.name,
@@ -278,6 +272,11 @@ async function main() {
   assertSupportedNodeVersion();
   if (process.argv.includes('--mac-arm64') && (process.platform !== 'darwin' || process.arch !== 'arm64')) {
     throw new Error(`macOS arm64 packaging requires darwin-arm64, received ${process.platform}-${process.arch}`);
+  }
+  const sourceCommit = run('git', ['rev-parse', 'HEAD']).stdout.trim();
+  const trackedChanges = run('git', ['status', '--porcelain', '--untracked-files=no']).stdout.trim();
+  if (trackedChanges) {
+    throw new Error('Packaging requires a clean tracked worktree so RELEASE.json can identify HEAD exactly');
   }
   const clientRoot = path.join(projectRoot, 'dist', 'client');
   const clientFiles = await listFiles(clientRoot);
@@ -324,7 +323,11 @@ async function main() {
     assets,
   });
   await copyExternalContent();
-  await writeReleaseMetadata();
+  await writeReleaseMetadata(sourceCommit);
+  await assertReleaseSourceCommit({
+    releaseFile: path.join(releaseRoot, 'RELEASE.json'),
+    expectedCommit: sourceCommit,
+  });
   const manifestEntries = await writeSha256Manifest({
     root: releaseRoot,
     outputFile: releaseManifestPath,

@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
-import { mkdir, readdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 async function listFiles(root, relativeDirectory = '') {
@@ -41,4 +41,14 @@ export async function writeSha256Manifest({ root, outputFile, pathPrefix }) {
     `${entries.map((entry) => `${entry.sha256}  ${entry.path}`).join('\n')}\n`,
   );
   return entries;
+}
+
+export async function assertReleaseSourceCommit({ releaseFile, expectedCommit }) {
+  const metadata = JSON.parse(await readFile(releaseFile, 'utf8'));
+  if (metadata.sourceCommit !== expectedCommit) {
+    throw new Error(
+      `RELEASE.json sourceCommit ${String(metadata.sourceCommit)} does not match HEAD ${expectedCommit}`,
+    );
+  }
+  return metadata;
 }
