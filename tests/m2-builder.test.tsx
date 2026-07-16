@@ -31,11 +31,12 @@ function dataTransfer(componentId: string) {
 }
 
 describe('M2 topology builder', () => {
-  it('offers configured distractors and snaps dropped components to the 24px grid', () => {
+  it('uses only neutral configured labels and snaps dropped components to the 24px grid', () => {
     render(<TopologyBuilder config={builderConfig} onSubmit={vi.fn()} />);
 
     expect(screen.getByText('蔗糖水')).toBeInTheDocument();
     expect(screen.getByText('绝缘连接件')).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/干扰|distractor|失电子场所|得电子场所|电子导体|离子导体/i);
 
     const canvas = screen.getByTestId('builder-canvas');
     vi.spyOn(canvas, 'getBoundingClientRect').mockReturnValue({
@@ -57,8 +58,8 @@ describe('M2 topology builder', () => {
     });
     fireEvent(canvas, drop);
 
-    const placed = screen.getByRole('button', { name: /画布组件.*失电子场所/ });
-    expect(placed.closest('.builder-node')).toHaveStyle({ left: '72px', top: '96px' });
+    const placed = screen.getByRole('button', { name: /画布组件.*导体棒 A/ });
+    expect(placed.closest('.builder-node')).toHaveStyle({ left: '72px', top: '72px' });
     expect(canvas).toHaveAttribute('data-snap-flash', 'true');
 
     const moveTransfer = dataTransfer('');
@@ -70,7 +71,7 @@ describe('M2 topology builder', () => {
       dataTransfer: { value: moveTransfer },
     });
     fireEvent(canvas, move);
-    expect(placed.closest('.builder-node')).toHaveStyle({ left: '336px', top: '240px' });
+    expect(placed.closest('.builder-node')).toHaveStyle({ left: '336px', top: '216px' });
   });
 
   it('connects both carrier paths and submits through the existing topology assessor', async () => {
@@ -79,10 +80,10 @@ describe('M2 topology builder', () => {
     render(<TopologyBuilder config={builderConfig} onSubmit={onSubmit} />);
 
     for (const label of [
-      '失电子场所',
-      '电子导体',
-      '离子导体',
-      '得电子场所',
+      '导体棒 A',
+      '金属连接件',
+      '可导电液体或离子通道',
+      '导体棒 B',
       '电子方向箭头',
       '阳离子方向箭头',
       '阴离子方向箭头',
@@ -95,19 +96,24 @@ describe('M2 topology builder', () => {
       name: new RegExp(`画布组件.*${label}`),
     });
 
+    await user.selectOptions(screen.getByLabelText('导体棒 A 的功能角色'), 'oxidation-site');
+    await user.selectOptions(screen.getByLabelText('金属连接件 的功能角色'), 'electron-conductor');
+    await user.selectOptions(screen.getByLabelText('可导电液体或离子通道 的功能角色'), 'ion-conductor');
+    await user.selectOptions(screen.getByLabelText('导体棒 B 的功能角色'), 'reduction-site');
+
     await user.click(screen.getByRole('button', { name: '电子路径' }));
-    await user.click(node('失电子场所'));
-    await user.click(node('电子导体'));
-    await user.click(node('电子导体'));
-    await user.click(node('得电子场所'));
+    await user.click(node('导体棒 A'));
+    await user.click(node('金属连接件'));
+    await user.click(node('金属连接件'));
+    await user.click(node('导体棒 B'));
 
     await user.click(screen.getByRole('button', { name: '离子路径' }));
     await user.selectOptions(screen.getByLabelText('方向载流粒子'), 'cation');
-    await user.click(node('离子导体'));
-    await user.click(node('得电子场所'));
+    await user.click(node('可导电液体或离子通道'));
+    await user.click(node('导体棒 B'));
     await user.selectOptions(screen.getByLabelText('方向载流粒子'), 'anion');
-    await user.click(node('离子导体'));
-    await user.click(node('失电子场所'));
+    await user.click(node('可导电液体或离子通道'));
+    await user.click(node('导体棒 A'));
 
     expect(screen.getByText('电子路径已闭合')).toBeInTheDocument();
     expect(screen.getByText('离子路径已闭合')).toBeInTheDocument();
@@ -124,6 +130,24 @@ describe('M2 topology builder', () => {
     });
   });
 
+  it('shows raw path connectivity without validating whether a chosen material is effective', () => {
+    const value = {
+      components: [
+        { instanceId: 'a', componentId: 'site-a', x: 24, y: 24 },
+        { instanceId: 'sugar', componentId: 'sucrose-solution', x: 168, y: 24 },
+        { instanceId: 'b', componentId: 'site-b', x: 312, y: 24 },
+      ],
+      connections: [
+        { id: 'ion-a', from: 'a', to: 'sugar', kind: 'ion-path' as const },
+        { id: 'ion-b', from: 'sugar', to: 'b', kind: 'ion-path' as const },
+      ],
+    } satisfies BuilderAnswer;
+
+    render(<TopologyBuilder config={builderConfig} initialValue={value} onSubmit={vi.fn()} />);
+
+    expect(screen.getByText('离子路径已闭合')).toBeInTheDocument();
+  });
+
   it('adopts a restored builder value when the active session changes', () => {
     const first = {
       components: [{ instanceId: 'first', componentId: 'site-a', x: 24, y: 24 }],
@@ -137,8 +161,20 @@ describe('M2 topology builder', () => {
 
     view.rerender(<TopologyBuilder config={builderConfig} initialValue={restored} onSubmit={vi.fn()} />);
 
-    expect(screen.queryByRole('button', { name: /画布组件.*失电子场所/ })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /画布组件.*得电子场所/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /画布组件.*导体棒 A/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /画布组件.*导体棒 B/ })).toBeInTheDocument();
+  });
+
+  it('skips an unknown restored component definition instead of crashing render', () => {
+    const value = {
+      components: [{ instanceId: 'legacy', componentId: 'removed-component', x: 24, y: 24 }],
+      connections: [],
+    } satisfies BuilderAnswer;
+
+    expect(() => render(
+      <TopologyBuilder config={builderConfig} initialValue={value} onSubmit={vi.fn()} />,
+    )).not.toThrow();
+    expect(screen.queryByRole('button', { name: /画布组件/ })).not.toBeInTheDocument();
   });
 });
 

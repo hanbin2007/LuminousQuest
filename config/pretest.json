@@ -3,10 +3,10 @@
   "builder": {
     "prompt": "不用具体金属名称，搭建一个能持续工作的原电池通用模型，并标出电子、阳离子和阴离子的运动方向。",
     "components": [
-      { "id": "site-a", "label": "导体棒 A", "kind": "electrode", "functionalRole": "oxidation-site", "abstract": true },
+      { "id": "site-a", "label": "导体棒 A", "kind": "electrode", "functionalRole": "oxidation-site", "allowedRoles": ["reduction-site"], "abstract": true },
       { "id": "electron-link", "label": "金属连接件", "kind": "electron-conductor", "functionalRole": "electron-conductor", "abstract": true },
       { "id": "ion-medium", "label": "可导电液体或离子通道", "kind": "ion-conductor", "functionalRole": "ion-conductor", "abstract": true },
-      { "id": "site-b", "label": "导体棒 B", "kind": "electrode", "functionalRole": "reduction-site", "abstract": true },
+      { "id": "site-b", "label": "导体棒 B", "kind": "electrode", "functionalRole": "reduction-site", "allowedRoles": ["oxidation-site"], "abstract": true },
       { "id": "container", "label": "容器", "kind": "container", "abstract": true },
       { "id": "electron-arrow", "label": "电子方向箭头", "kind": "direction-marker", "abstract": true },
       { "id": "cation-arrow", "label": "阳离子方向箭头", "kind": "direction-marker", "abstract": true },
@@ -15,6 +15,7 @@
         "id": "sucrose-solution",
         "label": "蔗糖水",
         "kind": "distractor",
+        "allowedRoles": ["ion-conductor"],
         "abstract": false,
         "distractor": {
           "misconceptionIds": ["D3-M2"],
@@ -25,6 +26,7 @@
         "id": "insulated-link",
         "label": "绝缘连接件",
         "kind": "distractor",
+        "allowedRoles": ["electron-conductor"],
         "abstract": true,
         "distractor": {
           "misconceptionIds": ["D2-M1"],

@@ -10,6 +10,9 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { PretestConfig } from '../../../shared/config/schemas';
 import {
   assessBuilderTopology,
+  configuredRoleWhitelist,
+  maximumBuilderComponents,
+  maximumBuilderConnections,
   type BuilderCarrier,
   type BuilderGraph,
   type BuilderGraphComponent,
@@ -23,7 +26,14 @@ const dragMime = 'application/x-lq-component';
 const moveMime = 'application/x-lq-instance';
 const gridSize = 24;
 const nodeWidth = 120;
-const nodeHeight = 132;
+const nodeHeight = 176;
+
+const roleLabels = {
+  'oxidation-site': '氧化反应位置',
+  'reduction-site': '还原反应位置',
+  'electron-conductor': '外电路传导',
+  'ion-conductor': '内电路传导',
+} as const;
 
 export interface PlacedBuilderComponent extends BuilderGraphComponent {
   x: number;
@@ -93,6 +103,10 @@ export function TopologyBuilder({ config, initialValue, onChange, onSubmit }: To
   const addComponent = (componentId: string, point?: { x: number; y: number }) => {
     const definition = definitionById.get(componentId);
     if (!definition) return;
+    if (value.components.length >= maximumBuilderComponents) {
+      setSubmitError(`搭建组件数量不能超过 ${maximumBuilderComponents}`);
+      return;
+    }
     const index = value.components.length;
     const canvasWidth = canvasRef.current?.getBoundingClientRect().width || 720;
     const columns = Math.max(1, Math.floor(canvasWidth / (nodeWidth + gridSize)));
@@ -104,7 +118,6 @@ export function TopologyBuilder({ config, initialValue, onChange, onSubmit }: To
       instanceId: createInstanceId(componentId),
       componentId,
       label: definition.label,
-      ...(definition.functionalRole ? { assignedRole: definition.functionalRole } : {}),
       ...(definition.kind === 'electrode'
         ? { materialBinding: { materialId: 'generic-conductor', specificity: 'generic' as const } }
         : {}),
@@ -154,6 +167,11 @@ export function TopologyBuilder({ config, initialValue, onChange, onSubmit }: To
       && connection.kind === connectionKind
       && connection.carrier === nextCarrier);
     if (!duplicate) {
+      if (value.connections.length >= maximumBuilderConnections) {
+        setSubmitError(`搭建连线数量不能超过 ${maximumBuilderConnections}`);
+        setConnectionStart(null);
+        return;
+      }
       update({
         ...value,
         connections: [
@@ -194,7 +212,7 @@ export function TopologyBuilder({ config, initialValue, onChange, onSubmit }: To
         <h3>组件托盘</h3>
         <div className="component-tray__list">
           {config.components.map((component) => {
-            const presentation = presentationFor(component.id, component.label);
+            const presentation = presentationFor(component.id);
             const Icon = presentation.Icon;
             return (
               <button
@@ -207,7 +225,7 @@ export function TopologyBuilder({ config, initialValue, onChange, onSubmit }: To
                   event.dataTransfer.setData(dragMime, component.id);
                 }}
                 type="button"
-                aria-label={`添加 ${presentation.functionalLabel}`}
+                aria-label={`添加 ${component.label}`}
               >
                 <span className="tray-item__visual" aria-hidden="true">
                   {presentation.image
@@ -215,8 +233,7 @@ export function TopologyBuilder({ config, initialValue, onChange, onSubmit }: To
                     : Icon ? <Icon /> : <CircleDot />}
                 </span>
                 <span>
-                  <strong>{presentation.functionalLabel}</strong>
-                  <small>{component.kind === 'distractor' ? '干扰项' : component.label}</small>
+                  <strong>{component.label}</strong>
                 </span>
                 <Plus className="tray-item__add" aria-hidden="true" />
               </button>
@@ -333,9 +350,11 @@ export function TopologyBuilder({ config, initialValue, onChange, onSubmit }: To
           ) : null}
 
           {value.components.map((component) => {
-            const definition = definitionById.get(component.componentId)!;
-            const presentation = presentationFor(component.componentId, definition.label);
+            const definition = definitionById.get(component.componentId);
+            if (!definition) return null;
+            const presentation = presentationFor(component.componentId);
             const Icon = presentation.Icon;
+            const allowedRoles = configuredRoleWhitelist(definition);
             return (
               <div
                 className={`builder-node${connectionStart === component.instanceId ? ' is-connection-start' : ''}`}
@@ -351,15 +370,40 @@ export function TopologyBuilder({ config, initialValue, onChange, onSubmit }: To
                   className="builder-node__target"
                   onClick={() => connect(component.instanceId)}
                   type="button"
-                  aria-label={`画布组件 ${presentation.functionalLabel}`}
+                  aria-label={`画布组件 ${definition.label}`}
                 >
                   <span className="builder-node__visual" aria-hidden="true">
                     {presentation.image
                       ? <img src={presentation.image} alt="" />
                       : Icon ? <Icon /> : <CircleDot />}
                   </span>
-                  <strong>{presentation.functionalLabel}</strong>
+                  <strong>{definition.label}</strong>
                 </button>
+                {allowedRoles.length > 0 ? (
+                  <label className="builder-node__role">
+                    <span>功能</span>
+                    <select
+                      aria-label={`${definition.label} 的功能角色`}
+                      value={component.assignedRole ?? ''}
+                      onChange={(event) => {
+                        const assignedRole = event.target.value as BuilderGraphComponent['assignedRole'] | '';
+                        update({
+                          ...value,
+                          components: value.components.map((entry) => {
+                            if (entry.instanceId !== component.instanceId) return entry;
+                            const { assignedRole: _assignedRole, ...unassigned } = entry;
+                            return assignedRole ? { ...unassigned, assignedRole } : unassigned;
+                          }),
+                        });
+                      }}
+                    >
+                      <option value="">不指定</option>
+                      {allowedRoles.map((role) => (
+                        <option key={role} value={role}>{roleLabels[role]}</option>
+                      ))}
+                    </select>
+                  </label>
+                ) : null}
                 {definition.kind === 'electrode' ? (
                   <label className="builder-node__material">
                     <span>材料</span>
@@ -388,8 +432,8 @@ export function TopologyBuilder({ config, initialValue, onChange, onSubmit }: To
                   className="icon-button builder-node__remove"
                   onClick={() => removeComponent(component.instanceId)}
                   type="button"
-                  aria-label={`移除 ${presentation.functionalLabel}`}
-                  title={`移除 ${presentation.functionalLabel}`}
+                  aria-label={`移除 ${definition.label}`}
+                  title={`移除 ${definition.label}`}
                 >
                   <Trash2 aria-hidden="true" />
                 </button>

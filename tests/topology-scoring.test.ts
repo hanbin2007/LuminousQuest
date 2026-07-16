@@ -9,10 +9,10 @@ import {
 function completeGraph(): BuilderGraph {
   return {
     components: [
-      { instanceId: 'negative', componentId: 'site-a' },
-      { instanceId: 'wire', componentId: 'electron-link' },
-      { instanceId: 'ions', componentId: 'ion-medium' },
-      { instanceId: 'positive', componentId: 'site-b' },
+      { instanceId: 'negative', componentId: 'site-a', assignedRole: 'oxidation-site' },
+      { instanceId: 'wire', componentId: 'electron-link', assignedRole: 'electron-conductor' },
+      { instanceId: 'ions', componentId: 'ion-medium', assignedRole: 'ion-conductor' },
+      { instanceId: 'positive', componentId: 'site-b', assignedRole: 'reduction-site' },
       { instanceId: 'electron-arrow', componentId: 'electron-arrow' },
       { instanceId: 'cation-arrow', componentId: 'cation-arrow' },
       { instanceId: 'anion-arrow', componentId: 'anion-arrow' },
@@ -45,6 +45,21 @@ describe('builder topology scoring', () => {
       new Set(['D1', 'D2', 'D3', 'D4', 'D5', 'P4']),
     );
     expect(result.nodeDecisions.every((decision) => decision.evidence.length > 0)).toBe(true);
+  });
+
+  it('treats every unassigned role as unassigned instead of filling answers from config', async () => {
+    const graph = completeGraph();
+    graph.components = graph.components.map((component) => {
+      const { assignedRole: _assignedRole, ...unassigned } = component;
+      return unassigned;
+    });
+
+    const result = assessBuilderTopology(graph, await builderConfig());
+
+    expect(result.checks.fourElements.status).toBe('miss');
+    expect(result.overall).toBe('miss');
+    expect(result.checks.fourElements.evidence.map((entry) => entry.message).join(' '))
+      .toContain('未指认');
   });
 
   it('traces a missing ion conductor to D3 and the closed circuit', async () => {
@@ -135,7 +150,11 @@ describe('builder topology scoring', () => {
 
   it('accepts multiple instances of one role when they form one connected functional network', async () => {
     const graph = completeGraph();
-    graph.components.push({ instanceId: 'wire-2', componentId: 'electron-link' });
+    graph.components.push({
+      instanceId: 'wire-2',
+      componentId: 'electron-link',
+      assignedRole: 'electron-conductor',
+    });
     graph.connections = graph.connections.flatMap((connection) =>
       connection.id === 'e2'
         ? [
@@ -151,13 +170,13 @@ describe('builder topology scoring', () => {
     expect(result.checks.fourElements.status).toBe('hit');
   });
 
-  it('rejects role overrides outside the component whitelist, especially distractors', async () => {
+  it('rejects role declarations outside each component whitelist', async () => {
     const graph = completeGraph();
     const config = await builderConfig();
     graph.components.push({
       instanceId: 'fake-ion-medium',
       componentId: 'sucrose-solution',
-      assignedRole: 'ion-conductor',
+      assignedRole: 'oxidation-site',
     });
 
     expect(() => assessBuilderTopology(graph, config)).toThrow(/role.*not allowed/i);
@@ -373,5 +392,32 @@ describe('builder topology scoring', () => {
       };
       expect(() => assessBuilderTopology(ionOnElectronPath, config)).toThrow(/must use ion-path/);
     }
+  });
+
+  it('rejects oversized graphs before traversing them', async () => {
+    const graph: BuilderGraph = {
+      components: Array.from({ length: 65 }, (_, index) => ({
+        instanceId: `container-${index}`,
+        componentId: 'container',
+      })),
+      connections: [],
+    };
+
+    const config = await builderConfig();
+    expect(() => assessBuilderTopology(graph, config)).toThrow(/64/);
+
+    const connectionHeavy: BuilderGraph = {
+      components: [
+        { instanceId: 'left', componentId: 'site-a', assignedRole: 'oxidation-site' },
+        { instanceId: 'right', componentId: 'site-b', assignedRole: 'reduction-site' },
+      ],
+      connections: Array.from({ length: 129 }, (_, index) => ({
+        id: `connection-${index}`,
+        from: 'left',
+        to: 'right',
+        kind: 'electron-path' as const,
+      })),
+    };
+    expect(() => assessBuilderTopology(connectionHeavy, config)).toThrow(/128/);
   });
 });

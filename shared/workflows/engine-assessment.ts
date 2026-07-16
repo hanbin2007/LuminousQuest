@@ -153,6 +153,11 @@ export function recordBuilderAssessment(input: BaseEngineAssessmentInput<Builder
     questionId: answer.questionId,
     answer: { format: 'builder', value: normalizedValue },
   });
+  const storedAnswer = session.events.at(-1);
+  if (!storedAnswer || storedAnswer.kind !== 'answer.submitted' || storedAnswer.answer.format !== 'builder') {
+    throw new Error('Builder answer was not persisted');
+  }
+  const canonicalAnswer = { ...answer, value: storedAnswer.answer.value };
   const graph: BuilderGraph = {
     components: normalizedValue.components.map(({ x: _x, y: _y, ...component }) => component),
     connections: normalizedValue.connections,
@@ -163,7 +168,7 @@ export function recordBuilderAssessment(input: BaseEngineAssessmentInput<Builder
     session = appendEngineDecision({
       session,
       config: input.config,
-      answer,
+      answer: canonicalAnswer,
       assistance: input.assistance,
       eventId: `${input.assessmentEventIdPrefix}-${index + 1}`,
       assessedAt: input.assessedAt,

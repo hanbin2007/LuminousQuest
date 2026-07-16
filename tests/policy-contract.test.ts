@@ -32,10 +32,10 @@ const oneRequirement = [{ id: 'electron-from', acceptedValues: ['Zn'] }];
 function fullBuilderGraph(): BuilderGraph {
   return {
     components: [
-      { instanceId: 'negative', componentId: 'site-a' },
-      { instanceId: 'wire', componentId: 'electron-link' },
-      { instanceId: 'ions', componentId: 'ion-medium' },
-      { instanceId: 'positive', componentId: 'site-b' },
+      { instanceId: 'negative', componentId: 'site-a', assignedRole: 'oxidation-site' },
+      { instanceId: 'wire', componentId: 'electron-link', assignedRole: 'electron-conductor' },
+      { instanceId: 'ions', componentId: 'ion-medium', assignedRole: 'ion-conductor' },
+      { instanceId: 'positive', componentId: 'site-b', assignedRole: 'reduction-site' },
       { instanceId: 'electron-arrow', componentId: 'electron-arrow' },
       { instanceId: 'cation-arrow', componentId: 'cation-arrow' },
       { instanceId: 'anion-arrow', componentId: 'anion-arrow' },

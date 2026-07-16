@@ -5,6 +5,8 @@ import type {
 
 export type BuilderConnectionKind = 'electron-path' | 'ion-path';
 export const topologyEngineVersion = 'builder-topology.v2';
+export const maximumBuilderComponents = 64;
+export const maximumBuilderConnections = 128;
 export type BuilderCarrier = 'electron' | 'cation' | 'anion';
 export type TopologyOutcome = 'hit' | 'partial' | 'miss';
 
@@ -91,14 +93,20 @@ function sorted(values: Iterable<string>) {
   return [...values].sort((left, right) => left.localeCompare(right));
 }
 
-function configuredRoleWhitelist(component: ConfiguredComponent) {
-  return new Set([
+export function configuredRoleWhitelist(component: ConfiguredComponent) {
+  return [
     ...(component.functionalRole ? [component.functionalRole] : []),
     ...component.allowedRoles,
-  ]);
+  ].filter((role, index, roles) => roles.indexOf(role) === index);
 }
 
 function validateGraph(graph: BuilderGraph, config: BuilderConfig) {
+  if (graph.components.length > maximumBuilderComponents) {
+    throw new Error(`搭建组件数量不能超过 ${maximumBuilderComponents}`);
+  }
+  if (graph.connections.length > maximumBuilderConnections) {
+    throw new Error(`搭建连线数量不能超过 ${maximumBuilderConnections}`);
+  }
   const configured = new Map(config.components.map((component) => [component.id, component]));
   const instanceIds = new Set<string>();
   for (const component of graph.components) {
@@ -109,7 +117,7 @@ function validateGraph(graph: BuilderGraph, config: BuilderConfig) {
     if (!definition) throw new Error(`Unknown builder component ${component.componentId}`);
     if (
       component.assignedRole
-      && !configuredRoleWhitelist(definition).has(component.assignedRole)
+      && !configuredRoleWhitelist(definition).includes(component.assignedRole)
     ) {
       throw new Error(
         `Builder role ${component.assignedRole} is not allowed for component ${component.componentId}`,
@@ -155,7 +163,7 @@ function buildRoleIndex(
   const roleByInstance = new Map<string, FunctionalRole>();
 
   for (const instance of graph.components) {
-    const role = instance.assignedRole ?? configured.get(instance.componentId)?.functionalRole;
+    const role = instance.assignedRole;
     if (!role) continue;
     roleByInstance.set(instance.instanceId, role);
     const instances = roles.get(role) ?? [];
@@ -171,13 +179,15 @@ interface PathWitness {
   connectionIds: string[];
 }
 
-function findPath(
+export function findTopologyPath(
   start: string,
   target: string,
   connections: readonly BuilderGraphConnection[],
-  internalRole: FunctionalRole,
-  roleByInstance: ReadonlyMap<string, FunctionalRole>,
-  directed: boolean,
+  options: {
+    isInternal: (instanceId: string) => boolean;
+    directed: boolean;
+    requireInternal: boolean;
+  },
 ): PathWitness | null {
   const adjacency = new Map<string, Array<{ next: string; connectionId: string }>>();
   const add = (from: string, next: string, connectionId: string) => {
@@ -189,7 +199,7 @@ function findPath(
   };
   connections.forEach((connection) => {
     add(connection.from, connection.to, connection.id);
-    if (!directed) add(connection.to, connection.from, connection.id);
+    if (!options.directed) add(connection.to, connection.from, connection.id);
   });
 
   const queue: Array<{
@@ -202,14 +212,17 @@ function findPath(
   while (queue.length > 0) {
     const current = queue.shift()!;
     for (const edge of adjacency.get(current.instanceId) ?? []) {
-      if (edge.next !== target && roleByInstance.get(edge.next) !== internalRole) continue;
-      const usedInternal = current.usedInternal || roleByInstance.get(edge.next) === internalRole;
+      if (edge.next !== target && !options.isInternal(edge.next)) continue;
+      const usedInternal = current.usedInternal
+        || (edge.next !== target && options.isInternal(edge.next));
       const visitKey = `${edge.next}\0${usedInternal}`;
       if (visited.has(visitKey)) continue;
       const components = [...current.components, edge.next];
       const connectionIds = [...current.connections, edge.connectionId];
       if (edge.next === target) {
-        if (usedInternal) return { componentInstanceIds: components, connectionIds };
+        if (!options.requireInternal || usedInternal) {
+          return { componentInstanceIds: components, connectionIds };
+        }
         continue;
       }
       visited.add(visitKey);
@@ -217,6 +230,26 @@ function findPath(
     }
   }
   return null;
+}
+
+export function previewBuilderConnectivity(graph: BuilderGraph, config: BuilderConfig) {
+  const definitions = new Map(config.components.map((component) => [component.id, component]));
+  const electrodes = graph.components
+    .filter((component) => definitions.get(component.componentId)?.kind === 'electrode')
+    .map((component) => component.instanceId);
+  const hasConnection = (kind: BuilderConnectionKind) => {
+    const connections = graph.connections.filter((connection) => connection.kind === kind);
+    return electrodes.some((start, startIndex) => electrodes.slice(startIndex + 1).some((target) =>
+      findTopologyPath(start, target, connections, {
+        isInternal: () => true,
+        directed: false,
+        requireInternal: false,
+      }) !== null));
+  };
+  return {
+    electronClosed: hasConnection('electron-path'),
+    ionClosed: hasConnection('ion-path'),
+  };
 }
 
 function evidence(
@@ -258,24 +291,28 @@ function findCircuitWitness(input: {
   for (const oxidationSiteId of input.oxidationSites) {
     for (const reductionSiteId of input.reductionSites) {
       const electron = input.requireElectron
-        ? findPath(
+        ? findTopologyPath(
             oxidationSiteId,
             reductionSiteId,
             input.electronConnections,
-            'electron-conductor',
-            input.roleByInstance,
-            false,
+            {
+              isInternal: (instanceId) => input.roleByInstance.get(instanceId) === 'electron-conductor',
+              directed: false,
+              requireInternal: true,
+            },
           )
         : { componentInstanceIds: [oxidationSiteId, reductionSiteId], connectionIds: [] };
       if (!electron) continue;
       const ion = input.requireIon
-        ? findPath(
+        ? findTopologyPath(
             oxidationSiteId,
             reductionSiteId,
             input.ionConnections,
-            'ion-conductor',
-            input.roleByInstance,
-            false,
+            {
+              isInternal: (instanceId) => input.roleByInstance.get(instanceId) === 'ion-conductor',
+              directed: false,
+              requireInternal: true,
+            },
           )
         : { componentInstanceIds: [oxidationSiteId, reductionSiteId], connectionIds: [] };
       if (!ion) continue;
@@ -315,40 +352,9 @@ export function assessBuilderTopology(
   const configured = validateGraph(graph, config);
   const requiredRoles = config.assessment.generalModel.requiredRoles;
   const { roles, roleByInstance } = buildRoleIndex(graph, configured, requiredRoles);
-  const roleStatuses = new Map(requiredRoles.map((role) => [
-    role,
-    roles.get(role)?.length ? 'hit' as const : 'miss' as const,
-  ]));
 
   const fourElementsRule = config.structuralRules.find((rule) => rule.check === 'four-elements')!;
   const fourMissing = missingRequiredComponents(fourElementsRule.requiredComponentIds, graph);
-  const fourElementsStatus = worstOutcome(
-    ...requiredRoles.map((role) => roleStatuses.get(role)!),
-    fourMissing.length > 0 ? 'miss' : 'hit',
-  );
-  const fourElements: TopologyCheck = {
-    status: fourElementsStatus,
-    ruleId: fourElementsRule.id,
-    evidence: [
-      ...requiredRoles.map((role) => {
-        const instances = roles.get(role) ?? [];
-        return evidence(
-          fourElementsRule.id,
-          instances.length === 0
-            ? `Missing functional role ${role}`
-            : `Functional role ${role} is represented in the connected model`,
-          instances,
-        );
-      }),
-      ...(fourMissing.length > 0
-        ? [evidence(
-            fourElementsRule.id,
-            `Missing required component definitions: ${fourMissing.join(', ')}`,
-            [],
-          )]
-        : []),
-    ],
-  };
 
   const oxidation = roles.get('oxidation-site') ?? [];
   const reduction = roles.get('reduction-site') ?? [];
@@ -370,6 +376,58 @@ export function assessBuilderTopology(
         requireSaltBridge: config.assessment.generalModel.saltBridgeRequired,
       })
     : undefined;
+  const requiredComponentIds = new Set(fourElementsRule.requiredComponentIds);
+  const requiredInstancesByRole = new Map(requiredRoles.map((role) => [
+    role,
+    (roles.get(role) ?? []).filter((instanceId) => {
+      const instance = graph.components.find((component) => component.instanceId === instanceId);
+      return instance !== undefined && requiredComponentIds.has(instance.componentId);
+    }),
+  ]));
+  const witnessInstancesForRole = (role: FunctionalRole) => {
+    if (!witness) return new Set<string>();
+    if (role === 'electron-conductor') return new Set(witness.electronComponentInstanceIds);
+    if (role === 'ion-conductor') return new Set(witness.ionComponentInstanceIds);
+    return new Set([
+      ...witness.electronComponentInstanceIds,
+      ...witness.ionComponentInstanceIds,
+    ]);
+  };
+  const roleStatuses = new Map(requiredRoles.map((role) => {
+    const assigned = requiredInstancesByRole.get(role) ?? [];
+    const connected = witnessInstancesForRole(role);
+    return [role, assigned.some((instanceId) => connected.has(instanceId)) ? 'hit' : 'miss'] as const;
+  }));
+  const fourElements: TopologyCheck = {
+    status: worstOutcome(
+      ...requiredRoles.map((role) => roleStatuses.get(role)!),
+      fourMissing.length > 0 ? 'miss' : 'hit',
+    ),
+    ruleId: fourElementsRule.id,
+    evidence: [
+      ...requiredRoles.map((role) => {
+        const assigned = requiredInstancesByRole.get(role) ?? [];
+        const connected = witnessInstancesForRole(role);
+        const connectedAssignments = assigned.filter((instanceId) => connected.has(instanceId));
+        return evidence(
+          fourElementsRule.id,
+          assigned.length === 0
+            ? `未指认功能角色（${role}）`
+            : connectedAssignments.length === 0
+              ? `已指认功能角色但未接入对应通路（${role}）`
+              : `学生指认的功能角色已接入对应通路（${role}）`,
+          assigned,
+        );
+      }),
+      ...(fourMissing.length > 0
+        ? [evidence(
+            fourElementsRule.id,
+            `缺少必需的物理组件：${fourMissing.join(', ')}`,
+            [],
+          )]
+        : []),
+    ],
+  };
   const electronConnected = !config.assessment.generalModel.requireClosedElectronPath
     || Boolean(witness?.electronConnectionIds.length);
   const ionConnected = !config.assessment.generalModel.requireClosedIonPath
@@ -380,13 +438,13 @@ export function assessBuilderTopology(
     evidence: [
       evidence(
         circuitRule.id,
-        electronConnected ? 'Electron path satisfies the configured closure rule' : 'Electron path is open',
+        electronConnected ? '电子通路已连通' : '电子通路悬空',
         witness?.electronComponentInstanceIds ?? [...oxidation, ...reduction],
         witness?.electronConnectionIds ?? [],
       ),
       evidence(
         circuitRule.id,
-        ionConnected ? 'Ion path satisfies the configured closure rule' : 'Ion path is open',
+        ionConnected ? '离子通路已连通' : '离子通路悬空',
         witness?.ionComponentInstanceIds ?? [...oxidation, ...reduction],
         witness?.ionConnectionIds ?? [],
       ),
@@ -410,13 +468,15 @@ export function assessBuilderTopology(
   const electronStarts = roles.get(config.assessment.direction.electronFrom) ?? [];
   const electronTargets = roles.get(config.assessment.direction.electronTo) ?? [];
   const electronDirectionCorrect = electronStarts.some((start) => electronTargets.some((target) =>
-    findPath(
+    findTopologyPath(
       start,
       target,
       markedElectronConnections,
-      'electron-conductor',
-      roleByInstance,
-      true,
+      {
+        isInternal: (instanceId) => roleByInstance.get(instanceId) === 'electron-conductor',
+        directed: true,
+        requireInternal: true,
+      },
     ) !== null));
   const cationConnections = ionConnections.filter((edge) => edge.carrier === 'cation');
   const anionConnections = ionConnections.filter((edge) => edge.carrier === 'anion');

@@ -7,29 +7,29 @@ import {
 } from 'lucide-react';
 
 import electrodeImage from '../../../assets/components/electrode-carbon@2x.png';
+import emptyBeakerImage from '../../../assets/components/beaker-empty@2x.png';
 import electrolyteImage from '../../../assets/components/beaker-electrolyte@2x.png';
 import sucroseImage from '../../../assets/components/sucrose-beaker@2x.png';
 import wireImage from '../../../assets/components/wire@2x.png';
 
 export interface ComponentPresentation {
-  functionalLabel: string;
   image?: string;
   Icon?: ComponentType<LucideProps>;
 }
 
 export const componentPresentation: Record<string, ComponentPresentation> = {
-  'site-a': { functionalLabel: '失电子场所', image: electrodeImage },
-  'electron-link': { functionalLabel: '电子导体', image: wireImage },
-  'ion-medium': { functionalLabel: '离子导体', image: electrolyteImage },
-  'site-b': { functionalLabel: '得电子场所', image: electrodeImage },
-  container: { functionalLabel: '容器', image: electrolyteImage },
-  'electron-arrow': { functionalLabel: '电子方向箭头', Icon: ArrowRight },
-  'cation-arrow': { functionalLabel: '阳离子方向箭头', Icon: ArrowUpRight },
-  'anion-arrow': { functionalLabel: '阴离子方向箭头', Icon: ArrowDownLeft },
-  'sucrose-solution': { functionalLabel: '蔗糖水', image: sucroseImage },
-  'insulated-link': { functionalLabel: '绝缘连接件', image: wireImage },
+  'site-a': { image: electrodeImage },
+  'electron-link': { image: wireImage },
+  'ion-medium': { image: electrolyteImage },
+  'site-b': { image: electrodeImage },
+  container: { image: emptyBeakerImage },
+  'electron-arrow': { Icon: ArrowRight },
+  'cation-arrow': { Icon: ArrowUpRight },
+  'anion-arrow': { Icon: ArrowDownLeft },
+  'sucrose-solution': { image: sucroseImage },
+  'insulated-link': { image: wireImage },
 };
 
-export function presentationFor(componentId: string, fallbackLabel: string) {
-  return componentPresentation[componentId] ?? { functionalLabel: fallbackLabel };
+export function presentationFor(componentId: string) {
+  return componentPresentation[componentId] ?? {};
 }

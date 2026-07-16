@@ -417,7 +417,7 @@ const builderComponentSchema = z
       container: [],
       'direction-marker': [],
       meter: [],
-      distractor: [],
+      distractor: ['electron-conductor', 'ion-conductor'],
     };
     const allowedForKind = new Set(kindRoles[value.kind]);
     const configuredRoles = [value.functionalRole, ...value.allowedRoles]
@@ -453,7 +453,7 @@ const structuralRuleSchema = z
 const questionBaseShape = {
   id: idSchema,
   prompt: z.string().trim().min(1),
-  dimensionId: z.enum(['principle', 'energy']),
+  dimensionId: dimensionIdSchema,
   rubricIds: z.array(idSchema).min(1),
   targetNodeIds: z.array(idSchema).min(1),
   evidencePath: z.string().trim().min(1),

@@ -47,10 +47,10 @@ function rawSliceAnswers(): SliceAnswers {
   return {
     builder: {
       components: [
-        { instanceId: 'negative', componentId: 'site-a', x: 0, y: 0 },
-        { instanceId: 'wire', componentId: 'electron-link', x: 1, y: 0 },
-        { instanceId: 'ions', componentId: 'ion-medium', x: 1, y: 1 },
-        { instanceId: 'positive', componentId: 'site-b', x: 2, y: 0 },
+        { instanceId: 'negative', componentId: 'site-a', x: 0, y: 0, assignedRole: 'oxidation-site' },
+        { instanceId: 'wire', componentId: 'electron-link', x: 1, y: 0, assignedRole: 'electron-conductor' },
+        { instanceId: 'ions', componentId: 'ion-medium', x: 1, y: 1, assignedRole: 'ion-conductor' },
+        { instanceId: 'positive', componentId: 'site-b', x: 2, y: 0, assignedRole: 'reduction-site' },
         { instanceId: 'electron-arrow', componentId: 'electron-arrow', x: 1, y: -1 },
         { instanceId: 'cation-arrow', componentId: 'cation-arrow', x: 2, y: 1 },
         { instanceId: 'anion-arrow', componentId: 'anion-arrow', x: 0, y: 1 },
