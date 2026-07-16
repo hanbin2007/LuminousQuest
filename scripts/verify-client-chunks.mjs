@@ -8,7 +8,7 @@ const routeSources = [
   'src/features/pretest/PretestPage.tsx',
   'src/features/training/TrainingPage.tsx',
   'src/features/teacher/TeacherPage.tsx',
-  'src/features/model/ModelPlaceholderPage.tsx',
+  'src/features/model/ModelPage.tsx',
 ];
 
 export function verifyRouteChunks(manifest) {
