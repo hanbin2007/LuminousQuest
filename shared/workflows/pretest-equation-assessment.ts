@@ -103,6 +103,8 @@ export function recordPretestEquationAssessments(input: {
       .filter((candidate, index, values) => values.findIndex((entry) =>
         entry.start === candidate.start && entry.end === candidate.end) === index)
       .map(({ quote, start, end }) => ({ quote, start, end }));
+    const misconceptionIds = [...new Set(selected.flatMap((entry) =>
+      entry?.score.nodeDecisions.find((decision) => decision.nodeId === nodeId)?.errorIds ?? []))];
     const decision = resolveRubricDecision({
       rubrics: input.config.rubrics,
       scaffoldPolicy: input.config.scaffoldPolicy,
@@ -128,6 +130,7 @@ export function recordPretestEquationAssessments(input: {
       attemptId: input.answer.attemptId,
       sourceAnswerEventId: input.answer.id,
       nodeId,
+      ...(misconceptionIds.length > 0 ? { misconceptionIds } : {}),
       rubric: { id: rubric.id, version: input.config.rubrics.version },
       extraction: {
         status: 'assessed',

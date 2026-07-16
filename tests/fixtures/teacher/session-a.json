@@ -1,0 +1,245 @@
+{
+  "schemaVersion": "session.v2",
+  "id": "teacher-fixture-session-a",
+  "anonymousStudentId": "anon-TEACH001",
+  "startedAt": "2026-07-16T01:00:00.000Z",
+  "updatedAt": "2026-07-16T01:09:00.000Z",
+  "configVersions": {
+    "configDigest": "sha256:1b49a6fac91ab7cf1fc708b0d766e647030077d51613c991171b010ead4f757d",
+    "knowledgeModel": "knowledge-model.v1.1",
+    "rubrics": "rubrics.v1.1",
+    "pretest": "pretest.v1.1",
+    "scaffoldPolicy": "scaffold-policy.v1.5",
+    "cases": {
+      "zinc-copper": "case.v1.5",
+      "aluminum-air": "case.v1.5",
+      "hydrogen-oxygen": "case.v1.5",
+      "methane-fuel": "case.v1.5"
+    },
+    "grammar": "equation-grammar.v2",
+    "engines": {
+      "rubric": "rubric-policy.v2",
+      "topology": "builder-topology.v2",
+      "equation": "equation-scoring.v3"
+    }
+  },
+  "events": [
+    {
+      "schemaVersion": "event.v2",
+      "id": "a-answer-p4",
+      "sequence": 0,
+      "occurredAt": "2026-07-16T01:01:00.000Z",
+      "caseId": "zinc-copper",
+      "stageId": "training",
+      "attemptId": "a-p4-1",
+      "kind": "answer.submitted",
+      "pipelineStage": "answer",
+      "questionId": "zinc-copper:analysis",
+      "answer": { "format": "text", "value": "电子从铜极经导线流向锌极。" }
+    },
+    {
+      "schemaVersion": "event.v2",
+      "id": "a-assessment-p4",
+      "sequence": 1,
+      "occurredAt": "2026-07-16T01:01:01.000Z",
+      "caseId": "zinc-copper",
+      "stageId": "training",
+      "attemptId": "a-p4-1",
+      "kind": "assessment.completed",
+      "pipelineStage": "score",
+      "sourceAnswerEventId": "a-answer-p4",
+      "nodeId": "P4",
+      "misconceptionIds": ["P4-M1"],
+      "rubric": { "id": "rubric-p4", "version": "rubrics.v1.1" },
+      "assistance": { "kind": "none", "rounds": 0 },
+      "objectiveOutcome": "miss",
+      "extraction": {
+        "status": "assessed",
+        "evidence": [{ "quote": "电子从铜极经导线流向锌极。", "start": 0, "end": 13 }],
+        "model": "fixture-v1",
+        "provenance": {
+          "promptId": "structured-assessment",
+          "promptVersion": "fixture-prompt.v1",
+          "cacheKey": "fixture-a-p4"
+        }
+      },
+      "ruleDecision": {
+        "status": "miss",
+        "ruleId": "p4-miss",
+        "reason": "P4-M1：电子流向写反。",
+        "engine": { "id": "rubric-policy", "version": "rubric-policy.v2" }
+      },
+      "following": {
+        "status": "not-followed",
+        "anchorNodeId": null,
+        "anchorOutcome": null,
+        "policy": "score-logical-chain"
+      },
+      "score": {
+        "status": "scored",
+        "earned": 0,
+        "possible": 2,
+        "annotations": [],
+        "outcome": "miss"
+      }
+    },
+    {
+      "schemaVersion": "event.v2",
+      "id": "a-tutor-start-p4",
+      "sequence": 2,
+      "occurredAt": "2026-07-16T01:02:00.000Z",
+      "caseId": "zinc-copper",
+      "stageId": "training",
+      "attemptId": "a-p4-1",
+      "kind": "tutor.cycle.started",
+      "pipelineStage": "tutor",
+      "sourceAnswerEventId": "a-answer-p4",
+      "sourceAssessmentEventId": "a-assessment-p4",
+      "nodeId": "P4",
+      "cycleId": "a-cycle-p4"
+    },
+    {
+      "schemaVersion": "event.v2",
+      "id": "a-tutor-turn-p4",
+      "sequence": 3,
+      "occurredAt": "2026-07-16T01:02:30.000Z",
+      "caseId": "zinc-copper",
+      "stageId": "training",
+      "attemptId": "a-p4-1",
+      "kind": "tutor.turn.completed",
+      "pipelineStage": "tutor",
+      "sourceAnswerEventId": "a-answer-p4",
+      "sourceAssessmentEventId": "a-assessment-p4",
+      "nodeId": "P4",
+      "cycleId": "a-cycle-p4",
+      "studentAnswer": "铜更活泼，所以电子从铜出发。",
+      "turn": { "action": "probe", "content": "先比较哪一极发生氧化，再沿外电路追踪电子。" },
+      "source": "demo-recording",
+      "degraded": false,
+      "activeElapsedMs": 30000
+    },
+    {
+      "schemaVersion": "event.v2",
+      "id": "a-answer-d3",
+      "sequence": 4,
+      "occurredAt": "2026-07-16T01:04:00.000Z",
+      "caseId": "zinc-copper",
+      "stageId": "training",
+      "attemptId": "a-d3-1",
+      "kind": "answer.submitted",
+      "pipelineStage": "answer",
+      "questionId": "zinc-copper:analysis-d3",
+      "answer": { "format": "text", "value": "盐桥传导离子，维持内电路电中性。" }
+    },
+    {
+      "schemaVersion": "event.v2",
+      "id": "a-assessment-d3",
+      "sequence": 5,
+      "occurredAt": "2026-07-16T01:04:01.000Z",
+      "caseId": "zinc-copper",
+      "stageId": "training",
+      "attemptId": "a-d3-1",
+      "kind": "assessment.completed",
+      "pipelineStage": "score",
+      "sourceAnswerEventId": "a-answer-d3",
+      "nodeId": "D3",
+      "rubric": { "id": "rubric-d3", "version": "rubrics.v1.1" },
+      "assistance": { "kind": "none", "rounds": 0 },
+      "objectiveOutcome": "hit",
+      "extraction": {
+        "status": "assessed",
+        "evidence": [{ "quote": "盐桥传导离子，维持内电路电中性。", "start": 0, "end": 16 }],
+        "model": "fixture-v1",
+        "provenance": { "promptId": "structured-assessment", "promptVersion": "fixture-prompt.v1", "cacheKey": "fixture-a-d3" }
+      },
+      "ruleDecision": {
+        "status": "hit",
+        "ruleId": "d3-hit",
+        "reason": "离子通路与电中性均有证据。",
+        "engine": { "id": "rubric-policy", "version": "rubric-policy.v2" }
+      },
+      "following": { "status": "not-followed", "anchorNodeId": null, "anchorOutcome": null, "policy": "score-logical-chain" },
+      "score": { "status": "scored", "earned": 2, "possible": 2, "annotations": [], "outcome": "hit" }
+    },
+    {
+      "schemaVersion": "event.v2",
+      "id": "a-answer-e1",
+      "sequence": 6,
+      "occurredAt": "2026-07-16T01:06:00.000Z",
+      "caseId": "zinc-copper",
+      "stageId": "training",
+      "attemptId": "a-e1-1",
+      "kind": "answer.submitted",
+      "pipelineStage": "answer",
+      "questionId": "zinc-copper:analysis-e1",
+      "answer": { "format": "text", "value": "原电池把化学能直接转化为电能。" }
+    },
+    {
+      "schemaVersion": "event.v2",
+      "id": "a-assessment-e1",
+      "sequence": 7,
+      "occurredAt": "2026-07-16T01:06:01.000Z",
+      "caseId": "zinc-copper",
+      "stageId": "training",
+      "attemptId": "a-e1-1",
+      "kind": "assessment.completed",
+      "pipelineStage": "score",
+      "sourceAnswerEventId": "a-answer-e1",
+      "nodeId": "E1",
+      "rubric": { "id": "rubric-e1", "version": "rubrics.v1.1" },
+      "assistance": { "kind": "none", "rounds": 0 },
+      "objectiveOutcome": "hit",
+      "extraction": {
+        "status": "assessed",
+        "evidence": [{ "quote": "原电池把化学能直接转化为电能。", "start": 0, "end": 15 }],
+        "model": "fixture-v1",
+        "provenance": { "promptId": "structured-assessment", "promptVersion": "fixture-prompt.v1", "cacheKey": "fixture-a-e1" }
+      },
+      "ruleDecision": {
+        "status": "hit",
+        "ruleId": "e1-hit",
+        "reason": "能量类型与直接转化方向正确。",
+        "engine": { "id": "rubric-policy", "version": "rubric-policy.v2" }
+      },
+      "following": { "status": "not-followed", "anchorNodeId": null, "anchorOutcome": null, "policy": "score-logical-chain" },
+      "score": { "status": "scored", "earned": 2, "possible": 2, "annotations": [], "outcome": "hit" }
+    },
+    {
+      "schemaVersion": "event.v2",
+      "id": "a-answer-p6",
+      "sequence": 8,
+      "occurredAt": "2026-07-16T01:09:00.000Z",
+      "caseId": "zinc-copper",
+      "stageId": "training",
+      "attemptId": "a-p6-1",
+      "kind": "answer.submitted",
+      "pipelineStage": "answer",
+      "questionId": "zinc-copper:equation-negative",
+      "answer": { "format": "text", "value": "Zn + OH- -> ZnO" }
+    },
+    {
+      "schemaVersion": "event.v2",
+      "id": "a-assessment-p6-review",
+      "sequence": 9,
+      "occurredAt": "2026-07-16T01:09:01.000Z",
+      "caseId": "zinc-copper",
+      "stageId": "training",
+      "attemptId": "a-p6-1",
+      "kind": "assessment.completed",
+      "pipelineStage": "extraction",
+      "sourceAnswerEventId": "a-answer-p6",
+      "nodeId": "P6",
+      "rubric": { "id": "rubric-p6", "version": "rubrics.v1.1" },
+      "assistance": { "kind": "none", "rounds": 0 },
+      "extraction": {
+        "status": "needs-review",
+        "reason": "回放证据与原文无法可靠对齐",
+        "model": "fixture-v1",
+        "provenance": { "promptId": "structured-assessment", "promptVersion": "fixture-prompt.v1", "cacheKey": "fixture-a-p6" }
+      },
+      "ruleDecision": { "status": "unassessed", "reason": "等待证据复核" },
+      "following": { "status": "unassessed" },
+      "score": { "status": "unassessed" }
+    }
+  ]
+}

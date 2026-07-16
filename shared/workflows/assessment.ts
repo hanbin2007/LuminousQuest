@@ -485,6 +485,7 @@ export function recordStructuredTextAssessment(input: RecordStructuredTextAssess
       attemptId: input.answer.attemptId,
       sourceAnswerEventId: input.answer.id,
       nodeId: assessment.nodeId,
+      ...(assessment.errorIds.length > 0 ? { misconceptionIds: assessment.errorIds } : {}),
       rubric: { id: rubric.id, version: input.config.rubrics.version },
       assistance: assessment.assistance,
     };

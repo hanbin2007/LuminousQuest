@@ -62,6 +62,9 @@ export function recordChoiceAssessment(input: {
       attemptId,
       sourceAnswerEventId: answerId,
       nodeId,
+      ...(option.misconceptionIds.length > 0
+        ? { misconceptionIds: option.misconceptionIds }
+        : {}),
       rubric: { id: rubric.id, version: input.config.rubrics.version },
       extraction: {
         status: 'assessed',

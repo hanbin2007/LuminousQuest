@@ -13,6 +13,7 @@ import { AppShell } from './app/AppShell';
 import { PlaceholderPage } from './app/PlaceholderPage';
 import { PretestPage } from './features/pretest/PretestPage';
 import { TrainingPage } from './features/training/TrainingPage';
+import TeacherPage from './features/teacher/TeacherPage';
 import { defaultRuntime, type AppRuntime } from './runtime/api';
 import { useLocalSession } from './session/useLocalSession';
 
@@ -98,13 +99,7 @@ function ConfiguredApp({ config, runtime }: { config: LoadedConfig; runtime: App
                 terms="装置 · 原理 · 能量"
               />
             )} />
-            <Route path="teacher" element={(
-              <PlaceholderPage
-                module="班级证据"
-                title="教师视图"
-                terms="量表条目 · 学生原文 · 诊断证据"
-              />
-            )} />
+            <Route path="teacher" element={<TeacherPage />} />
             <Route path="*" element={<Navigate replace to="/pretest" />} />
           </Route>
           </Routes>
