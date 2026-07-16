@@ -1,0 +1,27 @@
+M3.1 dist/client manifest verification
+generated-after-config-commit: 64112f30629b298a75d7fdd5cb693721fa504d7a
+manifest-commit: 99ba7b289e4adcb8ff2eae298b1e126aff43e2f9
+command: shasum -a 256 -c dist/client.sha256
+manifest-sha256: c449bcd94cef649c598b6c36f340289604a53d8c7a1ebaf9280171289e784f3d
+result: MATCH (20/20)
+
+dist/client/assets/DiagnosisRadar-geNOlX46.js: OK
+dist/client/assets/beaker-electrolyte@2x-D5rABJVQ.png: OK
+dist/client/assets/beaker-empty@2x-C8BdWHmA.png: OK
+dist/client/assets/electrode-carbon@2x-mfAJDkee.png: OK
+dist/client/assets/index-B0lYeb5b.css: OK
+dist/client/assets/index-DEk1REEj.js: OK
+dist/client/assets/noto-serif-sc-110-900-normal-BaDVX6nu.woff2: OK
+dist/client/assets/noto-serif-sc-111-900-normal-n4cNRCoU.woff2: OK
+dist/client/assets/noto-serif-sc-112-900-normal-Ct7co9fj.woff2: OK
+dist/client/assets/noto-serif-sc-113-900-normal-BhHANgFO.woff2: OK
+dist/client/assets/noto-serif-sc-114-900-normal-DHJ3JRKd.woff2: OK
+dist/client/assets/noto-serif-sc-115-900-normal-D420C9Bi.woff2: OK
+dist/client/assets/noto-serif-sc-116-900-normal-B1sjV77d.woff2: OK
+dist/client/assets/noto-serif-sc-117-900-normal-dB_jp2yq.woff2: OK
+dist/client/assets/noto-serif-sc-118-900-normal-D-m-897v.woff2: OK
+dist/client/assets/noto-serif-sc-119-900-normal-BkZNe1C9.woff2: OK
+dist/client/assets/noto-serif-sc-latin-900-normal-CzxUBGlO.woff2: OK
+dist/client/assets/sucrose-beaker@2x-DIZYvrdZ.png: OK
+dist/client/assets/wire@2x-DuWfbB5p.png: OK
+dist/client/index.html: OK

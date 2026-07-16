@@ -1,141 +1,96 @@
-# AC2 配置热加载实测证据
+# AC2 配置热加载实测证据（M3.1 复核）
 
 ## 结论
 
-AC2 通过。前三个训练案例、训练 UI、冷迁移、脚手架、辅导与回归测试完成后，先在提交
-`a477b0625b43895b79e12b66858f4dd8b22b9869` 构建并冻结客户端产物；冻结后没有修改代码、
-测试或构建产物，只新增 `config/cases/methane-fuel.json`，并把一条量表默认值
-`rubrics.policy.weakness.threshold` 从 `0.6` 改为 `0.61`。
+M3.1 已用可独立复核的方法重新验证 AC2。历史提交 `7e9fd74` 仍保留“只改配置即可发现
+甲烷冷迁移案例并改变阈值行为”的原始证据，但生产阈值已按终审裁决恢复为 `0.60`；
+`0.61` 只存在于 git 历史和忠实回放 fixture 中。
 
-同一 Hono 应用实例在不重启、不重建的情况下，通过下一次 `/api/config` 请求发现新案例和新
-配置摘要。训练 UI 从前三个案例进入固定三级的甲烷冷迁移案例，完成后生成共同节点归一化的
-前后雷达对比。甲烷案例为 `caseType: transfer`、`medium: acidic`，与签收素材图一致。
+原 M3 证据只记录了 `dist/client` 聚合摘要，没有在冻结提交内保存逐文件 manifest，且测试没有
+完整经过冻结客户端的真实请求路径，因此不能单独作为验收依据。本文件以下内容取代原验证方法。
 
-## 冻结点
+## 历史输入忠实性
 
-- 时间：`2026-07-15 23:16:53 EDT`（`2026-07-16T03:16:53Z`）
-- 分支：`codex/m3-training`
-- 冻结提交：`a477b0625b43895b79e12b66858f4dd8b22b9869`
-- 配置专用提交：`7e9fd74`（仅新增案例 JSON 与修改一条量表默认值）
-- 冻结前工作树：干净，且与 `origin/codex/m3-training` 同步
-- 冻结前完整测试：`37` 个测试文件、`378/378` 测试通过
-- 冻结命令：`pnpm build`
-- 构建结果：Vite `2505` 个模块构建成功，随后 `tsc --noEmit` 通过
-- 冻结产物：`dist/client`
-- 产物清单聚合 SHA-256：`4a108a4fa42203da3d4f76f0d2daa8a55a332067ea2c09d7c254bc63dbf44eeb`
+`tests/m3-ac2-hotload.test.tsx` 不再手写等价配置，而是逐字回放 `7e9fd74`：
 
-聚合值由以下确定性清单生成：
+- `tests/fixtures/ac2/7e9fd74/methane-fuel.json` 来自
+  `git show 7e9fd74:config/cases/methane-fuel.json`。
+- `tests/fixtures/ac2/7e9fd74/rubrics.patch` 来自
+  `git show --format= 7e9fd74 -- config/rubrics.json`。
+- 甲烷 JSON 的 SHA-256 为
+  `483b3ecb760e8ddda5dd5d199e2ed9cc3ce1b667821d9f1f598789c6dacb99d9`。
+- 测试逐字断言量表补丁，包含历史上的 `0.60 -> 0.61` 变更。
+
+复核命令：
 
 ```sh
-shasum -a 256 dist/client/index.html dist/client/assets/* | shasum -a 256
+git show 7e9fd74:config/cases/methane-fuel.json \
+  | shasum -a 256
+git show --format= 7e9fd74 -- config/rubrics.json \
+  | cmp - tests/fixtures/ac2/7e9fd74/rubrics.patch
 ```
 
-## 冻结后操作
+## 升级后的 AC2 回放
 
-严格按以下顺序操作，期间没有执行 `pnpm build`、`vite build` 或字体子集重建：
+自动化用例在一个未重启的 Hono 应用实例上执行以下链路：
+
+1. 写入锌铜、铝空气、氢氧三个真实基线案例，基线阈值固定为 `0.60`。
+2. 冻结客户端 `defaultRuntime` 首次请求 `/api/config`，确认只有三个基线案例。
+3. 逐字写入历史甲烷 JSON 和量表补丁效果，不重启 Hono、不重建客户端。
+4. 同一个 `defaultRuntime` 再次请求同一个 Hono 实例，确认配置摘要变化并发现 transfer 案例。
+5. 三个训练案例和甲烷冷迁移的文本判分均经 `/api/assessment/extract`。
+6. 负极、正极、总反应式均经真实 `/api/assessment/equation`，不使用伪造运行时判分。
+7. 额外断言甲烷等价式和倍数式为 `hit`，近似但不守恒的错误式为 `miss`。
+
+`tests/m3-real-e2e.test.tsx` 另以 `defaultRuntime` 和单个 Hono 实例完成
+“前测 -> 三个训练案例 -> 冷迁移”全路由链，并验证服务端会话同时包含
+`assessment`、`training`、`transfer` 三个阶段。
+
+## 生产阈值
+
+生产配置通过独立提交恢复：
 
 ```text
-1. A  config/cases/methane-fuel.json
-2. M  config/rubrics.json
-3. pnpm typecheck
-4. pnpm exec vitest run <AC2 与配置/流程聚焦测试>
-5. pnpm test
-6. 对 dist/client 重新计算 SHA-256 清单并与冻结值逐项比较
+64112f30629b298a75d7fdd5cb693721fa504d7a
+fix(config): 恢复阈值 0.60（AC2 演示改动回滚，证据保留于 git 历史）
 ```
 
-新增案例文件 SHA-256：
+`tests/m1a-config.test.ts` 只接受单值 `0.60`。边界行为测试使用测试本地配置构造同一
+`0.60` 维度得分：阈值 `0.60` 判为 `developing`，阈值 `0.61` 判为 `weak`，不再污染生产配置。
+
+## 冻结产物 Manifest
+
+M3.1 的 manifest 提交为：
 
 ```text
-483b3ecb760e8ddda5dd5d199e2ed9cc3ce1b667821d9f1f598789c6dacb99d9  config/cases/methane-fuel.json
+99ba7b289e4adcb8ff2eae298b1e126aff43e2f9
+build(dist): add client SHA-256 manifest
 ```
 
-## Git Diff 记录
+- 构建输入提交：`05882ef8486d4ef3b46c4b423799e112eefc9763`
+- 构建命令：`pnpm build`
+- 构建结果：Vite `2506` 个模块构建成功，随后 `tsc --noEmit` 通过
+- 逐文件 manifest：`dist/client.sha256`
+- manifest 文件数：`20`
+- manifest 自身 SHA-256：
+  `c449bcd94cef649c598b6c36f340289604a53d8c7a1ebaf9280171289e784f3d`
+- 配置提交后的逐项比较日志：
+  `docs/superpowers/evidence/2026-07-15-m3.1-dist-compare.log`
 
-冻结后、写入本证据文件前的 `git status --short --branch`：
+独立复核命令：
 
-```text
-## codex/m3-training...origin/codex/m3-training
- M config/rubrics.json
-?? config/cases/methane-fuel.json
+```sh
+shasum -a 256 -c dist/client.sha256
 ```
 
-新增文件统计：
+此命令必须得到 `20/20` 个 `OK`。今后的冻结类提交必须在同一冻结提交中包含对应的
+`dist` 逐文件 SHA-256 manifest；仅记录聚合摘要不再视为可独立验证。
 
-```text
-/dev/null => config/cases/methane-fuel.json | 189 ++++++++++++++++++++++++++++
-1 file changed, 189 insertions(+)
-```
+## M3.1 验证结果
 
-量表默认值的完整 diff：
-
-```diff
-diff --git a/config/rubrics.json b/config/rubrics.json
-index 4d5042b..71c37e1 100644
---- a/config/rubrics.json
-+++ b/config/rubrics.json
-@@ -53,7 +53,7 @@
-       }
-     },
-     "weakness": {
--      "threshold": 0.6,
-+      "threshold": 0.61,
-       "partialVisualization": "half-lit"
-     },
-     "repeatedAnswers": {
-```
-
-新案例关键配置：
-
-```json
-{
-  "id": "methane-fuel",
-  "sequence": 4,
-  "caseType": "transfer",
-  "medium": "acidic",
-  "materialRef": "assets/cases/methane-fuel/schematic.png",
-  "tutoring": []
-}
-```
-
-## 热加载与全流程证据
-
-自动化用例 `tests/m3-ac2-hotload.test.tsx` 在一个未重启的 Hono 应用实例上执行：
-
-1. 首次 `/api/config` 仅返回基线案例与阈值 `0.6`。
-2. 测试运行中新增甲烷 transfer JSON，并把阈值改为 `0.61`。
-3. 对同一应用实例再次请求 `/api/config`，断言配置摘要改变、甲烷案例为酸性、素材路径正确、
-   `tutoring` 为空。
-4. 不重建前端，挂载既有 `App`，完成训练案例后进入固定三级冷迁移作答。
-5. 断言冷迁移没有苏格拉底入口，提交后显示“训练前后对比”与缺测语义。
-
-对当前真实配置的应用内请求结果：
-
-```json
-{
-  "status": 200,
-  "configVersion": "sha256:1a9839512c4c46ba93b96fdff2558b9b99c2203d3f75c36b9e72c98d12a0830f",
-  "caseIds": ["zinc-copper", "aluminum-air", "hydrogen-oxygen", "methane-fuel"],
-  "methane": {
-    "sequence": 4,
-    "caseType": "transfer",
-    "medium": "acidic",
-    "materialRef": "assets/cases/methane-fuel/schematic.png",
-    "tutoring": []
-  },
-  "weaknessThreshold": 0.61,
-  "assetStatus": 200,
-  "assetType": "image/png"
-}
-```
-
-## 验证结果
-
-- 配置、方程式、真实 transfer UI、AC2 热加载、字体冻结契约聚焦测试：`105/105` 通过
-- 完整测试：`37` 个测试文件、`378/378` 通过
-- 类型检查：`pnpm typecheck` 通过
-- 冻结后 `dist/client` 清单逐项比较：`MATCH`
-- 冻结后产物清单聚合 SHA-256：仍为
-  `4a108a4fa42203da3d4f76f0d2daa8a55a332067ea2c09d7c254bc63dbf44eeb`
-
-因此，本次 AC2 验证没有借助重新编译吸收新增案例；案例发现、素材读取、固定三级冷迁移约束、
-作答与前后对比均由冻结代码对外部配置的热加载完成。
+- `pnpm test`：`40` 个测试文件、`388/388` 测试通过。
+- `pnpm typecheck`：通过。
+- `pnpm build`：通过。
+- `shasum -a 256 -c dist/client.sha256`：`20/20` 通过。
+- AC2 忠实回放：同一 Hono、冻结 `defaultRuntime`、三个真实基线、逐字历史 fixture、真实方程路由。
+- 生产配置：阈值为 `0.60`；历史 `0.61` 证据仍可由 fixture 与 git 提交复核。
