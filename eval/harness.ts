@@ -203,7 +203,7 @@ export async function runEvalHarness(options: EvalHarnessOptions) {
           caseId: evalCase.questionRef.caseId,
           stageId: 'eval-equation',
           attemptId: `${variant}-${iteration}`,
-          questionId: `${evalCase.questionRef.caseId}:${evalCase.questionRef.nodeId}`,
+          questionId: `${evalCase.questionRef.caseId}:${evalCase.questionRef.equationSetId}`,
           value: evalCase.studentAnswer,
         },
         assistance: { kind: 'none', rounds: 0 },

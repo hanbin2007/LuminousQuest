@@ -99,7 +99,7 @@ function runDeterministicSlice(
       caseId: 'zinc-copper',
       stageId: 'equations',
       attemptId: 'attempt-negative',
-      questionId: 'negative-half-reaction',
+      questionId: 'zinc-copper:zinc-negative',
       value: answers.negative,
     },
     assistance: { kind: 'none', rounds: 0 },
@@ -116,7 +116,7 @@ function runDeterministicSlice(
       caseId: 'zinc-copper',
       stageId: 'equations',
       attemptId: 'attempt-positive',
-      questionId: 'positive-half-reaction',
+      questionId: 'zinc-copper:copper-positive',
       value: answers.positive,
     },
     assistance: { kind: 'none', rounds: 0 },
@@ -133,7 +133,7 @@ function runDeterministicSlice(
       caseId: 'zinc-copper',
       stageId: 'equations',
       attemptId: 'attempt-overall',
-      questionId: 'overall-reaction',
+      questionId: 'zinc-copper:zinc-copper-overall',
       value: answers.overall,
     },
     assistance: { kind: 'none', rounds: 0 },
@@ -147,9 +147,9 @@ function persistedAnswers(session: StudentSession): SliceAnswers {
   const byQuestionId = new Map(session.events.flatMap((event) =>
     event.kind === 'answer.submitted' ? [[event.questionId, event.answer] as const] : []));
   const builder = byQuestionId.get('generic-cell');
-  const negative = byQuestionId.get('negative-half-reaction');
-  const positive = byQuestionId.get('positive-half-reaction');
-  const overall = byQuestionId.get('overall-reaction');
+  const negative = byQuestionId.get('zinc-copper:zinc-negative');
+  const positive = byQuestionId.get('zinc-copper:copper-positive');
+  const overall = byQuestionId.get('zinc-copper:zinc-copper-overall');
   if (
     builder?.format !== 'builder'
     || negative?.format !== 'text'
@@ -210,7 +210,11 @@ describe('zinc-copper M1a vertical slice', () => {
       : []).toEqual(['connection-1', 'connection-2', 'connection-3', 'connection-4']);
     const scores = finalSession.events.filter((event) =>
       event.kind === 'assessment.completed' && event.score.status === 'scored');
-    expect(scores).toHaveLength(12);
+    expect(scores).toHaveLength(16);
+    expect(scores.filter((event) => event.kind === 'assessment.completed'
+      && event.ruleDecision.status !== 'unanswered'
+      && 'engine' in event.ruleDecision
+      && event.ruleDecision.engine.id === 'equation-case-composite')).toHaveLength(5);
     expect(scores.every((event) =>
       event.kind === 'assessment.completed'
       && event.score.status === 'scored'
