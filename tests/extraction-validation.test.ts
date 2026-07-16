@@ -303,6 +303,83 @@ describe('closed-set extraction validation', () => {
     ]);
   });
 
+  it('grounds methane D1, P4, P5, and polarity facts in real Chinese quotations', async () => {
+    const config = await fixture();
+    const answer = [
+      '甲烷侧的铂电极只提供失电子反应场所且自身不消耗。',
+      '电子从甲烷侧的铂电极沿外电路流向氧气侧的铂电极，H+经质子交换膜移向氧气侧。',
+      'CH4和O2被消耗，生成CO2和H2O。',
+    ].join('');
+    const evidence = (quote: string) => {
+      const start = answer.indexOf(quote);
+      if (start < 0) throw new Error(`missing quote ${quote}`);
+      return { quote, start, end: start + quote.length };
+    };
+    const facts = (
+      slots: Array<{ id: string; value: string; quote: string }>,
+    ) => ({
+      response: 'substantive',
+      terminology: 'model',
+      syllabus: 'within',
+      contradiction: false,
+      typo: 'none',
+      slots: slots.map(({ quote, ...slot }) => ({ ...slot, evidence: evidence(quote) })),
+    });
+    const result = validateAssessmentExtraction({
+      extraction: {
+        anchors: [{
+          anchorId: 'case-polarity',
+          facts: [
+            { id: 'negative', value: 'methane-side', evidence: evidence('甲烷侧') },
+            { id: 'positive', value: 'oxygen-side', evidence: evidence('氧气侧') },
+          ],
+          evidence: [evidence('甲烷侧的铂电极'), evidence('氧气侧的铂电极')],
+        }],
+        assessments: [
+          {
+            nodeId: 'D1',
+            errorIds: [],
+            facts: facts([
+              { id: 'oxidation-site', value: 'methane-Pt', quote: '甲烷侧的铂电极' },
+              { id: 'site-consumed', value: 'false', quote: '自身不消耗' },
+            ]),
+            evidence: [evidence('甲烷侧的铂电极只提供失电子反应场所且自身不消耗')],
+            assistance: { kind: 'none', rounds: 0 },
+          },
+          {
+            nodeId: 'P4',
+            errorIds: [],
+            facts: facts([
+              { id: 'electron-from', value: 'methane-Pt', quote: '甲烷侧的铂电极' },
+              { id: 'electron-to', value: 'oxygen-Pt', quote: '氧气侧的铂电极' },
+              { id: 'permitted-ion', value: 'H+', quote: 'H+' },
+              { id: 'ion-toward', value: 'oxygen-Pt', quote: '氧气侧' },
+            ]),
+            evidence: [evidence('电子从甲烷侧的铂电极沿外电路流向氧气侧的铂电极，H+经质子交换膜移向氧气侧')],
+            assistance: { kind: 'none', rounds: 0 },
+          },
+          {
+            nodeId: 'P5',
+            errorIds: [],
+            facts: facts([
+              { id: 'consumed', value: 'CH4+O2', quote: 'CH4和O2' },
+              { id: 'generated', value: 'CO2+H2O', quote: 'CO2和H2O' },
+            ]),
+            evidence: [evidence('CH4和O2被消耗，生成CO2和H2O')],
+            assistance: { kind: 'none', rounds: 0 },
+          },
+        ],
+      },
+      answer,
+      caseId: 'methane-fuel',
+      targetNodeIds: ['D1', 'P4', 'P5'],
+      config,
+    });
+
+    expect(result.anchors[0].facts.map((fact) => fact.value)).toEqual(['methane-side', 'oxygen-side']);
+    expect(result.assessments.map((assessment) => assessment.nodeId)).toEqual(['D1', 'P4', 'P5']);
+  });
+
   it.each([
     ['spontaneous', 'zinc-copper', 'P1', 'spontaneous', '反应不能自发进行', '自发'],
     ['half-reactions-separated', 'zinc-copper', 'P1', 'half-reactions-separated', '两个半反应不分处两极', '分处'],
