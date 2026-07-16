@@ -2,6 +2,7 @@ import type { LoadedConfig } from '../config/schemas';
 import {
   equationScoringEngineVersion,
   scoreEquation,
+  validateHalfReactionPair,
 } from '../chemistry/equation';
 import { buildLearnerProfile } from '../scoring/profile';
 import {
@@ -14,7 +15,13 @@ import {
   type BuilderGraph,
 } from '../scoring/topology';
 import { appendSessionEvent } from '../session/session';
-import type { StudentSession } from '../session/schema';
+import type { AnswerSubmittedEvent, StudentSession } from '../session/schema';
+
+const caseCompositeEngineVersion = 'equation-case-composite.v1';
+type EquationOutcome = 'hit' | 'partial' | 'miss' | 'unanswered';
+type TextAnswerEvent = AnswerSubmittedEvent & {
+  answer: Extract<AnswerSubmittedEvent['answer'], { format: 'text' }>;
+};
 
 interface WorkflowAnswer<T> {
   id: string;
@@ -133,6 +140,113 @@ function appendEngineDecision(input: {
   });
 }
 
+function latestEquationAnswer(
+  session: StudentSession,
+  caseId: string,
+  equationSetId: string,
+) {
+  const questionId = `${caseId}:${equationSetId}`;
+  return session.events.reduce<TextAnswerEvent | undefined>(
+    (latest, event) => event.kind === 'answer.submitted'
+      && event.caseId === caseId
+      && event.questionId === questionId
+      && event.answer.format === 'text'
+      && (!latest || event.sequence > latest.sequence)
+        ? event as TextAnswerEvent
+        : latest,
+    undefined,
+  );
+}
+
+function combinedOutcome(outcomes: readonly EquationOutcome[]): EquationOutcome {
+  if (outcomes.includes('miss')) return 'miss';
+  if (outcomes.includes('unanswered')) return 'unanswered';
+  if (outcomes.includes('partial')) return 'partial';
+  return 'hit';
+}
+
+function appendCaseEquationComposite(input: {
+  session: StudentSession;
+  config: LoadedConfig;
+  trainingCase: LoadedConfig['cases'][number];
+  answer: WorkflowAnswer<string>;
+  assessedAt: string;
+  assessmentEventIdPrefix: string;
+}) {
+  const scored = new Map(input.trainingCase.equationSets.map((equationSet) => {
+    const answer = latestEquationAnswer(input.session, input.trainingCase.id, equationSet.id);
+    return [equationSet.electrode, {
+      equationSet,
+      answer,
+      score: answer
+        ? scoreEquation(answer.answer.value, equationSet, input.config.rubrics.policy)
+        : undefined,
+    }] as const;
+  }));
+  const negative = scored.get('negative')!;
+  const positive = scored.get('positive')!;
+  const overall = scored.get('overall')!;
+  const decisionFor = (
+    entry: typeof negative,
+    nodeId: 'P3' | 'P6' | 'P7',
+  ): EquationOutcome => entry.score?.nodeDecisions.find((decision) => decision.nodeId === nodeId)?.outcome
+    ?? entry.score?.outcome
+    ?? 'unanswered';
+
+  const p3 = combinedOutcome([
+    decisionFor(negative, 'P3'),
+    decisionFor(positive, 'P3'),
+  ]);
+  let p6 = combinedOutcome([
+    decisionFor(negative, 'P6'),
+    decisionFor(positive, 'P6'),
+  ]);
+  let pairReason = 'Both half reactions must be valid accepted equations with equal submitted electron counts';
+  if (p6 === 'hit' && negative.answer && positive.answer) {
+    const pair = validateHalfReactionPair(
+      negative.answer.answer.value,
+      positive.answer.answer.value,
+      input.trainingCase.medium,
+    );
+    if (!pair.balanced) {
+      p6 = 'partial';
+      pairReason = `Half reactions require multipliers ${pair.multipliers[0]}:${pair.multipliers[1]} before electrons cancel`;
+    } else {
+      pairReason = `Both half reactions balance and cancel ${pair.electronCount} electrons`;
+    }
+  }
+  const p7 = decisionFor(overall, 'P7');
+  const attempts = [negative, positive, overall]
+    .map((entry) => `${entry.equationSet.electrode}=${entry.answer?.attemptId ?? 'missing'}`)
+    .join(', ');
+  const outcomes = [
+    { nodeId: 'P3', outcome: p3, reason: `Combined electrode product and medium evidence; ${attempts}` },
+    { nodeId: 'P6', outcome: p6, reason: `${pairReason}; ${attempts}` },
+    { nodeId: 'P7', outcome: p7, reason: `Derived only from the submitted overall equation; ${attempts}` },
+  ] as const;
+
+  let session = input.session;
+  outcomes.forEach((entry, index) => {
+    session = appendEngineDecision({
+      session,
+      config: input.config,
+      answer: input.answer,
+      assistance: { kind: 'none', rounds: 0 },
+      eventId: `${input.assessmentEventIdPrefix}-composite-${index + 1}`,
+      assessedAt: input.assessedAt,
+      nodeId: entry.nodeId,
+      outcome: entry.outcome,
+      engine: {
+        id: 'equation-case-composite',
+        version: caseCompositeEngineVersion,
+        ruleId: `equation-case-${entry.nodeId.toLowerCase()}`,
+        reason: entry.reason,
+      },
+    });
+  });
+  return session;
+}
+
 export function recordBuilderAssessment(input: BaseEngineAssessmentInput<BuilderAnswerValue>) {
   const normalizedValue: BuilderAnswerValue = {
     components: input.answer.value.components,
@@ -221,6 +335,14 @@ export function recordEquationAssessment(
         reason: nodeDecision.reasons.join('; '),
       },
     });
+  });
+  session = appendCaseEquationComposite({
+    session,
+    config: input.config,
+    trainingCase,
+    answer: input.answer,
+    assessedAt: input.assessedAt,
+    assessmentEventIdPrefix: input.assessmentEventIdPrefix,
   });
   return { session, profile: buildLearnerProfile(session, input.config), assessment };
 }

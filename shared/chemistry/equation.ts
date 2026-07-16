@@ -1,7 +1,7 @@
 import type { CaseConfig, RubricsConfig } from '../config/schemas';
 
 export const equationGrammarVersion = 'equation-grammar.v2';
-export const equationScoringEngineVersion = 'equation-scoring.v2';
+export const equationScoringEngineVersion = 'equation-scoring.v3';
 
 const maximumSourceLength = 2_048;
 const maximumNumericDigits = 6;
@@ -755,6 +755,8 @@ export function scoreEquation(
   expected: EquationSet,
   policy?: RubricsConfig['policy'],
 ): EquationScore {
+  const kind = expected.electrode === 'overall' ? 'overall' : 'half';
+  const balanceNodeId = kind === 'overall' ? 'P7' : 'P6';
   if (isEquationNonResponse(source)) {
     const configuredStatus = policy?.nonResponse.status ?? 'unanswered';
     return {
@@ -767,14 +769,13 @@ export function scoreEquation(
         reason: 'blank or explicit non-answer',
       },
       nodeDecisions: [{
-        nodeId: 'P6',
+        nodeId: balanceNodeId,
         outcome: configuredStatus,
         errorIds: [],
         reasons: ['blank or explicit non-answer'],
       }],
     };
   }
-  const kind = expected.electrode === 'overall' ? 'overall' : 'half';
   const analysis = analyzeEquation(source, {
     kind,
     medium: expected.medium,
@@ -786,9 +787,9 @@ export function scoreEquation(
       ruleId: 'equation-parse-miss',
       analysis,
       nodeDecisions: [{
-        nodeId: 'P6',
+        nodeId: balanceNodeId,
         outcome: 'miss',
-        errorIds: ['P6-M1'],
+        errorIds: [kind === 'overall' ? 'P7-M1' : 'P6-M1'],
         reasons: [analysis.error.message],
       }],
     };
@@ -803,7 +804,13 @@ export function scoreEquation(
   });
   const exact = accepted.find((candidate) => candidate.canonical === analysis.canonical);
   const notationIssues = notationPolicyIssues(analysis, policy);
-  const balanceNodeId = kind === 'overall' ? 'P7' : 'P6';
+  const productDecision = (
+    outcome: 'hit' | 'partial' | 'miss',
+    errorIds: string[],
+    reasons: string[],
+  ): EquationScoreNodeDecision[] => kind === 'overall'
+    ? []
+    : [{ nodeId: 'P3', outcome, errorIds, reasons }];
   if (analysis.valid && exact && notationIssues.length === 0) {
     return {
       outcome: 'hit',
@@ -811,7 +818,7 @@ export function scoreEquation(
       analysis,
       matchedCanonical: exact.canonical,
       nodeDecisions: [
-        { nodeId: 'P3', outcome: 'hit', errorIds: [], reasons: ['medium matches the configured case'] },
+        ...productDecision('hit', [], ['medium matches the configured case']),
         {
           nodeId: balanceNodeId,
           outcome: 'hit',
@@ -829,7 +836,7 @@ export function scoreEquation(
       analysis,
       matchedCanonical: exact.canonical,
       nodeDecisions: [
-        { nodeId: 'P3', outcome: 'hit', errorIds: [], reasons: ['species and medium match the configured case'] },
+        ...productDecision('hit', [], ['species and medium match the configured case']),
         { nodeId: balanceNodeId, outcome: 'miss', errorIds: [], reasons: notationIssues },
       ],
     };
@@ -856,12 +863,12 @@ export function scoreEquation(
       ruleId: 'equation-medium-partial',
       analysis,
       nodeDecisions: [
-        {
+        ...(kind === 'overall' ? [] : [{
           nodeId: feedbackNodeId,
           outcome: mediumOutcome,
           errorIds: mediumErrorIds(analysis),
           reasons: [`forbidden in ${expected.medium}: ${analysis.medium.forbiddenSpecies.join(', ')}`],
-        },
+        }]),
         {
           nodeId: balanceNodeId,
           outcome: kind === 'half' ? mediumOutcome : 'hit',
@@ -888,7 +895,7 @@ export function scoreEquation(
       ruleId: 'equation-balance-partial',
       analysis,
       nodeDecisions: [
-        { nodeId: 'P3', outcome: 'hit', errorIds: [], reasons: ['species and medium match the configured case'] },
+        ...productDecision('hit', [], ['species and medium match the configured case']),
         {
           nodeId: balanceNodeId,
           outcome: 'partial',
@@ -904,12 +911,11 @@ export function scoreEquation(
     ruleId: 'equation-miss',
     analysis,
     nodeDecisions: [
-      {
-        nodeId: 'P3',
-        outcome: 'miss',
-        errorIds: analysis.medium.matches ? ['P3-M3'] : mediumErrorIds(analysis),
-        reasons: ['products or medium do not match a configured target-reaction family'],
-      },
+      ...productDecision(
+        'miss',
+        analysis.medium.matches ? ['P3-M3'] : mediumErrorIds(analysis),
+        ['products or medium do not match a configured target-reaction family'],
+      ),
       {
         nodeId: balanceNodeId,
         outcome: 'miss',

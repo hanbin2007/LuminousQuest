@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 
 import { createServerApp } from '../server/app';
 import type { LLMProvider, LLMRequest, LLMResponse } from '../server/llm/types';
-import type { StudentSession } from '../shared/session';
+import type { AssessmentCompletedEvent, StudentSession } from '../shared/session';
 import { createTemporaryDirectory, writeValidContentTree } from './helpers/content-fixture';
 
 const apiToken = 'workflow-token';
@@ -162,23 +162,99 @@ describe('server-owned assessment and tutor routes', () => {
     const retry = await post(app, '/api/assessment/equation', body);
 
     expect(first.status).toBe(200);
-    expect(await first.json()).toMatchObject({
-      status: 'recorded',
-      session: {
-        events: [
-          expect.objectContaining({
-            kind: 'answer.submitted',
-            caseId: 'zinc-copper',
-            stageId: 'training',
-            questionId: 'zinc-copper:zinc-negative',
-          }),
-          expect.objectContaining({ kind: 'assessment.completed', nodeId: 'P3' }),
-          expect.objectContaining({ kind: 'assessment.completed', nodeId: 'P6' }),
-        ],
-      },
-    });
+    const payload = await first.json() as { status: string; session: StudentSession };
+    expect(payload.status).toBe('recorded');
+    expect(payload.session.events).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        kind: 'answer.submitted',
+        caseId: 'zinc-copper',
+        stageId: 'training',
+        questionId: 'zinc-copper:zinc-negative',
+      }),
+      expect.objectContaining({ kind: 'assessment.completed', nodeId: 'P3' }),
+      expect.objectContaining({ kind: 'assessment.completed', nodeId: 'P6' }),
+      expect.objectContaining({ kind: 'assessment.completed', nodeId: 'P7' }),
+    ]));
     expect(await retry.json()).toMatchObject({ status: 'already-recorded' });
-    expect(sessions.get('equation-session')?.events).toHaveLength(3);
+    expect(sessions.get('equation-session')?.events).toHaveLength(6);
+  });
+
+  it('keeps each equation attempt and prevents later hits from replacing an earlier half-reaction miss', async () => {
+    const root = await createTemporaryDirectory();
+    await writeValidContentTree(root);
+    const sessions = new TestSessionStore();
+    const app = createServerApp({
+      contentRoot: root,
+      clientRoot: path.join(root, 'client'),
+      apiToken,
+      sessions,
+      workflow: { now: () => Date.parse('2026-07-15T12:00:00.000Z') },
+    });
+    const sessionId = 'equation-composite-session';
+    const submissions = [
+      {
+        equationSetId: 'zinc-negative',
+        equation: 'Cu -> Cu^2+ + 2e^-',
+        submissionId: 'negative-miss',
+      },
+      {
+        equationSetId: 'copper-positive',
+        equation: 'Cu^2+ + 2e^- -> Cu',
+        submissionId: 'positive-hit',
+      },
+      {
+        equationSetId: 'zinc-copper-overall',
+        equation: 'Zn + Cu^2+ -> Zn^2+ + Cu',
+        submissionId: 'overall-hit',
+      },
+    ];
+
+    for (const submission of submissions) {
+      const response = await post(app, '/api/assessment/equation', {
+        sessionId,
+        caseId: 'zinc-copper',
+        ...submission,
+      });
+      expect(response.status).toBe(200);
+    }
+
+    const session = sessions.get(sessionId)!;
+    const answers = session.events.filter((event) => event.kind === 'answer.submitted');
+    expect(answers.map((event) => ({ questionId: event.questionId, attemptId: event.attemptId })))
+      .toEqual([
+        { questionId: 'zinc-copper:zinc-negative', attemptId: 'negative-miss' },
+        { questionId: 'zinc-copper:copper-positive', attemptId: 'positive-hit' },
+        { questionId: 'zinc-copper:zinc-copper-overall', attemptId: 'overall-hit' },
+      ]);
+
+    const composite = session.events.filter((event): event is AssessmentCompletedEvent =>
+      event.kind === 'assessment.completed'
+      && event.ruleDecision.status !== 'unanswered'
+      && 'engine' in event.ruleDecision
+      && event.ruleDecision.engine.id === 'equation-case-composite');
+    const latestByNode = new Map<string, typeof composite[number]>();
+    for (const event of composite) {
+      const previous = latestByNode.get(event.nodeId);
+      if (!previous || event.sequence > previous.sequence) latestByNode.set(event.nodeId, event);
+    }
+
+    expect(latestByNode.get('P3')).toMatchObject({
+      attemptId: 'overall-hit',
+      ruleDecision: { status: 'miss' },
+    });
+    expect(latestByNode.get('P6')).toMatchObject({
+      attemptId: 'overall-hit',
+      ruleDecision: { status: 'miss' },
+    });
+    expect(latestByNode.get('P7')).toMatchObject({
+      attemptId: 'overall-hit',
+      ruleDecision: { status: 'hit' },
+    });
+    const latestAssessment = [...session.events].reverse().find((event) =>
+      event.kind === 'assessment.completed' && event.nodeId === 'P6');
+    expect(latestAssessment).toMatchObject({
+      ruleDecision: { status: 'miss', engine: { id: 'equation-case-composite' } },
+    });
   });
 
   it('accepts only minimal workflow input and blocks the raw protected-prompt bypass', async () => {

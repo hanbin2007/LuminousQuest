@@ -395,6 +395,29 @@ describe('electrode equation grammar and scoring', () => {
     expect(both.status === 'parsed' && both.conservation.electrons.actualSide).toBe('both');
   });
 
+  it.each([
+    ['', 'equation-unanswered', 'unanswered'],
+    ['Zn + -> Cu', 'equation-parse-miss', 'miss'],
+  ] as const)('attributes an empty or malformed total equation only to P7: %j', (
+    source,
+    ruleId,
+    outcome,
+  ) => {
+    const result = scoreEquation(source, {
+      id: 'zinc-total',
+      electrode: 'overall',
+      medium: 'neutral',
+      expectedElectronSide: 'none',
+      accepted: ['Zn + Cu^2+ -> Zn^2+ + Cu'],
+      crossMediumAccepted: [],
+    });
+
+    expect(result).toMatchObject({ outcome, ruleId });
+    expect(result.nodeDecisions).toEqual([
+      expect.objectContaining({ nodeId: 'P7', outcome }),
+    ]);
+  });
+
   it('validates paired electron counts and reports the least multipliers needed', () => {
     const zincCopper = validateHalfReactionPair(
       'Zn -> Zn^2+ + 2e^-',
