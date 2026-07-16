@@ -102,6 +102,7 @@ function evidence(answer: string, quote: string) {
 
 export function goldenResponse(evalCase: LabeledEvalCase, model: string): LLMResponse {
   const expected = evalCase.expectedExtraction;
+  const classificationQuote = expected.evidenceQuotes[0] ?? evalCase.studentAnswer;
   const structured = {
     anchors: expected.anchors.map((anchor) => ({
       anchorId: anchor.anchorId,
@@ -121,6 +122,20 @@ export function goldenResponse(evalCase: LabeledEvalCase, model: string): LLMRes
         syllabus: expected.syllabus,
         contradiction: expected.contradiction,
         typo: expected.typo,
+        classificationEvidence: {
+          ...(expected.terminology === 'colloquial'
+            ? { terminology: evidence(evalCase.studentAnswer, classificationQuote) }
+            : {}),
+          ...(expected.syllabus === 'beyond'
+            ? { syllabus: evidence(evalCase.studentAnswer, classificationQuote) }
+            : {}),
+          ...(expected.contradiction
+            ? { contradiction: evidence(evalCase.studentAnswer, classificationQuote) }
+            : {}),
+          ...(expected.typo !== 'none'
+            ? { typo: evidence(evalCase.studentAnswer, classificationQuote) }
+            : {}),
+        },
         slots: expected.slots.map((slot) => ({
           id: slot.id,
           value: slot.value,
