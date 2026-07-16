@@ -34,3 +34,7 @@
 **低**
 13. 公开视图泄漏断言改白名单键集(或递归扫描),fixture 补 transfer 案例覆盖 followingAnchors。(opus#4)
 14. 取最新事件统一按 sequence 比较(transfer-comparison 与 scaffold-adapter 口径一致)。(opus#5)
+
+## M3.1 复核关闭(2026-07-16)
+
+opus-4.8 复核:四项裁决与清单 1-14 全部真关闭(AC2 fixture 与 git show 逐字一致、复合 miss 不可被覆盖有真实路由回归、tutor 阶段 409 双判据),388/388,**可合并**。残留 2 条低危(未评估节点的 tutor 放行、P6 电子不相消降级分支无复合层用例)并入 M4。M3 正式关闭。
