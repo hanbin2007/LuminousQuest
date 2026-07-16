@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { lazy, useCallback, useEffect, useRef, useState } from 'react';
 import {
   BrowserRouter,
   Navigate,
@@ -10,12 +10,19 @@ import type { LoadedConfig } from '../shared/config/schemas';
 import { AppContext } from './app/AppContext';
 import { AppErrorBoundary } from './app/AppErrorBoundary';
 import { AppShell } from './app/AppShell';
-import { PlaceholderPage } from './app/PlaceholderPage';
-import { PretestPage } from './features/pretest/PretestPage';
-import { TrainingPage } from './features/training/TrainingPage';
-import TeacherPage from './features/teacher/TeacherPage';
 import { defaultRuntime, type AppRuntime, type LLMExecutionMode } from './runtime/api';
 import { useLocalSession } from './session/useLocalSession';
+
+const PretestPage = lazy(async () => {
+  const module = await import('./features/pretest/PretestPage');
+  return { default: module.PretestPage };
+});
+const TrainingPage = lazy(async () => {
+  const module = await import('./features/training/TrainingPage');
+  return { default: module.TrainingPage };
+});
+const TeacherPage = lazy(() => import('./features/teacher/TeacherPage'));
+const ModelPlaceholderPage = lazy(() => import('./features/model/ModelPlaceholderPage'));
 
 export type { AppRuntime } from './runtime/api';
 
@@ -152,13 +159,7 @@ function ConfiguredApp({ config, runtime }: { config: LoadedConfig; runtime: App
             <Route index element={<Navigate replace to="/pretest" />} />
             <Route path="pretest" element={<PretestPage />} />
             <Route path="training" element={<TrainingPage />} />
-            <Route path="model" element={(
-              <PlaceholderPage
-                module="模块三"
-                title="3D 思维模型外显"
-                terms="装置 · 原理 · 能量"
-              />
-            )} />
+            <Route path="model" element={<ModelPlaceholderPage />} />
             <Route path="teacher" element={<TeacherPage />} />
             <Route path="*" element={<Navigate replace to="/pretest" />} />
           </Route>

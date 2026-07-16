@@ -2230,6 +2230,7 @@ p {
 }
 
 .loading-state,
+.route-loading,
 .fatal-state {
   width: min(calc(100% - var(--space-6)), var(--content-max));
   min-height: 70vh;
@@ -2243,7 +2244,8 @@ p {
   gap: var(--space-3);
 }
 
-.loading-state::before {
+.loading-state::before,
+.route-loading::before {
   display: block;
   width: 120px;
   height: 4px;

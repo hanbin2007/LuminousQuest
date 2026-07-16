@@ -12,7 +12,7 @@
     "font:subset": "node scripts/subset-font.mjs",
     "prebuild:client": "pnpm run font:subset",
     "build": "pnpm run build:client && pnpm run typecheck",
-    "build:client": "vite build",
+    "build:client": "vite build && node scripts/verify-client-chunks.mjs",
     "start": "pnpm run build && tsx server/index.ts",
     "serve": "tsx server/index.ts",
     "test": "vitest run",

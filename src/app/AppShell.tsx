@@ -1,4 +1,5 @@
 import { Clapperboard, GraduationCap } from 'lucide-react';
+import { Suspense } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 
 import { useAppContext } from './AppContext';
@@ -87,7 +88,9 @@ export function AppShell() {
           ) : null}
         </div>
       </header>
-      <Outlet />
+      <Suspense fallback={<main className="route-loading" aria-label="页面载入中" />}>
+        <Outlet />
+      </Suspense>
     </div>
   );
 }
