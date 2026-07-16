@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { loadAllConfig } from '../server/config/loader';
+import type { LoadedConfig } from '../shared/config/schemas';
 import { resolveRubricDecision } from '../shared/scoring/rubric';
 import {
   appendSessionEvent,
@@ -10,8 +11,12 @@ import {
 import type { StudentSession } from '../shared/session/schema';
 import { buildModelScene } from '../src/features/model/lighting';
 
-async function sceneWith(entries: Array<{ nodeId: string; outcome: 'hit' | 'partial' | 'miss' }>) {
+async function sceneWith(
+  entries: Array<{ nodeId: string; outcome: 'hit' | 'partial' | 'miss' }>,
+  configure: (config: LoadedConfig) => void = () => undefined,
+) {
   const config = await loadAllConfig(process.cwd());
+  configure(config);
   let session: StudentSession = createSession({
     id: 'session-model-lighting',
     anonymousStudentId: 'anon-3D3D3D3D',
@@ -106,5 +111,21 @@ describe('module 3 model scene lighting', () => {
     expect(scene.radar).toHaveLength(3);
     expect(scene.radar.map((entry) => entry.id)).toEqual(['device', 'principle', 'energy']);
     expect(scene.radar.find((entry) => entry.id === 'energy')?.value).toBeNull();
+  });
+
+  it('remaps node and radar dimensions through the adjudication policy', async () => {
+    const scene = await sceneWith(
+      [{ nodeId: 'D5', outcome: 'hit' }],
+      (config) => {
+        config.rubrics.policy.dimensionAssignments.siteReactantDistinction = 'principle-only';
+      },
+    );
+
+    expect(scene.nodes.find((node) => node.id === 'D5')).toMatchObject({
+      dimensionId: 'principle',
+      light: 'full-lit',
+    });
+    expect(scene.radar.find((entry) => entry.id === 'device')?.value).toBeNull();
+    expect(scene.radar.find((entry) => entry.id === 'principle')?.value).toBe(1);
   });
 });
