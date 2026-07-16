@@ -396,7 +396,7 @@ describe('server-owned assessment and tutor routes', () => {
     expect(await retry.json()).toMatchObject({ status: 'already-recorded' });
     expect(requests[0]).toMatchObject({
       prompt: { id: 'structured-assessment' },
-      schemaVersion: 'structured-assessment.v4',
+      schemaVersion: 'structured-assessment.v5',
       temperature: 0.1,
       input: {
         answer,

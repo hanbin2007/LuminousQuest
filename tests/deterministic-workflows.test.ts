@@ -117,6 +117,12 @@ describe('deterministic workflow and persistence contracts', () => {
             syllabus: 'within',
             contradiction: false,
             typo: 'none',
+            verified: {
+              colloquial: false,
+              beyondSyllabus: false,
+              contradiction: false,
+              typo: 'none',
+            },
             slots: [
               { id: 'electron-from', value: 'Cu', evidence: quote('铜') },
               { id: 'electron-to', value: 'Zn', evidence: quote('锌') },
@@ -185,6 +191,12 @@ describe('deterministic workflow and persistence contracts', () => {
             syllabus: 'within',
             contradiction: false,
             typo: 'none',
+            verified: {
+              colloquial: false,
+              beyondSyllabus: false,
+              contradiction: false,
+              typo: 'none',
+            },
             slots: [
               {
                 id: 'reducing-agent',
@@ -303,6 +315,12 @@ describe('deterministic workflow and persistence contracts', () => {
             syllabus: 'within',
             contradiction: false,
             typo: 'none',
+            verified: {
+              colloquial: false,
+              beyondSyllabus: false,
+              contradiction: false,
+              typo: 'none',
+            },
             slots: [],
           },
           evidence: [],
@@ -364,6 +382,15 @@ describe('deterministic workflow and persistence contracts', () => {
             syllabus: 'within',
             contradiction: false,
             typo: 'ambiguous',
+            classificationEvidence: {
+              typo: { quote: answer, start: 0, end: answer.length },
+            },
+            verified: {
+              colloquial: false,
+              beyondSyllabus: false,
+              contradiction: false,
+              typo: 'ambiguous',
+            },
             slots: [
               {
                 id: 'reducing-agent',

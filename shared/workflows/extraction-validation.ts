@@ -1,5 +1,6 @@
 import type { LoadedConfig } from '../config/schemas';
 import {
+  classifyTextResponse,
   structuredAssessmentResponseSchema,
   type StructuredAssessmentResponse,
 } from './assessment';
@@ -9,6 +10,7 @@ export type ExtractionValidationCategory =
   | 'citation-mismatch'
   | 'normalization-insufficient'
   | 'fact-grounding'
+  | 'classification-grounding'
   | 'answer-too-long';
 
 export class ExtractionValidationError extends Error {
@@ -316,6 +318,67 @@ function validateEvidence(
   );
 }
 
+type AssessmentFacts = StructuredAssessmentResponse['assessments'][number]['facts'];
+type ClassificationEvidenceKey = keyof AssessmentFacts['classificationEvidence'];
+
+function verifiedClassifications(
+  facts: AssessmentFacts,
+  answer: string,
+  config: LoadedConfig,
+  detail: { caseId: string; nodeId: string },
+) {
+  const adverse: Array<{
+    key: ClassificationEvidenceKey;
+    active: boolean;
+  }> = [
+    { key: 'terminology', active: facts.terminology === 'colloquial' },
+    { key: 'syllabus', active: facts.syllabus === 'beyond' },
+    { key: 'contradiction', active: facts.contradiction },
+    { key: 'typo', active: facts.typo !== 'none' },
+  ];
+
+  for (const declaration of adverse) {
+    if (!declaration.active) continue;
+    const evidence = facts.classificationEvidence[declaration.key];
+    if (!evidence) {
+      throw new ExtractionValidationError(
+        'classification-grounding',
+        false,
+        `Adverse ${declaration.key} classification requires its own grounded quote`,
+        { ...detail, classification: declaration.key, reason: 'missing-evidence' },
+      );
+    }
+    try {
+      facts.classificationEvidence[declaration.key] = validateEvidence(
+        evidence,
+        answer,
+        config,
+        { ...detail, classification: declaration.key },
+      );
+    } catch (error) {
+      if (!(error instanceof ExtractionValidationError)) throw error;
+      throw new ExtractionValidationError(
+        'classification-grounding',
+        false,
+        `Adverse ${declaration.key} classification quote is not grounded in the original answer`,
+        {
+          ...detail,
+          classification: declaration.key,
+          reason: error.category,
+          modelQuote: evidence.quote,
+        },
+      );
+    }
+  }
+
+  return {
+    colloquial: facts.terminology === 'colloquial',
+    beyondSyllabus: facts.syllabus === 'beyond',
+    contradiction: facts.contradiction,
+    typo: facts.typo,
+  };
+}
+
 export function validateAssessmentExtraction(input: {
   extraction: unknown;
   answer: string;
@@ -417,6 +480,7 @@ export function validateAssessmentExtraction(input: {
     ));
   }
   for (const assessment of parsed.assessments) {
+    assessment.facts.response = classifyTextResponse(input.answer);
     const evidencePath = trainingCase.evidencePaths.find((entry) =>
       entry.nodeId === assessment.nodeId && entry.source === 'answer');
     const allowedSlotIds = new Set(evidencePath?.factRequirements.map((entry) => entry.id) ?? []);
@@ -482,6 +546,12 @@ export function validateAssessmentExtraction(input: {
       input.config,
       { caseId: input.caseId, nodeId: assessment.nodeId, evidenceIndex },
     ));
+    assessment.facts.verified = verifiedClassifications(
+      assessment.facts,
+      input.answer,
+      input.config,
+      { caseId: input.caseId, nodeId: assessment.nodeId },
+    );
   }
   return parsed;
 }

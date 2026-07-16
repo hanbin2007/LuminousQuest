@@ -10,7 +10,10 @@ import { RecordingStore } from '../server/llm/recording-store';
 import { LLMService } from '../server/llm/service';
 import type { LLMProvider, LLMResponse } from '../server/llm/types';
 import { loadAllPrompts } from '../server/prompts/loader';
-import { runAssessmentExtraction } from '../server/workflows/assessment-extraction';
+import {
+  createClosedExtractionSchema,
+  runAssessmentExtraction,
+} from '../server/workflows/assessment-extraction';
 import { createTemporaryDirectory } from './helpers/content-fixture';
 
 const answer = '电子由Zn极流向Cu极。';
@@ -122,6 +125,59 @@ describe('production assessment extraction pipeline', () => {
     });
   });
 
+  it('exposes classification evidence but not server verification flags to providers', async () => {
+    const root = await createTemporaryDirectory();
+    const parts = await fixture(root, new Map());
+    const schema = createClosedExtractionSchema({
+      config: parts.config,
+      caseId: 'zinc-copper',
+      targetNodeIds: ['P4'],
+      assistance: { kind: 'none', rounds: 0 },
+    }) as any;
+    const facts = schema.properties.assessments.items.oneOf[0].properties.facts;
+
+    expect(facts.properties.classificationEvidence).toBeDefined();
+    expect(facts.properties.verified).toBeUndefined();
+  });
+
+  it.each([
+    ['contradiction', true],
+    ['terminology', 'colloquial'],
+    ['typo', 'unambiguous'],
+    ['syllabus', 'beyond'],
+  ] as const)(
+    'routes an ungrounded adverse %s declaration to needs-review instead of policy scoring',
+    async (field, declaration) => {
+      const root = await createTemporaryDirectory();
+      let attempts = 0;
+      const response = structuredResponse();
+      const facts = (response.structured as any).assessments[0].facts;
+      facts[field] = declaration;
+      response.content = JSON.stringify(response.structured);
+      const provider: LLMProvider = {
+        id: `ungrounded-${field}`,
+        async chat() { throw new Error('not used'); },
+        async vision() { throw new Error('not used'); },
+        async structured() {
+          attempts += 1;
+          return structuredClone(response);
+        },
+      };
+      const parts = await fixture(root, new Map([[provider.id, provider]]));
+
+      const result = await runAssessmentExtraction({
+        ...runInput(parts),
+        provider: provider.id,
+      });
+
+      expect(attempts).toBe(1);
+      expect(result).toMatchObject({
+        status: 'needs-review',
+        reason: 'classification-grounding',
+      });
+    },
+  );
+
   it('runs the same closed-set validator for a structured demo recording', async () => {
     const root = await createTemporaryDirectory();
     const demoRoot = path.join(root, 'recordings', 'demo');
@@ -200,7 +256,7 @@ describe('production assessment extraction pipeline', () => {
           id: parts.prompt.id,
           version: parts.prompt.version,
         },
-        schemaVersion: 'structured-assessment.v4',
+        schemaVersion: 'structured-assessment.v5',
         provider: provider.id,
         model: 'mock-v1',
       },

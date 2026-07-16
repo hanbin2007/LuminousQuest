@@ -249,7 +249,7 @@ describe('M1b candidate importer', () => {
                 .normalizationCandidateMaxEditDistanceRatio,
           },
           prompt: { id: prompt.id, version: prompt.version },
-          schemaVersion: 'structured-assessment.v4',
+          schemaVersion: 'structured-assessment.v5',
           provider: 'deepseek',
           model: 'deepseek-chat',
         },

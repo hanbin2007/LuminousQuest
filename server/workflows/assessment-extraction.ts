@@ -178,7 +178,7 @@ export async function runAssessmentExtraction(
     provider: input.provider,
     model: input.model,
     prompt: input.prompt,
-    schemaVersion: 'structured-assessment.v4',
+    schemaVersion: 'structured-assessment.v5',
     configVersion: input.config.configVersion,
     input: {
       answer: input.answer,
@@ -223,7 +223,7 @@ export async function runAssessmentExtraction(
                       .normalizationCandidateMaxEditDistanceRatio,
                 },
                 prompt: { id: input.prompt.id, version: input.prompt.version },
-                schemaVersion: 'structured-assessment.v4',
+                schemaVersion: 'structured-assessment.v5',
                 provider: input.provider,
                 model: input.model,
               },

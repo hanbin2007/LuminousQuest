@@ -10,10 +10,12 @@ export interface ExtractedFactSlot {
 
 export interface ExtractedAssessmentFacts {
   response: 'substantive' | 'blank' | 'non-answer';
-  terminology: 'model' | 'colloquial';
-  syllabus: 'within' | 'beyond';
-  contradiction: boolean;
-  typo: 'none' | 'unambiguous' | 'ambiguous';
+  verified: {
+    colloquial: boolean;
+    beyondSyllabus: boolean;
+    contradiction: boolean;
+    typo: 'none' | 'unambiguous' | 'ambiguous';
+  };
   slots: ExtractedFactSlot[];
 }
 
@@ -78,10 +80,10 @@ export function evaluateExtractedFacts(input: {
       includeInDiagnosis: policy.nonResponse.includeInDiagnosis,
     };
   }
-  if (facts.contradiction) {
+  if (facts.verified.contradiction) {
     return { ...base, status: capPartial(policy.contradiction.outcome, policy) };
   }
-  if (facts.typo === 'ambiguous') {
+  if (facts.verified.typo === 'ambiguous') {
     return { ...base, status: policy.typos.ambiguousStrategy };
   }
 
@@ -92,16 +94,16 @@ export function evaluateExtractedFacts(input: {
       ? 'partial'
       : 'miss';
 
-  if (status === 'hit' && facts.terminology === 'colloquial') {
+  if (status === 'hit' && facts.verified.colloquial) {
     status = policy.terminology.requireModelTermsForHit
       ? 'partial'
       : policy.terminology.colloquialCorrectOutcome;
   }
-  if (status === 'hit' && facts.syllabus === 'beyond') {
+  if (status === 'hit' && facts.verified.beyondSyllabus) {
     status = policy.beyondSyllabus.correctOutcome;
     base.bonusPoints = policy.beyondSyllabus.bonusPoints;
   }
-  if (facts.typo === 'unambiguous') {
+  if (facts.verified.typo === 'unambiguous') {
     if (policy.typos.unambiguousStrategy === 'warn-no-penalty') {
       base.warnings.push('unambiguous-typo');
     } else if (policy.typos.unambiguousStrategy === 'penalize' && status === 'hit') {
@@ -113,7 +115,7 @@ export function evaluateExtractedFacts(input: {
 }
 
 export function factsMatchRequirements(
-  facts: ExtractedAssessmentFacts,
+  facts: Pick<ExtractedAssessmentFacts, 'slots'>,
   requirements: readonly FactRequirement[],
 ) {
   const slots = new Map(facts.slots.map((slot) => [slot.id, normalizeFactValue(slot.value)]));

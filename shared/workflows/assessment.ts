@@ -27,6 +27,25 @@ const evidenceSchema = z
     message: 'evidence end must follow start',
   });
 
+const verifiedClassificationSchema = z
+  .object({
+    colloquial: z.boolean(),
+    beyondSyllabus: z.boolean(),
+    contradiction: z.boolean(),
+    typo: z.enum(['none', 'unambiguous', 'ambiguous']),
+  })
+  .strict();
+
+const classificationEvidenceSchema = z
+  .object({
+    terminology: evidenceSchema.optional(),
+    syllabus: evidenceSchema.optional(),
+    contradiction: evidenceSchema.optional(),
+    typo: evidenceSchema.optional(),
+  })
+  .strict()
+  .default({});
+
 const factSlotSchema = z
   .object({
     id: z.string().trim().min(1),
@@ -42,6 +61,9 @@ const extractedFactsSchema = z
     syllabus: z.enum(['within', 'beyond']),
     contradiction: z.boolean(),
     typo: z.enum(['none', 'unambiguous', 'ambiguous']),
+    classificationEvidence: classificationEvidenceSchema,
+    // Server-owned. This property is deliberately absent from the provider JSON schema.
+    verified: verifiedClassificationSchema.optional(),
     slots: z.array(factSlotSchema),
   })
   .strict();
@@ -194,6 +216,52 @@ export const structuredAssessmentResponseJsonSchema = {
               syllabus: { enum: ['within', 'beyond'] },
               contradiction: { type: 'boolean' },
               typo: { enum: ['none', 'unambiguous', 'ambiguous'] },
+              classificationEvidence: {
+                type: 'object',
+                additionalProperties: false,
+                properties: {
+                  terminology: {
+                    type: 'object',
+                    additionalProperties: false,
+                    required: ['quote', 'start', 'end'],
+                    properties: {
+                      quote: { type: 'string', minLength: 1 },
+                      start: { type: 'integer', minimum: 0 },
+                      end: { type: 'integer', minimum: 1 },
+                    },
+                  },
+                  syllabus: {
+                    type: 'object',
+                    additionalProperties: false,
+                    required: ['quote', 'start', 'end'],
+                    properties: {
+                      quote: { type: 'string', minLength: 1 },
+                      start: { type: 'integer', minimum: 0 },
+                      end: { type: 'integer', minimum: 1 },
+                    },
+                  },
+                  contradiction: {
+                    type: 'object',
+                    additionalProperties: false,
+                    required: ['quote', 'start', 'end'],
+                    properties: {
+                      quote: { type: 'string', minLength: 1 },
+                      start: { type: 'integer', minimum: 0 },
+                      end: { type: 'integer', minimum: 1 },
+                    },
+                  },
+                  typo: {
+                    type: 'object',
+                    additionalProperties: false,
+                    required: ['quote', 'start', 'end'],
+                    properties: {
+                      quote: { type: 'string', minLength: 1 },
+                      start: { type: 'integer', minimum: 0 },
+                      end: { type: 'integer', minimum: 1 },
+                    },
+                  },
+                },
+              },
               slots: {
                 type: 'array',
                 items: {
@@ -246,6 +314,30 @@ export const structuredAssessmentResponseJsonSchema = {
     },
   },
 } as const;
+
+const explicitNonAnswers = new Set([
+  '不会',
+  '不知道',
+  '不会写',
+  '不会做',
+  '不清楚',
+  '不懂',
+  '没学过',
+  '放弃',
+  'idk',
+  'idonotknow',
+  'dontknow',
+  'noidea',
+]);
+
+export function classifyTextResponse(answer: string): 'substantive' | 'blank' | 'non-answer' {
+  const normalized = answer
+    .normalize('NFKC')
+    .toLocaleLowerCase('en-US')
+    .replace(/[\s\p{P}\p{S}]/gu, '');
+  if (normalized.length === 0) return 'blank';
+  return explicitNonAnswers.has(normalized) ? 'non-answer' : 'substantive';
+}
 
 export interface RecordStructuredTextAssessmentInput {
   session: StudentSession;
@@ -453,6 +545,9 @@ export function recordStructuredTextAssessment(input: RecordStructuredTextAssess
       (entry) => entry.nodeId === assessment.nodeId,
     );
     if (!rubric) throw new Error(`No rubric configured for node ${assessment.nodeId}`);
+    if (!assessment.facts.verified) {
+      throw new Error(`Assessment ${assessment.nodeId} lacks server-verified classification flags`);
+    }
     assessment.errorIds.forEach((errorId) => {
       if (misconceptionNode.get(errorId) !== assessment.nodeId) {
         throw new Error(`Error ${errorId} is not configured for node ${assessment.nodeId}`);
@@ -472,7 +567,11 @@ export function recordStructuredTextAssessment(input: RecordStructuredTextAssess
       throw new Error(`No deterministic fact requirements configured for node ${assessment.nodeId}`);
     }
     const evaluation = evaluateExtractedFacts({
-      facts: assessment.facts,
+      facts: {
+        response: classifyTextResponse(input.answer.value),
+        verified: assessment.facts.verified,
+        slots: assessment.facts.slots,
+      },
       requirements,
       policy: input.config.rubrics.policy,
     });

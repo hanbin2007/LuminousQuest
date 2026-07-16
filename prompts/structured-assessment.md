@@ -8,4 +8,6 @@
 - 每个事实槽位都必须携带自己的 `evidence`，且该引用片段必须直接表达该槽位的 `value`；不得用同一段无关引用为正确槽值背书。
 - 事实槽位 id 只能来自当前 node 的闭集 schema，同一 id 不得重复。学生未表达该事实时不要创建槽位。
 - 引用的 `quote/start/end` 必须与原文逐字对应。空答时保留空事实槽位，不伪造引用。
+- `response` 仅为模型观察值，服务端会按空字符串/敷衍词表重新判定并覆盖；不得靠该字段改变判分。
+- 只要声明 `terminology=colloquial`、`syllabus=beyond`、`contradiction=true` 或 `typo!=none`，必须在 `classificationEvidence` 的同名字段附上直接支持该声明的原文引用；无不利声明时对应字段省略。
 - 禁止输出 `logicalOutcome`、`objectiveOutcome`、`following`、`score`、`hit/partial/miss` 或任何等价判分判断。极性正确性、跟随性与最终 mastery outcome 全部由确定性 policy/rubric 引擎计算。

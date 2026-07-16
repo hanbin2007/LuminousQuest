@@ -134,7 +134,7 @@ export async function importEvalCandidates(input: {
                 citation.normalizationCandidateMaxEditDistanceRatio,
             },
             prompt: { id: prompt.id, version: prompt.version },
-            schemaVersion: 'structured-assessment.v4',
+            schemaVersion: 'structured-assessment.v5',
             provider: parsed.provenance.provider,
             model: parsed.provenance.model,
           },

@@ -20,10 +20,12 @@ import { structuredAssessmentResponseSchema } from '../shared/workflows/assessme
 
 const completeFacts: ExtractedAssessmentFacts = {
   response: 'substantive',
-  terminology: 'model',
-  syllabus: 'within',
-  contradiction: false,
-  typo: 'none',
+  verified: {
+    colloquial: false,
+    beyondSyllabus: false,
+    contradiction: false,
+    typo: 'none',
+  },
   slots: [{ id: 'electron-from', value: 'Zn' }],
 };
 
@@ -118,7 +120,11 @@ describe('runtime adjudication policy contracts', () => {
         nodeId: 'P4',
         errorIds: [],
         facts: {
-          ...completeFacts,
+          response: 'substantive',
+          terminology: 'model',
+          syllabus: 'within',
+          contradiction: false,
+          typo: 'none',
           slots: completeFacts.slots.map((slot) => ({
             ...slot,
             evidence: { quote: slot.value, start: 0, end: slot.value.length },
@@ -172,7 +178,10 @@ describe('runtime adjudication policy contracts', () => {
 
   it('§3: changing terminology.colloquialCorrectOutcome changes colloquial credit', async () => {
     const config = await loadAllConfig(process.cwd());
-    const facts = { ...completeFacts, terminology: 'colloquial' as const };
+    const facts = {
+      ...completeFacts,
+      verified: { ...completeFacts.verified, colloquial: true },
+    };
     expect(evaluateExtractedFacts({ facts, requirements: oneRequirement, policy: config.rubrics.policy }).status)
       .toBe('hit');
     const changed = structuredClone(config.rubrics.policy);
@@ -183,7 +192,10 @@ describe('runtime adjudication policy contracts', () => {
 
   it('§4: changing beyondSyllabus.correctOutcome changes correct beyond-syllabus credit', async () => {
     const config = await loadAllConfig(process.cwd());
-    const facts = { ...completeFacts, syllabus: 'beyond' as const };
+    const facts = {
+      ...completeFacts,
+      verified: { ...completeFacts.verified, beyondSyllabus: true },
+    };
     expect(evaluateExtractedFacts({ facts, requirements: oneRequirement, policy: config.rubrics.policy }).status)
       .toBe('hit');
     const changed = structuredClone(config.rubrics.policy);
@@ -194,7 +206,10 @@ describe('runtime adjudication policy contracts', () => {
 
   it('§5: changing contradiction.outcome changes contradictory-answer behavior', async () => {
     const config = await loadAllConfig(process.cwd());
-    const facts = { ...completeFacts, contradiction: true };
+    const facts = {
+      ...completeFacts,
+      verified: { ...completeFacts.verified, contradiction: true },
+    };
     expect(evaluateExtractedFacts({ facts, requirements: oneRequirement, policy: config.rubrics.policy }).status)
       .toBe('miss');
     const changed = structuredClone(config.rubrics.policy);
@@ -216,7 +231,10 @@ describe('runtime adjudication policy contracts', () => {
 
   it('§7: changing typos.unambiguousStrategy changes typo behavior', async () => {
     const config = await loadAllConfig(process.cwd());
-    const facts = { ...completeFacts, typo: 'unambiguous' as const };
+    const facts = {
+      ...completeFacts,
+      verified: { ...completeFacts.verified, typo: 'unambiguous' as const },
+    };
     expect(evaluateExtractedFacts({ facts, requirements: oneRequirement, policy: config.rubrics.policy }))
       .toMatchObject({ status: 'hit', warnings: ['unambiguous-typo'] });
     const changed = structuredClone(config.rubrics.policy);

@@ -34,7 +34,8 @@ function extraction(
         terminology: 'model',
         syllabus: 'within',
         contradiction: false,
-        typo: 'unambiguous',
+        typo: 'none',
+        classificationEvidence: {},
         slots: [] as Array<{
           id: string;
           value: string;
@@ -222,6 +223,70 @@ describe('closed-set extraction validation', () => {
       targetNodeIds: ['P4'],
       config,
     }).assessments[0].evidence).toEqual([]);
+  });
+
+  it('overrides the provider response label with deterministic server classification', async () => {
+    const config = await fixture();
+    const substantive = extraction('电子由负极流向正极');
+    substantive.assessments[0].facts.response = 'blank';
+    expect(validateAssessmentExtraction({
+      extraction: substantive,
+      answer: '电子由负极流向正极',
+      caseId: 'zinc-copper',
+      targetNodeIds: ['P4'],
+      config,
+    }).assessments[0].facts.response).toBe('substantive');
+
+    for (const [answer, expected] of [['  。！？ ', 'blank'], ['不知道！', 'non-answer']] as const) {
+      const nonResponse = extraction('placeholder');
+      nonResponse.assessments[0].facts.response = 'substantive';
+      nonResponse.assessments[0].facts.slots = [];
+      nonResponse.assessments[0].evidence = [];
+      expect(validateAssessmentExtraction({
+        extraction: nonResponse,
+        answer,
+        caseId: 'zinc-copper',
+        targetNodeIds: ['P4'],
+        config,
+      }).assessments[0].facts.response).toBe(expected);
+    }
+  });
+
+  it('grounds each adverse classification quote and emits server-owned verified flags', async () => {
+    const config = await fixture();
+    const answer = '电子从锌跑到铜，写成负级；还提到电极电势，前后说法矛盾。';
+    const value = extraction(answer);
+    const bound = (quote: string) => {
+      const start = answer.indexOf(quote);
+      return { quote, start, end: start + quote.length };
+    };
+    value.assessments[0].facts.terminology = 'colloquial';
+    value.assessments[0].facts.syllabus = 'beyond';
+    value.assessments[0].facts.contradiction = true;
+    value.assessments[0].facts.typo = 'unambiguous';
+    value.assessments[0].facts.classificationEvidence = {
+      terminology: bound('电子从锌跑到铜'),
+      syllabus: bound('电极电势'),
+      contradiction: bound('前后说法矛盾'),
+      typo: bound('负级'),
+    };
+
+    const result = validateAssessmentExtraction({
+      extraction: value,
+      answer,
+      caseId: 'zinc-copper',
+      targetNodeIds: ['P4'],
+      config,
+    });
+
+    expect(result.assessments[0].facts.verified).toEqual({
+      colloquial: true,
+      beyondSyllabus: true,
+      contradiction: true,
+      typo: 'unambiguous',
+    });
+    expect(result.assessments[0].facts.classificationEvidence.typo)
+      .toEqual(bound('负级'));
   });
 
   it('classifies a near citation above the configured threshold as normalization-insufficient', async () => {

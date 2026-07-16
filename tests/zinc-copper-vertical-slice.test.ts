@@ -262,6 +262,12 @@ describe('zinc-copper M1a vertical slice', () => {
         syllabus: 'within' as const,
         contradiction: false,
         typo: 'none' as const,
+        verified: {
+          colloquial: false,
+          beyondSyllabus: false,
+          contradiction: false,
+          typo: 'none' as const,
+        },
         slots: [{
           id: 'reducing-agent',
           value: 'Zn',
