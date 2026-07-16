@@ -1,6 +1,6 @@
 # 5 分钟演示回放步骤
 
-演示入口:页面顶部打开“演示回放”开关。该动作同时完成三件事:
+演示入口:比赛进程用 `./start.command --lock-demo`(或 `LQ_LOCK_DEMO=1`)启动，页面顶部“演示回放”应自动保持开启。固定起点载入同时完成三件事:
 
 1. 服务端将 `executionMode` 切为 `demo`，禁止访问在线 provider。
 2. 按 `start-state.json` 载入并校验 `session.json`、训练反馈轮次、手绘页状态和班级会话索引。

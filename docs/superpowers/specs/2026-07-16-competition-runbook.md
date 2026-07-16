@@ -9,13 +9,13 @@
 在仓库根目录执行:
 
 ```bash
-test "$(node -p "require('./release/darwin-arm64/RELEASE.json').sourceCommit")" = "$(git rev-parse HEAD)"
+test "$(node -p "require('./release/darwin-arm64/RELEASE.json').sourceCommit")" = "$(git rev-list -n 1 release/m4-rc1)"
 shasum -a 256 -c dist/client.sha256
 shasum -a 256 -c dist/release-darwin-arm64.sha256
 codesign --verify --deep --strict release/darwin-arm64/LuminousQuest
 ```
 
-三条命令均成功后，保持 `release/darwin-arm64/` 目录结构不变。可执行体与 `config/`、`prompts/`、`assets/`、`recordings/`、`.env` 是一个整体，不能只移动可执行体。
+四条命令均成功后，才表示两份 manifest 各自与本地冻结树一致、`RELEASE.sourceCommit` 与 `release/m4-rc1` 指向同一提交。这里不得再与当前 `HEAD` 比较。保持 `release/darwin-arm64/` 目录结构不变；可执行体与 `config/`、`prompts/`、`assets/`、`recordings/`、`.env` 是一个整体，不能只移动可执行体。GitHub Release ZIP 由发布负责人上传，本手册不代替该步骤。
 
 ### 默认启动
 
@@ -25,6 +25,17 @@ cd release/darwin-arm64
 ```
 
 终端出现 `[startup] LuminousQuest is ready at http://127.0.0.1:<端口>` 即启动完成。默认端口为 `4173`；占用时程序自动选择后续空闲端口并打印实际地址。默认只绑定 `127.0.0.1`，不向局域网暴露。
+
+### 比赛锁定启动
+
+正式彩排和比赛使用启动参数把服务端硬锁在演示模式:
+
+```bash
+cd release/darwin-arm64
+./start.command --lock-demo
+```
+
+也可等价地设置 `LQ_LOCK_DEMO=1` 后启动。锁定进程会从 `demo` 模式初始化，`/api/runtime/execution-mode` 对任何切换请求返回 `403`；页面应自动载入固定演示会话并显示 `executionMode=demo`。需要退出只关闭进程，不在现场解锁或切到在线 provider。
 
 ### 局域网启动
 
@@ -43,7 +54,7 @@ cd release/darwin-arm64
 
 **0:55-1:25，教师侧。** 单生视图串起诊断、训练和脚手架轨迹，待复核项单独列出。班级视图批量导入匿名会话，给出三维均值与分布带、节点错误率和高频误区，且明确拒绝损坏、重复或量表版本不一致的文件。
 
-**1:25-1:45，可信与离线。** 比赛演示使用内置录制会话，打开“演示回放”后显示 `executionMode=demo`，整个流程不访问在线模型。发布物是 arm64 Node SEA 可执行体加可审计外置内容，配置、提示词、回放和哈希清单都可独立检查。
+**1:25-1:45，可信与离线。** 比赛演示使用内置录制会话，锁定启动后显示 `executionMode=demo`，整个流程不访问在线模型。发布物是 arm64 Node SEA 可执行体加可审计外置内容，配置、提示词、回放和哈希清单都可独立检查。
 
 **1:45-2:00，价值。** 产品交付的不是更会聊天的模型，而是一条从学生原话到教学决策的证据链。它帮助教师把有限时间用在真正需要复核和干预的节点上。
 
@@ -53,13 +64,13 @@ cd release/darwin-arm64
 
 | 时间 | 主路径与点击 | 讲解证据 | 备用跳转或处置 |
 | --- | --- | --- | --- |
-| 0:00-0:25 | 页头打开“演示回放” | `start-state.json` 一键恢复训练反馈轮次，显示 `executionMode=demo` | 若开关报错，刷新后再开；仍失败则直接 `/teacher` 展示本地会话 |
-| 0:25-1:25 | `/training` 查看“本轮证据批注” | 正式结果来自共享规则；AI 不改分，第一轮蓝笔追问已可见 | 页面状态不合适时关闭再打开演示开关 |
-| 1:25-2:05 | P4 辅导处点“请老师提示一下” | 第二轮内容来自 `recordings/demo/tutor-p4.json`；在线 provider 调用为零 | 回放缺失时只给确定性预设，不回落在线模型 |
-| 2:05-2:40 | 点页头“前测”，再点“提交手绘点评” | 固定起点直达手绘页；结构化响应只允许 `comment`，不可携带分数字段 | 不现场重画，直接说明真实 PNG 红队用例并跳教师视图 |
-| 2:40-3:45 | `/teacher` 的“单生证据” | 展开 P4:量表条目、学生原文、证据、误区、训练记录、脚手架轨迹、待复核 | 若当前会话为空，重新打开演示开关；也可导入 `recordings/demo/session.json` |
-| 3:45-4:40 | 切换“班级汇总”，导入 `recordings/demo/class/` 三份会话 | 以学生为统计单位：同一匿名 ID 取最新会话，均值、错误率、人数和 Top N 同口径 | 文件名不会出现在错误提示中；只显示“批次文件 N” |
-| 4:40-5:00 | 点页头“外显” | 展示实装 3D 知识场景：节点点亮、依赖边、节点详情与三维雷达同源 | WebGL 不可用时页面自动显示同一 scene 的节点清单 |
+| 0:00-0:25 | 确认页头“演示回放”已锁定开启 | `start-state.json` 一键恢复训练反馈轮次，显示 `executionMode=demo` | 若固定起点未载入，只刷新一次；仍失败则直接 `/teacher` 展示本地会话 |
+| 0:25-1:35 | `/training` 查看“本轮证据批注” | 正式结果来自共享规则；AI 不改分，第一轮蓝笔追问已可见 | 页面状态不合适时刷新，不切换 execution mode |
+| 1:35-2:15 | P4 辅导处点“请老师提示一下” | 第二轮内容来自 `recordings/demo/tutor-p4.json`；在线 provider 调用为零 | 回放缺失时只给确定性预设，不回落在线模型 |
+| 2:15-2:50 | 点页头“前测”，再点“提交手绘点评” | 固定起点直达手绘页；结构化响应只允许 `comment`，不可携带分数字段 | 不现场重画，直接说明真实 PNG 红队用例并跳教师视图 |
+| 2:50-4:10 | `/teacher` 的“单生证据” | 展开 P4:量表条目、学生原文、证据、误区、训练记录、脚手架轨迹、待复核 | 若当前会话为空，刷新固定起点；也可导入 `recordings/demo/session.json` |
+| 4:10-4:45 | 切换“班级汇总”，导入 `recordings/demo/class/` 三份会话 | 以学生为统计单位：同一匿名 ID 取最新会话，均值、错误率、人数和 Top N 同口径 | 文件名不会出现在错误提示中；只显示“批次文件 N” |
+| 4:45-5:00 | 点页头“外显” | 展示实装 3D 知识场景：节点点亮、依赖边、节点详情与三维雷达同源 | WebGL 不可用时页面自动显示同一 scene 的节点清单 |
 
 精确的录制 step ID、文件映射与失败边界见 `docs/README.md`（发布包内由 `recordings/demo/README.md` 复制而来）。
 
@@ -125,14 +136,14 @@ cd release/darwin-arm64
 
 - [ ] 比赛 Mac 为 Apple Silicon，电源充足，系统时间正确。
 - [ ] `dist/client.sha256`、`dist/release-darwin-arm64.sha256` 与代码签名校验通过。
-- [ ] 默认模式启动，确认实际端口和 `127.0.0.1` 地址。
+- [ ] 用 `./start.command --lock-demo` 启动，确认实际端口、`127.0.0.1` 地址和 `[startup] Demo mode is locked`。
 - [ ] 浏览器缩放 100%，关闭通知、自动更新和无关标签页。
 
 ### 2:00-4:00 离线与固定起点
 
 - [ ] 关闭 Wi-Fi 后刷新页面，核心 UI、前测、训练、教师视图仍可打开。
-- [ ] 打开“演示回放”，确认显示 `executionMode=demo` 并进入固定训练会话。
-- [ ] 关闭再打开开关，确认原会话可恢复、演示起点可重复。
+- [ ] 确认“演示回放”已锁定开启，显示 `executionMode=demo` 并进入固定训练会话。
+- [ ] 刷新一次，确认固定会话与训练反馈轮次可重复恢复，且无需切换 execution mode。
 
 ### 4:00-7:00 主路径
 
@@ -150,7 +161,8 @@ cd release/darwin-arm64
 
 ### 9:00-10:00 收尾
 
-- [ ] 重启一次应用，确认端口、演示开关和匿名会话处于预期初始状态。
+- [ ] 用 `--lock-demo` 重启一次应用，确认端口、锁定状态和匿名会话处于预期初始状态。
 - [ ] 若确需第二设备，单独彩排 `--lan`、令牌 URL、401 恢复和 `Ctrl+C` 关闭；否则坚持默认本机模式。
-- [ ] 发布目录、manifest、HDMI/转接线和离线备份 U 盘各有一份可用副本。
+- [ ] 将 GitHub Release ZIP、两份 manifest 和 `RELEASE.json` 复制到专用 U 盘；从 U 盘回读并逐文件比对 SHA-256，不以“复制成功”代替校验。
+- [ ] 校验后安全推出并物理拔下 U 盘，标记 `release/m4-rc1` 与日期；彩排使用工作盘副本，不直接从冷备盘运行。
 - [ ] 计时器完成一次 2 分钟陈述、5 分钟点击、3 分钟答辩，总时长不超过 10 分钟。
