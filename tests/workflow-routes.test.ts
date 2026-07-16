@@ -65,6 +65,122 @@ function post(app: ReturnType<typeof createServerApp>, route: string, body: unkn
 }
 
 describe('server-owned assessment and tutor routes', () => {
+  it('assesses a configured training-case answer without treating it as pretest data', async () => {
+    const root = await createTemporaryDirectory();
+    await writeValidContentTree(root);
+    const sessions = new TestSessionStore();
+    const answer = 'Zn 是发生氧化反应并失去电子的电极场所。';
+    const provider: LLMProvider = {
+      id: 'training-provider',
+      async chat() { throw new Error('not used'); },
+      async vision() { throw new Error('not used'); },
+      async structured() {
+        const quote = 'Zn';
+        const value = {
+          anchors: [],
+          assessments: [{
+            nodeId: 'D1',
+            errorIds: [],
+            facts: {
+              response: 'substantive',
+              terminology: 'model',
+              syllabus: 'within',
+              contradiction: false,
+              typo: 'none',
+              slots: [{
+                id: 'oxidation-site',
+                value: 'Zn',
+                evidence: { quote, start: answer.indexOf(quote), end: answer.indexOf(quote) + quote.length },
+              }],
+            },
+            evidence: [{ quote: answer, start: 0, end: answer.length }],
+            assistance: { kind: 'none', rounds: 0 },
+          }],
+        };
+        return { content: JSON.stringify(value), structured: value, model: 'training-v1' };
+      },
+    };
+    const app = createServerApp({
+      contentRoot: root,
+      clientRoot: path.join(root, 'client'),
+      apiToken,
+      providers: new Map([[provider.id, provider]]),
+      sessions,
+      workflow: { executionMode: 'live', provider: provider.id, model: 'training-v1' },
+    });
+
+    const response = await post(app, '/api/assessment/extract', {
+      sessionId: 'training-session',
+      caseId: 'zinc-copper',
+      questionId: 'zinc-copper:analysis',
+      targetNodeIds: ['D1'],
+      studentAnswer: answer,
+      submissionId: 'zinc-analysis-1',
+    });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      status: 'extracted',
+      session: {
+        events: [
+          expect.objectContaining({
+            kind: 'answer.submitted',
+            caseId: 'zinc-copper',
+            stageId: 'training',
+          }),
+          expect.objectContaining({
+            kind: 'assessment.completed',
+            caseId: 'zinc-copper',
+            nodeId: 'D1',
+            objectiveOutcome: 'hit',
+          }),
+        ],
+      },
+    });
+  });
+
+  it('scores a training equation through the server route and keeps retries idempotent', async () => {
+    const root = await createTemporaryDirectory();
+    await writeValidContentTree(root);
+    const sessions = new TestSessionStore();
+    const app = createServerApp({
+      contentRoot: root,
+      clientRoot: path.join(root, 'client'),
+      apiToken,
+      sessions,
+      workflow: { now: () => Date.parse('2026-07-15T12:00:00.000Z') },
+    });
+    const body = {
+      sessionId: 'equation-session',
+      caseId: 'zinc-copper',
+      equationSetId: 'zinc-negative',
+      equation: 'Zn -> Zn^2+ + 2e^-',
+      submissionId: 'zinc-negative-1',
+    };
+
+    const first = await post(app, '/api/assessment/equation', body);
+    const retry = await post(app, '/api/assessment/equation', body);
+
+    expect(first.status).toBe(200);
+    expect(await first.json()).toMatchObject({
+      status: 'recorded',
+      session: {
+        events: [
+          expect.objectContaining({
+            kind: 'answer.submitted',
+            caseId: 'zinc-copper',
+            stageId: 'training',
+            questionId: 'zinc-copper:zinc-negative',
+          }),
+          expect.objectContaining({ kind: 'assessment.completed', nodeId: 'P3' }),
+          expect.objectContaining({ kind: 'assessment.completed', nodeId: 'P6' }),
+        ],
+      },
+    });
+    expect(await retry.json()).toMatchObject({ status: 'already-recorded' });
+    expect(sessions.get('equation-session')?.events).toHaveLength(3);
+  });
+
   it('accepts only minimal workflow input and blocks the raw protected-prompt bypass', async () => {
     const root = await createTemporaryDirectory();
     await writeValidContentTree(root);

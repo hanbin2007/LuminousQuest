@@ -101,6 +101,7 @@ async function loadCases(contentRoot: string) {
 
 function assertUniqueCaseIds(cases: Awaited<ReturnType<typeof loadCases>>) {
   const seen = new Set<string>();
+  const sequences = new Set<number>();
   for (const trainingCase of cases) {
     if (seen.has(trainingCase.value.id)) {
       throw new ConfigValidationError(
@@ -110,6 +111,14 @@ function assertUniqueCaseIds(cases: Awaited<ReturnType<typeof loadCases>>) {
       );
     }
     seen.add(trainingCase.value.id);
+    if (sequences.has(trainingCase.value.sequence)) {
+      throw new ConfigValidationError(
+        trainingCase.file,
+        'sequence',
+        `duplicate case sequence ${trainingCase.value.sequence}`,
+      );
+    }
+    sequences.add(trainingCase.value.sequence);
   }
 }
 
@@ -294,6 +303,25 @@ export async function validateReferences(
           `scaffold.${scaffoldIndex}.level`,
           `unknown scaffold policy level ${entry.level}`,
         );
+      }
+      if (entry.level === 1) {
+        entry.fields.forEach((field, fieldIndex) => {
+          const node = config.knowledgeModel.nodes.find((candidate) => candidate.id === field.nodeId);
+          if (!node) {
+            throw new ConfigValidationError(
+              relativeCaseFile,
+              `scaffold.${scaffoldIndex}.fields.${fieldIndex}.nodeId`,
+              `unknown knowledge node ${field.nodeId}`,
+            );
+          }
+          if (node.dimensionId !== field.dimensionId) {
+            throw new ConfigValidationError(
+              relativeCaseFile,
+              `scaffold.${scaffoldIndex}.fields.${fieldIndex}.dimensionId`,
+              `must match ${field.nodeId} dimension ${node.dimensionId}`,
+            );
+          }
+        });
       }
     });
     trainingCase.evidencePaths.forEach((evidencePath, evidenceIndex) => {
@@ -496,7 +524,9 @@ export async function loadAllConfig(contentRoot: string): Promise<LoadedConfig> 
     );
 
     assertUniqueCaseIds(loadedCases);
-    const cases = loadedCases.map((entry) => entry.value);
+    const orderedCases = [...loadedCases].sort((left, right) =>
+      left.value.sequence - right.value.sequence);
+    const cases = orderedCases.map((entry) => entry.value);
     const config = {
       configVersion,
       runtimeVersions: {
@@ -514,7 +544,7 @@ export async function loadAllConfig(contentRoot: string): Promise<LoadedConfig> 
       cases,
       scaffoldPolicy,
     };
-    await validateReferences(config, contentRoot, loadedCases.map((entry) => entry.file));
+    await validateReferences(config, contentRoot, orderedCases.map((entry) => entry.file));
     if (await deriveConfigVersion(contentRoot) === configVersion) return config;
   }
   throw new ConfigValidationError('config', '$', 'files changed while loading; retry the request');

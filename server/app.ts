@@ -13,6 +13,7 @@ import {
   recordStructuredTextAssessment,
 } from '../shared/workflows/assessment';
 import { recordChoiceAssessment } from '../shared/workflows/choice-assessment';
+import { recordEquationAssessment } from '../shared/workflows/engine-assessment';
 import { ExtractionValidationError } from '../shared/workflows/extraction-validation';
 import { recordPretestEquationAssessments } from '../shared/workflows/pretest-equation-assessment';
 import { loadAllConfig, ConfigValidationError } from './config/loader';
@@ -81,6 +82,7 @@ const llmRequestSchema = z
 const assessmentRouteRequestSchema = z
   .object({
     sessionId: z.string().trim().min(1).max(128),
+    caseId: z.string().trim().min(1).max(128).optional(),
     questionId: z.string().trim().min(1).max(128),
     targetNodeIds: z.array(z.string().trim().min(1).max(128)).min(1).max(32),
     studentAnswer: z.string(),
@@ -91,6 +93,16 @@ const assessmentRouteRequestSchema = z
     path: ['targetNodeIds'],
     message: 'must contain unique node ids',
   });
+
+const equationRouteRequestSchema = z
+  .object({
+    sessionId: z.string().trim().min(1).max(128),
+    caseId: z.string().trim().min(1).max(128),
+    equationSetId: z.string().trim().min(1).max(128),
+    equation: z.string(),
+    submissionId: z.string().trim().min(1).max(128),
+  })
+  .strict();
 
 const choiceRouteRequestSchema = z
   .object({
@@ -409,16 +421,28 @@ export function createServerApp(options: ServerAppOptions) {
         loadPrompt(options.contentRoot, 'structured-assessment'),
       ]);
       if (!prompt) throw new Error('Required prompt structured-assessment is missing');
-      const question = config.pretest.questions.find((entry) =>
-        entry.id === parsed.data.questionId && entry.type === 'text');
-      if (!question || question.type !== 'text') {
+      const requestedCase = parsed.data.caseId
+        ? config.cases.find((entry) => entry.id === parsed.data.caseId)
+        : undefined;
+      const question = parsed.data.caseId
+        ? undefined
+        : config.pretest.questions.find((entry) =>
+            entry.id === parsed.data.questionId && entry.type === 'text');
+      if (parsed.data.caseId && !requestedCase) {
+        return context.json({ error: 'Unknown training case' }, 400);
+      }
+      if (requestedCase && parsed.data.questionId !== `${requestedCase.id}:analysis`) {
+        return context.json({ error: 'Unknown training question' }, 400);
+      }
+      if (!parsed.data.caseId && (!question || question.type !== 'text')) {
         return context.json({ error: 'Unknown text question' }, 400);
       }
-      const configuredTargets = new Set(question.targetNodeIds);
+      const configuredTargets = new Set(requestedCase?.targetNodeIds ?? question!.targetNodeIds);
       if (parsed.data.targetNodeIds.some((nodeId) => !configuredTargets.has(nodeId))) {
         return context.json({ error: 'Target node is not configured for this question' }, 400);
       }
-      const referenceCaseId = question.referenceEquations[0].caseId;
+      const referenceCaseId = requestedCase?.id
+        ?? (question!.type === 'text' ? question!.referenceEquations[0].caseId : '');
       const trainingCase = config.cases.find((entry) => entry.id === referenceCaseId);
       if (!trainingCase) throw new Error(`Required case ${referenceCaseId} is missing`);
       const sourceByNode = new Map(trainingCase.evidencePaths.map((path) => [path.nodeId, path.source]));
@@ -442,7 +466,7 @@ export function createServerApp(options: ServerAppOptions) {
       const existing = session.events.find((event) =>
         event.kind === 'answer.submitted' && event.attemptId === parsed.data.submissionId);
       if (existing?.kind === 'answer.submitted') {
-        const matches = existing.questionId === question.id
+        const matches = existing.questionId === parsed.data.questionId
           && existing.answer.format === 'text'
           && existing.answer.value === parsed.data.studentAnswer;
         return matches
@@ -458,10 +482,12 @@ export function createServerApp(options: ServerAppOptions) {
       const answer = {
         id: `answer-${operationId}`,
         occurredAt,
-        caseId: 'pretest' as const,
-        stageId: 'assessment',
+        caseId: requestedCase?.id ?? 'pretest',
+        stageId: requestedCase
+          ? requestedCase.caseType === 'transfer' ? 'transfer' : 'training'
+          : 'assessment',
         attemptId: parsed.data.submissionId,
-        questionId: question.id,
+        questionId: parsed.data.questionId,
         value: parsed.data.studentAnswer,
       };
       let extractionResult: Awaited<ReturnType<typeof runAssessmentExtraction>> | null = null;
@@ -539,6 +565,75 @@ export function createServerApp(options: ServerAppOptions) {
       const detail = error instanceof Error ? error.message : String(error);
       console.error(`[assessment] request failed: ${detail}`);
       return context.json({ error: 'Assessment extraction failed' }, 500);
+    }
+  });
+
+  app.post('/api/assessment/equation', async (context) => {
+    const requestBody = await readProtectedJson(context, apiToken, maxRequestBodyBytes);
+    if (!requestBody.ok) return requestBody.response;
+    const parsed = equationRouteRequestSchema.safeParse(requestBody.body);
+    if (!parsed.success) return invalidRequest(context, 'equation assessment', parsed.error);
+
+    try {
+      const config = await loadAllConfig(options.contentRoot);
+      const trainingCase = config.cases.find((entry) => entry.id === parsed.data.caseId);
+      const equationSet = trainingCase?.equationSets.find((entry) =>
+        entry.id === parsed.data.equationSetId);
+      if (!trainingCase || !equationSet) {
+        return context.json({ error: 'Unknown case equation set' }, 400);
+      }
+      const nowMs = workflow.now?.() ?? Date.now();
+      let session = sessions.get(parsed.data.sessionId) ?? createSession({
+        id: parsed.data.sessionId,
+        now: new Date(nowMs).toISOString(),
+        configVersions: sessionConfigVersions(config),
+      });
+      if (session.configVersions.configDigest !== config.configVersion) {
+        return context.json({ error: 'Session config version does not match the current server config' }, 409);
+      }
+      const questionId = `${trainingCase.id}:${equationSet.id}`;
+      const existing = session.events.find((event) =>
+        event.kind === 'answer.submitted' && event.attemptId === parsed.data.submissionId);
+      if (existing?.kind === 'answer.submitted') {
+        const matches = existing.questionId === questionId
+          && existing.answer.format === 'text'
+          && existing.answer.value === parsed.data.equation;
+        return matches
+          ? context.json({ status: 'already-recorded', session })
+          : context.json({ error: 'Submission id was already used for different content' }, 409);
+      }
+
+      const operationId = randomUUID();
+      const occurredAt = new Date(Math.max(nowMs, Date.parse(session.updatedAt))).toISOString();
+      const recorded = recordEquationAssessment({
+        session,
+        config,
+        equationSetId: equationSet.id,
+        answer: {
+          id: `answer-${operationId}`,
+          occurredAt,
+          caseId: trainingCase.id,
+          stageId: trainingCase.caseType === 'transfer' ? 'transfer' : 'training',
+          attemptId: parsed.data.submissionId,
+          questionId,
+          value: parsed.data.equation,
+        },
+        assistance: { kind: 'none', rounds: 0 },
+        assessmentEventIdPrefix: `assessment-${operationId}-equation`,
+        assessedAt: occurredAt,
+      });
+      session = recorded.session;
+      sessions.set(session);
+      return context.json({
+        status: 'recorded',
+        session,
+        profile: recorded.profile,
+        assessment: recorded.assessment,
+      });
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      console.error(`[equation-assessment] request failed: ${detail}`);
+      return context.json({ error: 'Equation assessment failed' }, 500);
     }
   });
 

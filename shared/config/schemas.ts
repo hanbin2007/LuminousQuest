@@ -615,12 +615,61 @@ const equationSetSchema = z
   })
   .strict();
 
+const scaffoldLevelOneSchema = z
+  .object({
+    level: z.literal(1),
+    fields: z
+      .array(
+        z
+          .object({
+            id: idSchema,
+            dimensionId: dimensionIdSchema,
+            nodeId: idSchema,
+            prompt: z.string().trim().min(1),
+          })
+          .strict(),
+      )
+      .min(1),
+    answerPoints: z.array(z.string().trim().min(1)).min(1),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    reportDuplicateIds(value.fields, ['fields'], context);
+  });
+
+const scaffoldLevelTwoSchema = z
+  .object({
+    level: z.literal(2),
+    dimensionIds: z.array(dimensionIdSchema).length(3),
+    answerPoints: z.array(z.string().trim().min(1)).min(1),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    reportDuplicateStrings(value.dimensionIds, ['dimensionIds'], context);
+  });
+
+const scaffoldLevelThreeSchema = z
+  .object({
+    level: z.literal(3),
+    prompt: z.string().trim().min(1),
+    answerPoints: z.array(z.string().trim().min(1)).min(1),
+  })
+  .strict();
+
+const caseScaffoldSchema = z.discriminatedUnion('level', [
+  scaffoldLevelOneSchema,
+  scaffoldLevelTwoSchema,
+  scaffoldLevelThreeSchema,
+]);
+
 export const caseSchema = z
   .object({
     version: versionSchema,
     id: idSchema,
+    sequence: z.number().int().positive(),
     title: z.string().trim().min(1),
     type: z.enum(['analysis', 'design']),
+    caseType: z.enum(['training', 'transfer']),
     medium: z.enum(['acidic', 'alkaline', 'neutral', 'molten']),
     materials: z.array(caseMaterialSchema).min(1),
     followingAnchors: z
@@ -634,18 +683,7 @@ export const caseSchema = z
           .strict(),
       )
       .min(1),
-    scaffold: z
-      .array(
-        z
-          .object({
-            level: z.number().int().min(1).max(3),
-            questions: z.array(z.string().trim().min(1)).min(1),
-            // Each entry is one semantic answer unit; related clauses stay grouped.
-            answerPoints: z.array(z.string().trim().min(1)).min(1),
-          })
-          .strict(),
-      )
-      .length(3),
+    scaffold: z.array(caseScaffoldSchema).length(3),
     equationSets: z.array(equationSetSchema).length(3),
     tutoring: z
       .array(
@@ -687,6 +725,13 @@ export const caseSchema = z
     reportDuplicateStrings(value.tutoring.map((entry) => entry.nodeId), ['tutoring'], context);
     reportDuplicateIds(value.evidencePaths, ['evidencePaths'], context);
     reportDuplicateStrings(value.targetNodeIds, ['targetNodeIds'], context);
+    if (value.caseType === 'transfer' && value.tutoring.length > 0) {
+      context.addIssue({
+        code: 'custom',
+        path: ['tutoring'],
+        message: 'transfer case cannot configure Socratic tutoring',
+      });
+    }
     const electrodeCounts = new Map<'negative' | 'positive' | 'overall', number>([
       ['negative', 0],
       ['positive', 0],
@@ -754,6 +799,17 @@ export const caseSchema = z
         });
       }
       levels.add(entry.level);
+      if (entry.level === 1) {
+        entry.fields.forEach((field, fieldIndex) => {
+          if (!value.targetNodeIds.includes(field.nodeId)) {
+            context.addIssue({
+              code: 'custom',
+              path: ['scaffold', index, 'fields', fieldIndex, 'nodeId'],
+              message: `scaffold field targets non-case node ${field.nodeId}`,
+            });
+          }
+        });
+      }
     });
     for (const expectedLevel of [1, 2, 3]) {
       if (!levels.has(expectedLevel)) {

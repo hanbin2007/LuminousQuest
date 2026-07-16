@@ -49,7 +49,14 @@ describe('Hono server responsibilities', () => {
         builder: { components: Array<Record<string, unknown>> };
         questions: Array<Record<string, unknown>>;
       };
-      cases: unknown[];
+      cases: Array<{
+        id: string;
+        materials: Array<Record<string, unknown>>;
+        scaffold: Array<Record<string, unknown>>;
+        equationSets: Array<Record<string, unknown>>;
+        followingAnchors?: unknown;
+        evidencePaths: Array<Record<string, unknown>>;
+      }>;
       prompts?: unknown;
     };
     const choice = payload.pretest.questions.find((question) => question.type === 'choice')!;
@@ -58,7 +65,34 @@ describe('Hono server responsibilities', () => {
 
     expect(response.headers.get('x-lq-api-token')).toBe(apiToken);
     expect(payload).not.toHaveProperty('prompts');
-    expect(payload.cases).toEqual([]);
+    expect(payload.cases.map((trainingCase) => trainingCase.id)).toEqual(['zinc-copper']);
+    expect(payload.cases[0]?.materials).toEqual([
+      expect.objectContaining({
+        kind: 'apparatus-diagram',
+        materialRef: 'assets/cases/zinc-copper/schematic.png',
+        status: 'ready',
+      }),
+    ]);
+    expect(payload.cases[0]).not.toHaveProperty('followingAnchors');
+    expect(payload.cases[0]?.evidencePaths.length).toBeGreaterThan(0);
+    for (const evidencePath of payload.cases[0]?.evidencePaths ?? []) {
+      expect(evidencePath).toEqual(expect.objectContaining({
+        id: expect.any(String),
+        nodeId: expect.any(String),
+        source: expect.stringMatching(/^(answer|equation|builder)$/),
+      }));
+      expect(evidencePath).not.toHaveProperty('description');
+      expect(evidencePath).not.toHaveProperty('referenceAnswerPoints');
+      expect(evidencePath).not.toHaveProperty('factRequirements');
+    }
+    for (const scaffold of payload.cases[0]?.scaffold ?? []) {
+      expect(scaffold).not.toHaveProperty('answerPoints');
+    }
+    for (const equationSet of payload.cases[0]?.equationSets ?? []) {
+      expect(equationSet).not.toHaveProperty('accepted');
+      expect(equationSet).not.toHaveProperty('crossMediumAccepted');
+      expect(equationSet).not.toHaveProperty('expectedElectronSide');
+    }
     for (const option of choice.options as Array<Record<string, unknown>>) {
       expect(option).not.toHaveProperty('correct');
       expect(option).not.toHaveProperty('misconceptionIds');

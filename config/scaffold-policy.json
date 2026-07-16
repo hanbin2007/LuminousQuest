@@ -1,7 +1,7 @@
 {
   "version": "scaffold-policy.v1.5",
   "levels": [
-    { "level": 1, "label": "完整引导", "promptCount": 8 },
+    { "level": 1, "label": "完整引导", "promptCount": 9 },
     { "level": 2, "label": "三维度标题", "promptCount": 3 },
     { "level": 3, "label": "独立作答", "promptCount": 1 }
   ],
@@ -29,8 +29,11 @@
       "H+": ["H⁺", "质子", "氢离子"],
       "H2": ["H₂", "氢气"],
       "O2": ["O₂", "氧气"],
+      "CH4": ["CH₄", "甲烷"],
+      "CO2": ["CO₂", "二氧化碳"],
       "H2O": ["H₂O", "水"],
       "H2+O2": ["H₂+O₂", "H2与O2", "氢气与氧气", "氢气和氧气"],
+      "CH4+O2": ["CH₄+O₂", "CH4与O2", "甲烷与氧气", "甲烷和氧气"],
       "Al+O2": ["Al与O2", "铝与氧气", "铝和氧气"],
       "Zn+Cu^2+": ["Zn与Cu^2+", "Zn与Cu2+", "锌与铜离子", "锌和二价铜离子"],
       "electron": ["电子", "e-", "e⁻"],

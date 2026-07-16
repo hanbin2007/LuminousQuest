@@ -57,4 +57,44 @@ describe('M2 browser runtime', () => {
       body: JSON.stringify({ imageData: 'image-bytes' }),
     }));
   });
+
+  it('uses protected training assessment and tutor routes', async () => {
+    globalThis.__LQ_API_TOKEN__ = 'runtime-token';
+    const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => new Response(JSON.stringify({
+      status: 'recorded',
+      session: null,
+      turn: { action: 'probe', content: '先判断对象。' },
+    }), { headers: { 'content-type': 'application/json' } }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await defaultRuntime.extractAssessment({
+      sessionId: 'training-session',
+      caseId: 'zinc-copper',
+      questionId: 'zinc-copper:analysis',
+      targetNodeIds: ['D1'],
+      studentAnswer: 'Zn 失去电子。',
+      submissionId: 'analysis-1',
+    });
+    await defaultRuntime.assessEquation({
+      sessionId: 'training-session',
+      caseId: 'zinc-copper',
+      equationSetId: 'zinc-negative',
+      equation: 'Zn -> Zn^2+ + 2e^-',
+      submissionId: 'equation-1',
+    });
+    await defaultRuntime.tutorTurn({
+      sessionId: 'training-session',
+      nodeId: 'D1',
+      studentAnswer: '不知道',
+    });
+
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+      '/api/assessment/extract',
+      '/api/assessment/equation',
+      '/api/tutor/turn',
+    ]);
+    expect(fetchMock.mock.calls[0]?.[1]).toEqual(expect.objectContaining({
+      body: expect.stringContaining('"caseId":"zinc-copper"'),
+    }));
+  });
 });

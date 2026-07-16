@@ -44,7 +44,7 @@ export function recordPretestEquationAssessments(input: {
   answer: {
     id: string;
     occurredAt: string;
-    caseId: 'pretest';
+    caseId: string;
     stageId: string;
     attemptId: string;
     questionId: string;

@@ -87,21 +87,40 @@ describe('M1a external teaching configuration', () => {
     );
   });
 
-  it('defines three cases, three scaffold levels, and three non-builder pretest questions', async () => {
+  it('orders the three training cases from configuration and exposes the signed-off materials', async () => {
     const config = await loadAllConfig(process.cwd());
 
     expect(config.cases.map((trainingCase) => trainingCase.id)).toEqual([
+      'zinc-copper',
       'aluminum-air',
       'hydrogen-oxygen',
-      'zinc-copper',
     ]);
+    expect(config.cases.map((trainingCase) => trainingCase.sequence)).toEqual([1, 2, 3]);
+    expect(config.cases.every((trainingCase) => trainingCase.caseType === 'training')).toBe(true);
     expect(config.cases.every((trainingCase) => trainingCase.scaffold.length === 3)).toBe(true);
+    expect(config.cases.flatMap((trainingCase) => trainingCase.materials)
+      .every((material) => material.status === 'ready' && material.materialRef !== null)).toBe(true);
+    expect(config.cases.find((trainingCase) => trainingCase.id === 'zinc-copper')?.materials)
+      .toHaveLength(1);
     expect(config.pretest.questions).toHaveLength(3);
     expect(config.pretest.questions.map((question: any) => question.dimensionId)).toEqual([
       'principle',
       'principle',
       'energy',
     ]);
+  });
+
+  it('configures level one as the D5 four-question probe plus the P2 to P5 ladder', async () => {
+    const config = await loadAllConfig(process.cwd());
+
+    for (const trainingCase of config.cases) {
+      const levelOne = trainingCase.scaffold.find((entry) => entry.level === 1);
+      if (!levelOne || levelOne.level !== 1) throw new Error('missing level-one scaffold');
+      expect(levelOne.fields.filter((field) => field.nodeId === 'D5')).toHaveLength(4);
+      expect(levelOne.fields
+        .filter((field) => ['P2', 'P3', 'P4', 'P5'].includes(field.nodeId))
+        .map((field) => field.nodeId)).toEqual(['P2', 'P3', 'P4', 'P5']);
+    }
   });
 
   it('maps every configured pretest distractor option to a declared misconception id', async () => {
@@ -127,7 +146,7 @@ describe('M1a external teaching configuration', () => {
     expect(config.pretest.version).toBe('pretest.v1.1');
     expect(config.scaffoldPolicy.version).toBe('scaffold-policy.v1.5');
     expect(config.scaffoldPolicy.extraction.temperature).toBe(0.1);
-    expect(config.cases.every((entry) => entry.version === 'case.v1.3')).toBe(true);
+    expect(config.cases.every((entry) => entry.version === 'case.v1.4')).toBe(true);
     expect(config.knowledgeModel.nodes.find((node) => node.id === 'D4')?.statement)
       .toContain('惰性电极');
     expect(config.knowledgeModel.nodes.find((node) => node.id === 'D4')?.statement)
@@ -192,7 +211,11 @@ describe('M1a external teaching configuration', () => {
       expect(trainingCase.evidencePaths
         .filter((entry) => entry.source === 'answer')
         .every((entry) => entry.factRequirements.length > 0)).toBe(true);
-      expect(trainingCase.tutoring.length).toBeGreaterThan(0);
+      if (trainingCase.caseType === 'transfer') {
+        expect(trainingCase.tutoring).toEqual([]);
+      } else {
+        expect(trainingCase.tutoring.length).toBeGreaterThan(0);
+      }
       expect(trainingCase.tutoring.every((entry) => {
         const evidence = trainingCase.evidencePaths.find((candidate) =>
           candidate.nodeId === entry.nodeId && candidate.source === 'answer');

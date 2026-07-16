@@ -3,11 +3,48 @@ import type { StudentSession } from '../../shared/session/schema';
 
 export interface ExtractAssessmentInput {
   sessionId: string;
+  caseId?: string;
   questionId: string;
   targetNodeIds: string[];
   studentAnswer: string;
   submissionId: string;
 }
+
+export interface EquationAssessmentInput {
+  sessionId: string;
+  caseId: string;
+  equationSetId: string;
+  equation: string;
+  submissionId: string;
+}
+
+export interface TutorTurnInput {
+  sessionId: string;
+  nodeId: string;
+  studentAnswer: string;
+}
+
+export type TutorTurnResult = {
+  session: StudentSession;
+  assistance: { kind: 'none' | 'socratic'; rounds: number };
+  source: 'provider' | 'development-cache' | 'demo-recording' | 'preset';
+  degraded: boolean;
+} & (
+  | { status: 'none'; reason: 'no-assessment' | 'not-miss' | 'not-tutorable' }
+  | {
+      status: 'respond';
+      turn: { action: 'probe' | 'hint' | 'check'; content: string };
+      completedRounds: number;
+      finalRound: boolean;
+      reason?: string;
+    }
+  | {
+      status: 'advance';
+      content: string;
+      completedRounds: number;
+      reason: 'max-rounds' | 'deadline';
+    }
+);
 
 export interface ChoiceAssessmentInput {
   sessionId: string;
@@ -20,6 +57,8 @@ export interface AppRuntime {
   loadConfig: () => Promise<LoadedConfig>;
   assessChoice: (input: ChoiceAssessmentInput) => Promise<{ session: StudentSession | null }>;
   extractAssessment: (input: ExtractAssessmentInput) => Promise<{ session: StudentSession | null }>;
+  assessEquation: (input: EquationAssessmentInput) => Promise<{ session: StudentSession | null }>;
+  tutorTurn: (input: TutorTurnInput) => Promise<TutorTurnResult>;
   reviewDrawing: (imageData: string) => Promise<string>;
 }
 
@@ -78,6 +117,24 @@ export const defaultRuntime: AppRuntime = {
     } finally {
       clearTimeout(timeout);
     }
+  },
+
+  async assessEquation(input) {
+    const response = await fetch('/api/assessment/equation', {
+      method: 'POST',
+      headers: protectedHeaders(),
+      body: JSON.stringify(input),
+    });
+    return jsonResponse<{ session: StudentSession }>(response);
+  },
+
+  async tutorTurn(input) {
+    const response = await fetch('/api/tutor/turn', {
+      method: 'POST',
+      headers: protectedHeaders(),
+      body: JSON.stringify(input),
+    });
+    return jsonResponse<TutorTurnResult>(response);
   },
 
   async reviewDrawing(imageData) {

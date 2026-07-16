@@ -88,6 +88,15 @@ describe('M2 pretest route', () => {
       loadConfig: vi.fn(async () => config),
       assessChoice: vi.fn(async () => ({ session: null })),
       extractAssessment: vi.fn(async () => ({ session: null })),
+      assessEquation: vi.fn(async () => ({ session: null })),
+      tutorTurn: vi.fn(async () => ({
+        status: 'none' as const,
+        reason: 'no-assessment' as const,
+        session: null as never,
+        assistance: { kind: 'none' as const, rounds: 0 },
+        source: 'preset' as const,
+        degraded: false,
+      })),
       reviewDrawing: vi.fn(async () => '线条清楚；再检查电子路径与离子路径是否分别闭合。'),
     };
     render(<App initialConfig={config} runtime={runtime} />);

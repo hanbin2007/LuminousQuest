@@ -18,9 +18,10 @@ export async function writeValidContentTree(root: string) {
   const casesRoot = path.join(configRoot, 'cases');
   const promptsRoot = path.join(root, 'prompts');
   const assetsRoot = path.join(root, 'assets');
+  const zincAssetsRoot = path.join(assetsRoot, 'cases', 'zinc-copper');
   await mkdir(casesRoot, { recursive: true });
   await mkdir(promptsRoot, { recursive: true });
-  await mkdir(assetsRoot, { recursive: true });
+  await mkdir(zincAssetsRoot, { recursive: true });
 
   await Promise.all([
     ...['knowledge-model.json', 'rubrics.json', 'pretest.json', 'scaffold-policy.json'].map((file) =>
@@ -29,6 +30,10 @@ export async function writeValidContentTree(root: string) {
     copyRepositoryFile(
       path.join('config', 'cases', 'zinc-copper.json'),
       path.join(casesRoot, 'zinc-copper.json'),
+    ),
+    copyRepositoryFile(
+      path.join('assets', 'cases', 'zinc-copper', 'schematic.png'),
+      path.join(zincAssetsRoot, 'schematic.png'),
     ),
     copyRepositoryFile(
       path.join('prompts', 'structured-assessment.md'),

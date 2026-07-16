@@ -2,7 +2,32 @@ import type { LoadedConfig } from '../../shared/config/schemas';
 
 export function createPublicConfigView(config: LoadedConfig) {
   const view = structuredClone(config) as LoadedConfig;
-  view.cases = [];
+  view.cases = config.cases.map((trainingCase) => ({
+    version: trainingCase.version,
+    id: trainingCase.id,
+    sequence: trainingCase.sequence,
+    title: trainingCase.title,
+    type: trainingCase.type,
+    caseType: trainingCase.caseType,
+    medium: trainingCase.medium,
+    materials: structuredClone(trainingCase.materials),
+    scaffold: trainingCase.scaffold.map((entry) => {
+      const { answerPoints: _answerPoints, ...publicEntry } = entry;
+      return publicEntry;
+    }),
+    equationSets: trainingCase.equationSets.map((entry) => ({
+      id: entry.id,
+      electrode: entry.electrode,
+      medium: entry.medium,
+    })),
+    evidencePaths: trainingCase.evidencePaths.map((entry) => ({
+      id: entry.id,
+      nodeId: entry.nodeId,
+      source: entry.source,
+    })),
+    tutoring: structuredClone(trainingCase.tutoring),
+    targetNodeIds: [...trainingCase.targetNodeIds],
+  })) as LoadedConfig['cases'];
 
   for (const component of view.pretest.builder.components) {
     component.allowedRoles = [

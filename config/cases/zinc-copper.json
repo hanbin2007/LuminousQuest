@@ -1,12 +1,13 @@
 {
-  "version": "case.v1.3",
+  "version": "case.v1.4",
   "id": "zinc-copper",
+  "sequence": 1,
   "title": "锌铜原电池",
   "type": "analysis",
+  "caseType": "training",
   "medium": "neutral",
   "materials": [
-    { "id": "apparatus", "kind": "apparatus-diagram", "materialRef": null, "status": "pending-assets" },
-    { "id": "cross-section", "kind": "cross-section", "materialRef": null, "status": "pending-assets" }
+    { "id": "apparatus", "kind": "apparatus-diagram", "materialRef": "assets/cases/zinc-copper/schematic.png", "status": "ready" }
   ],
   "followingAnchors": [
     { "id": "case-polarity", "statement": "锌极为负极，铜极为正极。", "correctValue": "negative=Zn;positive=Cu" }
@@ -14,15 +15,16 @@
   "scaffold": [
     {
       "level": 1,
-      "questions": [
-        "该电极的材料（场所）是什么？",
-        "它参与反应吗？",
-        "真正的反应物是谁？",
-        "反应物从哪里来？",
-        "先确定两极反应物，再分别判断电极产物。",
-        "电子和盐桥中离子怎样移动？",
-        "这些过程对应哪些可观察现象？",
-        "化学能从哪个反应释放，又转化成什么能量？"
+      "fields": [
+        { "id": "d5-site", "dimensionId": "device", "nodeId": "D5", "prompt": "两极分别由什么材料提供反应场所？" },
+        { "id": "d5-participation", "dimensionId": "device", "nodeId": "D5", "prompt": "两种电极材料分别参与反应吗？" },
+        { "id": "d5-reactant", "dimensionId": "device", "nodeId": "D5", "prompt": "每一极真正得失电子的反应物是谁？" },
+        { "id": "d5-source", "dimensionId": "device", "nodeId": "D5", "prompt": "这些反应物从电极本身还是溶液中来？" },
+        { "id": "p2-reactants", "dimensionId": "principle", "nodeId": "P2", "prompt": "先判断氧化剂、还原剂，并与两极场所对应。" },
+        { "id": "p3-products", "dimensionId": "principle", "nodeId": "P3", "prompt": "再判断两极反应物失、得电子后的产物。" },
+        { "id": "p4-process", "dimensionId": "principle", "nodeId": "P4", "prompt": "沿闭合回路追踪电子、阳离子和阴离子的移动方向。" },
+        { "id": "p5-observation", "dimensionId": "principle", "nodeId": "P5", "prompt": "由两极过程推出可观察现象。" },
+        { "id": "energy-chain", "dimensionId": "energy", "nodeId": "E1", "prompt": "说明能量来自哪个自发反应、转化为什么能量以及是否存在损耗。" }
       ],
       "answerPoints": [
         "负极场所为 Zn，Zn 同时是还原剂和电极反应物；正极场所为 Cu，真正的氧化剂是溶液中的 Cu^2+。",
@@ -34,11 +36,7 @@
     },
     {
       "level": 2,
-      "questions": [
-        "装置维度：四个功能要素分别由什么承担？",
-        "原理维度：按反应物、产物、过程、现象组织分析。",
-        "能量维度：说明来源、方向和转化限度。"
-      ],
+      "dimensionIds": ["device", "principle", "energy"],
       "answerPoints": [
         "失电子场所 Zn、外电路导线、盐桥与两侧电解质、得电子场所 Cu 共同构成闭合回路。",
         "Zn 被氧化，Cu^2+ 被还原；两条电极反应式守恒，电子与离子方向一致，现象与过程相符。",
@@ -47,9 +45,7 @@
     },
     {
       "level": 3,
-      "questions": [
-        "请独立用装置、原理、能量三个维度分析这个电池，并写出两极反应式。"
-      ],
+      "prompt": "请独立分析这个电池，并写出两极反应式。",
       "answerPoints": [
         "完整覆盖功能四要素、场所与反应物区分、反应物到现象的逻辑链及能量转化。",
         "两条电极反应式满足元素、电荷和电子守恒，且符合中性盐溶液案例。"
