@@ -48,8 +48,13 @@ export function ModelPage() {
     }
   }, []);
 
-  if (!app) return null;
-  const scene = buildModelScene(app.session, app.config);
+  const session = app?.session;
+  const config = app?.config;
+  const scene = useMemo(
+    () => (session && config ? buildModelScene(session, config) : null),
+    [session, config],
+  );
+  if (!app || !scene) return null;
   const selected = selectedId ? scene.nodes.find((node) => node.id === selectedId) ?? null : null;
 
   return (
@@ -72,7 +77,7 @@ export function ModelPage() {
       </header>
 
       <div className="model-stage__body">
-        <div className="model-stage__canvas" role="img" aria-label={`三维知识模型,已点亮 ${scene.litCount} 个节点`}>
+        <div className="model-stage__canvas" aria-hidden={hasWebgl}>
           {hasWebgl ? (
             <KnowledgeScene
               scene={scene}
@@ -109,6 +114,19 @@ export function ModelPage() {
               <p>点击任意节点,查看它对应的知识点与掌握状态。</p>
             </section>
           )}
+          <nav className="model-stage__nodes" aria-label="知识节点清单">
+            {scene.nodes.map((node) => (
+              <button
+                key={node.id}
+                type="button"
+                className={`node-chip node-chip--${node.light} ${selectedId === node.id ? 'node-chip--selected' : ''}`}
+                aria-pressed={selectedId === node.id}
+                onClick={() => setSelectedId(selectedId === node.id ? null : node.id)}
+              >
+                {node.id}
+              </button>
+            ))}
+          </nav>
           <section className="model-stage__radar">
             <h2>三维度掌握概览</h2>
             <DiagnosisRadar dimensions={scene.radar.map((entry) => ({

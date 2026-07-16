@@ -1,5 +1,5 @@
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
 import * as THREE from 'three';
 
 import type { ModelScene, SceneNode } from './lighting';
@@ -16,8 +16,19 @@ export const STAGE = {
 };
 
 const IGNITION_STAGGER = 0.08; // 每节点点亮间隔(秒),与 ui-style-guide §2③ 一致
+const SCENE_SCALE = 1.45;
+const CAMERA_TARGET = new THREE.Vector3(0, 3.6, 0); // 只读,useFrame 内零分配
+const DRAG_SUPPRESS_PX = 6; // 位移超过该阈值视为拖拽,抑制节点点击
 
-function glowTexture(color: string) {
+/** three 资源(texture/geometry)统一经此挂 cleanup,防 GPU 泄漏。 */
+function useDisposable<T extends { dispose(): void }>(factory: () => T, deps: readonly unknown[]): T {
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const value = useMemo(factory, deps);
+  useEffect(() => () => value.dispose(), [value]);
+  return value;
+}
+
+function makeGlowTexture(color: string) {
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = 128;
   const context = canvas.getContext('2d')!;
@@ -30,7 +41,7 @@ function glowTexture(color: string) {
   return new THREE.CanvasTexture(canvas);
 }
 
-function labelTexture(text: string, color: string) {
+function makeLabelTexture(text: string, color: string) {
   const canvas = document.createElement('canvas');
   canvas.width = 128;
   canvas.height = 64;
@@ -49,9 +60,10 @@ interface NodeVisualProps {
   reducedMotion: boolean;
   selected: boolean;
   onSelect: (id: string) => void;
+  suppressClick: MutableRefObject<boolean>;
 }
 
-function NodeVisual({ node, ignitionStart, reducedMotion, selected, onSelect }: NodeVisualProps) {
+function NodeVisual({ node, ignitionStart, reducedMotion, selected, onSelect, suppressClick }: NodeVisualProps) {
   const meshRef = useRef<THREE.Mesh>(null);
   const spriteRef = useRef<THREE.Sprite>(null);
   const lit = node.light === 'full-lit' || node.light === 'half-lit';
@@ -61,15 +73,18 @@ function NodeVisual({ node, ignitionStart, reducedMotion, selected, onSelect }: 
     switch (node.light) {
       case 'full-lit': return { color: dimGlow, emissiveIntensity: 1.6, glowScale: 2.8, opacity: 1 };
       case 'half-lit': return { color: dimGlow, emissiveIntensity: 0.7, glowScale: 1.8, opacity: 0.85 };
-      case 'needs-review': return { color: STAGE.needsReview, emissiveIntensity: 0.25, glowScale: 0, opacity: 0.9 };
+      case 'needs-review': return { color: STAGE.needsReview, emissiveIntensity: 0.3, glowScale: 0, opacity: 0.9 };
       case 'unassessed': return { color: STAGE.unassessed, emissiveIntensity: 0, glowScale: 0, opacity: 0.45 };
       default: return { color: STAGE.unlit, emissiveIntensity: 0, glowScale: 0, opacity: 0.9 };
     }
   }, [node.light, dimGlow]);
 
-  const glowMap = useMemo(() => (lit ? glowTexture(dimGlow) : null), [lit, dimGlow]);
-  const tagMap = useMemo(
-    () => labelTexture(node.id, lit ? '#ffffff' : STAGE.text),
+  const glowMap = useDisposable(
+    () => (lit ? makeGlowTexture(dimGlow) : new THREE.Texture()),
+    [lit, dimGlow],
+  );
+  const tagMap = useDisposable(
+    () => makeLabelTexture(node.id, lit ? '#ffffff' : STAGE.text),
     [node.id, lit],
   );
 
@@ -82,24 +97,33 @@ function NodeVisual({ node, ignitionStart, reducedMotion, selected, onSelect }: 
       progress = THREE.MathUtils.clamp((clock.elapsedTime - igniteAt) / 0.45, 0, 1);
     }
     const eased = 1 - (1 - progress) ** 3;
-    material.emissiveIntensity = emissiveIntensity * eased;
+    material.emissiveIntensity = node.light === 'needs-review'
+      ? (reducedMotion ? 0.3 : 0.2 + 0.15 * Math.sin(clock.elapsedTime * 3))
+      : emissiveIntensity * eased;
     meshRef.current.scale.setScalar(0.7 + 0.3 * eased + (selected ? 0.12 : 0));
     if (spriteRef.current) {
-      const breathe = lit ? 0.75 + 0.25 * Math.sin(clock.elapsedTime * 2 + (node.ignitionIndex ?? 0)) : 0;
+      const breathe = lit
+        ? (reducedMotion ? 0.85 : 0.75 + 0.25 * Math.sin(clock.elapsedTime * 2 + (node.ignitionIndex ?? 0)))
+        : 0;
       (spriteRef.current.material as THREE.SpriteMaterial).opacity = breathe * eased;
       spriteRef.current.scale.setScalar(glowScale * (0.6 + 0.4 * eased));
     }
-    if (node.light === 'needs-review') {
-      material.emissiveIntensity = 0.2 + 0.15 * Math.sin(clock.elapsedTime * 3);
-    }
   });
 
-  const position: [number, number, number] = [node.position.x * 1.45, node.position.y * 1.45, node.position.z * 1.45];
+  const position: [number, number, number] = [
+    node.position.x * SCENE_SCALE,
+    node.position.y * SCENE_SCALE,
+    node.position.z * SCENE_SCALE,
+  ];
   return (
     <group position={position}>
       <mesh
         ref={meshRef}
-        onClick={(event) => { event.stopPropagation(); onSelect(node.id); }}
+        onClick={(event) => {
+          event.stopPropagation();
+          if (suppressClick.current) return;
+          onSelect(node.id);
+        }}
         onPointerOver={() => { document.body.style.cursor = 'pointer'; }}
         onPointerOut={() => { document.body.style.cursor = ''; }}
       >
@@ -113,7 +137,7 @@ function NodeVisual({ node, ignitionStart, reducedMotion, selected, onSelect }: 
           metalness={0.1}
         />
       </mesh>
-      {glowMap ? (
+      {lit ? (
         <sprite ref={spriteRef}>
           <spriteMaterial map={glowMap} transparent depthWrite={false} blending={THREE.AdditiveBlending} />
         </sprite>
@@ -125,77 +149,93 @@ function NodeVisual({ node, ignitionStart, reducedMotion, selected, onSelect }: 
   );
 }
 
-function Edges({ scene }: { scene: ModelScene }) {
-  const nodeById = useMemo(() => new Map(scene.nodes.map((node) => [node.id, node])), [scene.nodes]);
+function toScaled(node: SceneNode) {
+  return new THREE.Vector3(node.position.x * SCENE_SCALE, node.position.y * SCENE_SCALE, node.position.z * SCENE_SCALE);
+}
+
+function Edges({ scene, reducedMotion }: { scene: ModelScene; reducedMotion: boolean }) {
   const pulseRef = useRef<THREE.LineBasicMaterial>(null);
   useFrame(({ clock }) => {
-    if (pulseRef.current) pulseRef.current.opacity = 0.55 + 0.3 * Math.sin(clock.elapsedTime * 1.6);
+    if (pulseRef.current) {
+      pulseRef.current.opacity = reducedMotion ? 0.7 : 0.55 + 0.3 * Math.sin(clock.elapsedTime * 1.6);
+    }
   });
-  const groups = useMemo(() => {
-    const plain: THREE.Vector3[] = [];
-    const crossLit: THREE.Vector3[] = [];
+  const nodeById = useMemo(() => new Map(scene.nodes.map((node) => [node.id, node])), [scene.nodes]);
+  const plainGeometry = useDisposable(() => {
+    const points: THREE.Vector3[] = [];
     for (const edge of scene.edges) {
+      if (edge.crossAxis && edge.bothLit) continue;
       const from = nodeById.get(edge.from);
       const to = nodeById.get(edge.to);
-      if (!from || !to) continue;
-      const pair = [
-        new THREE.Vector3(from.position.x * 1.45, from.position.y * 1.45, from.position.z * 1.45),
-        new THREE.Vector3(to.position.x * 1.45, to.position.y * 1.45, to.position.z * 1.45),
-      ];
-      (edge.crossAxis && edge.bothLit ? crossLit : plain).push(...pair);
+      if (from && to) points.push(toScaled(from), toScaled(to));
     }
-    return { plain, crossLit };
+    return new THREE.BufferGeometry().setFromPoints(points);
+  }, [scene.edges, nodeById]);
+  const crossGeometry = useDisposable(() => {
+    const points: THREE.Vector3[] = [];
+    for (const edge of scene.edges) {
+      if (!(edge.crossAxis && edge.bothLit)) continue;
+      const from = nodeById.get(edge.from);
+      const to = nodeById.get(edge.to);
+      if (from && to) points.push(toScaled(from), toScaled(to));
+    }
+    return new THREE.BufferGeometry().setFromPoints(points);
   }, [scene.edges, nodeById]);
 
   return (
     <group>
-      {groups.plain.length > 0 ? (
-        <lineSegments geometry={new THREE.BufferGeometry().setFromPoints(groups.plain)}>
-          <lineBasicMaterial color={STAGE.text} transparent opacity={0.16} />
-        </lineSegments>
-      ) : null}
-      {groups.crossLit.length > 0 ? (
-        <lineSegments geometry={new THREE.BufferGeometry().setFromPoints(groups.crossLit)}>
-          <lineBasicMaterial ref={pulseRef} color={STAGE.glow.principle} transparent opacity={0.7} />
-        </lineSegments>
-      ) : null}
+      <lineSegments geometry={plainGeometry}>
+        <lineBasicMaterial color={STAGE.text} transparent opacity={0.16} />
+      </lineSegments>
+      <lineSegments geometry={crossGeometry}>
+        <lineBasicMaterial ref={pulseRef} color={STAGE.glow.principle} transparent opacity={0.7} />
+      </lineSegments>
     </group>
   );
 }
 
-function AxisRails() {
-  const axes = useMemo(() => ([
-    { color: STAGE.glow.device, points: [new THREE.Vector3(-6.1, 0, 0), new THREE.Vector3(6.1, 0, 0)], label: '装置', at: new THREE.Vector3(6.7, 0, 0) },
-    { color: STAGE.glow.principle, points: [new THREE.Vector3(0, -0.9, 0), new THREE.Vector3(0, 9.3, 0)], label: '原理', at: new THREE.Vector3(0, 9.9, 0) },
-    { color: STAGE.glow.energy, points: [new THREE.Vector3(0, 0, 0), new THREE.Vector3(-4.1, -3.5, 2.3)], label: '能量', at: new THREE.Vector3(-4.6, -4.0, 2.7) },
-  ]), []);
+const AXES = [
+  { color: STAGE.glow.device, from: new THREE.Vector3(-6.1, 0, 0), to: new THREE.Vector3(6.1, 0, 0), label: '装置', at: [6.7, 0, 0] as const },
+  { color: STAGE.glow.principle, from: new THREE.Vector3(0, -0.9, 0), to: new THREE.Vector3(0, 9.3, 0), label: '原理', at: [0, 9.9, 0] as const },
+  { color: STAGE.glow.energy, from: new THREE.Vector3(0, 0, 0), to: new THREE.Vector3(-4.1, -3.5, 2.3), label: '能量', at: [-4.6, -4.0, 2.7] as const },
+];
+
+function AxisRail({ axis }: { axis: (typeof AXES)[number] }) {
+  const geometry = useDisposable(
+    () => new THREE.BufferGeometry().setFromPoints([axis.from, axis.to]),
+    [axis],
+  );
+  const label = useDisposable(() => makeLabelTexture(axis.label, axis.color), [axis]);
   return (
     <group>
-      {axes.map((axis) => (
-        <group key={axis.label}>
-          <lineSegments geometry={new THREE.BufferGeometry().setFromPoints(axis.points)}>
-            <lineBasicMaterial color={axis.color} transparent opacity={0.5} />
-          </lineSegments>
-          <sprite position={axis.at.toArray() as [number, number, number]} scale={[1.1, 0.55, 1]}>
-            <spriteMaterial map={labelTexture(axis.label, axis.color)} transparent depthWrite={false} />
-          </sprite>
-        </group>
-      ))}
+      <lineSegments geometry={geometry}>
+        <lineBasicMaterial color={axis.color} transparent opacity={0.5} />
+      </lineSegments>
+      <sprite position={[axis.at[0], axis.at[1], axis.at[2]]} scale={[1.1, 0.55, 1]}>
+        <spriteMaterial map={label} transparent depthWrite={false} />
+      </sprite>
     </group>
   );
 }
 
-function Rig({ reducedMotion }: { reducedMotion: boolean }) {
+function Rig({ reducedMotion, suppressClick }: {
+  reducedMotion: boolean;
+  suppressClick: MutableRefObject<boolean>;
+}) {
   const { camera, gl } = useThree();
-  const state = useRef({ yaw: 0.6, pitch: 0.35, radius: 11.5, dragging: false, lastX: 0, lastY: 0, idleAt: 0 });
+  const state = useRef({
+    yaw: 0.6, pitch: 0.35, radius: 11.5,
+    dragging: false, lastX: 0, lastY: 0, downX: 0, downY: 0, idleAt: 0,
+  });
 
   useEffect(() => {
     const element = gl.domElement;
     const current = state.current;
     const down = (event: PointerEvent) => {
       current.dragging = true;
-      current.lastX = event.clientX;
-      current.lastY = event.clientY;
+      current.lastX = current.downX = event.clientX;
+      current.lastY = current.downY = event.clientY;
+      suppressClick.current = false;
     };
     const move = (event: PointerEvent) => {
       if (!current.dragging) return;
@@ -204,6 +244,9 @@ function Rig({ reducedMotion }: { reducedMotion: boolean }) {
       current.lastX = event.clientX;
       current.lastY = event.clientY;
       current.idleAt = performance.now();
+      if (Math.hypot(event.clientX - current.downX, event.clientY - current.downY) > DRAG_SUPPRESS_PX) {
+        suppressClick.current = true;
+      }
     };
     const up = () => { current.dragging = false; };
     const wheel = (event: WheelEvent) => {
@@ -221,26 +264,25 @@ function Rig({ reducedMotion }: { reducedMotion: boolean }) {
       window.removeEventListener('pointerup', up);
       element.removeEventListener('wheel', wheel);
     };
-  }, [gl]);
+  }, [gl, suppressClick]);
 
   useFrame((_, delta) => {
     const current = state.current;
     const idle = performance.now() - current.idleAt > 3000;
     if (!reducedMotion && idle && !current.dragging) current.yaw += delta * 0.08;
-    const target = new THREE.Vector3(0, 3.6, 0);
     camera.position.set(
-      target.x + current.radius * Math.cos(current.pitch) * Math.sin(current.yaw),
-      target.y + current.radius * Math.sin(current.pitch),
-      target.z + current.radius * Math.cos(current.pitch) * Math.cos(current.yaw),
+      CAMERA_TARGET.x + current.radius * Math.cos(current.pitch) * Math.sin(current.yaw),
+      CAMERA_TARGET.y + current.radius * Math.sin(current.pitch),
+      CAMERA_TARGET.z + current.radius * Math.cos(current.pitch) * Math.cos(current.yaw),
     );
-    camera.lookAt(target);
+    camera.lookAt(CAMERA_TARGET);
   });
   return null;
 }
 
 export interface KnowledgeSceneProps {
   scene: ModelScene;
-  /** 传入非空即重放点亮序列(时间基准由内部时钟重置)。 */
+  /** 递增即重放点亮序列。 */
   replayToken: number;
   reducedMotion: boolean;
   onSelect: (id: string | null) => void;
@@ -260,18 +302,19 @@ function IgnitionClock({ replayToken, children }: {
 }
 
 export function KnowledgeScene({ scene, replayToken, reducedMotion, onSelect, selectedId }: KnowledgeSceneProps) {
+  const suppressClick = useRef(false);
   return (
     <Canvas
       dpr={[1, 2]}
       camera={{ fov: 52, near: 0.1, far: 100 }}
-      onPointerMissed={() => onSelect(null)}
+      onPointerMissed={() => { if (!suppressClick.current) onSelect(null); }}
       style={{ background: STAGE.bg }}
     >
       <fog attach="fog" args={[STAGE.fog, 16, 40]} />
       <ambientLight color="#8899bb" intensity={0.55} />
       <directionalLight position={[5, 8, 6]} intensity={0.8} />
-      <AxisRails />
-      <Edges scene={scene} />
+      {AXES.map((axis) => <AxisRail key={axis.label} axis={axis} />)}
+      <Edges scene={scene} reducedMotion={reducedMotion} />
       <IgnitionClock replayToken={replayToken}>
         {(start) => (
           <group>
@@ -282,13 +325,14 @@ export function KnowledgeScene({ scene, replayToken, reducedMotion, onSelect, se
                 ignitionStart={start}
                 reducedMotion={reducedMotion}
                 selected={selectedId === node.id}
-                onSelect={(id) => onSelect(id)}
+                onSelect={onSelect}
+                suppressClick={suppressClick}
               />
             ))}
           </group>
         )}
       </IgnitionClock>
-      <Rig reducedMotion={reducedMotion} />
+      <Rig reducedMotion={reducedMotion} suppressClick={suppressClick} />
     </Canvas>
   );
 }

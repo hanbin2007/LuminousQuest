@@ -24,6 +24,8 @@ export interface LearnerNodeProfile {
     assistance: AssessmentCompletedEvent['assistance'];
   };
   outcome?: 'hit' | 'hit-with-help' | 'partial' | 'miss';
+  /** 被 repeated-answers 策略选中的评分事件(点亮状态与顺序的同源依据)。 */
+  selectedAssessment?: { eventId: string; sequence: number };
   earned?: number;
   possible?: number;
   visualization?: 'half-lit' | 'dark' | 'full-lit';
@@ -232,6 +234,7 @@ export function buildLearnerProfile(
       ...base,
       status: 'scored' as const,
       outcome: ruleDecision.status,
+      selectedAssessment: { eventId: selected.id, sequence: selected.sequence },
       earned: selected.score.earned,
       possible: selected.score.possible,
       visualization: visualizationFor(ruleDecision.status, rubrics.policy),

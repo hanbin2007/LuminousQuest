@@ -46,8 +46,8 @@ export function buildModelScene(session: StudentSession, config: LoadedConfig): 
       const light = lightOf(node);
       return light === 'full-lit' || light === 'half-lit';
     })
-    .sort((a, b) => (a.latestAttempt?.sequence ?? Number.MAX_SAFE_INTEGER)
-      - (b.latestAttempt?.sequence ?? Number.MAX_SAFE_INTEGER));
+    .sort((a, b) => (a.selectedAssessment?.sequence ?? a.latestAttempt?.sequence ?? Number.MAX_SAFE_INTEGER)
+      - (b.selectedAssessment?.sequence ?? b.latestAttempt?.sequence ?? Number.MAX_SAFE_INTEGER));
   const ignitionByNode = new Map(litSequence.map((node, index) => [node.nodeId, index]));
 
   const nodes: SceneNode[] = config.knowledgeModel.nodes.map((node) => {
@@ -55,7 +55,7 @@ export function buildModelScene(session: StudentSession, config: LoadedConfig): 
     const light: NodeLight = learner ? lightOf(learner) : 'unassessed';
     return {
       id: node.id,
-      dimensionId: node.dimensionId as SceneNode['dimensionId'],
+      dimensionId: (learner?.dimensionId ?? node.dimensionId) as SceneNode['dimensionId'],
       statement: node.statement,
       position: node.position,
       light,
@@ -70,18 +70,14 @@ export function buildModelScene(session: StudentSession, config: LoadedConfig): 
   };
 
   const edges: SceneEdge[] = [];
-  for (const node of config.knowledgeModel.nodes) {
-    for (const dep of node.dependsOn ?? []) {
-      if (!nodeById.has(dep)) continue; // 极性认定等 case 级锚点不在图上
-      const from = nodeById.get(dep)!;
-      const to = nodeById.get(node.id)!;
-      edges.push({
-        from: from.id,
-        to: to.id,
-        crossAxis: from.dimensionId !== to.dimensionId,
-        bothLit: isLit(from.id) && isLit(to.id),
-      });
-    }
+  for (const edge of config.knowledgeModel.edges ?? []) {
+    if (!nodeById.has(edge.from) || !nodeById.has(edge.to)) continue;
+    edges.push({
+      from: edge.from,
+      to: edge.to,
+      crossAxis: edge.kind === 'cross-axis',
+      bothLit: isLit(edge.from) && isLit(edge.to),
+    });
   }
 
   const dimensionLabels = new Map(

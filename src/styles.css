@@ -2560,3 +2560,22 @@ p {
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
 }
 .model-stage__radar h2 { color: var(--ink); font-size: var(--text-base); }
+
+/* 3D 节点清单(键盘/读屏可达,与画布选中同步) */
+.model-stage__nodes { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.node-chip {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-pill);
+  border: 1px solid rgba(215, 226, 239, 0.25);
+  background: transparent;
+  color: var(--stage-text);
+  cursor: pointer;
+  opacity: 0.55;
+}
+.node-chip--full-lit { border-color: var(--glow-principle); opacity: 1; }
+.node-chip--half-lit { border-color: var(--glow-principle); opacity: 0.8; }
+.node-chip--needs-review { border-color: var(--glow-energy); opacity: 0.9; }
+.node-chip--selected { background: rgba(63, 224, 216, 0.15); }
+.node-chip:focus-visible { outline: none; box-shadow: var(--focus-ring); }
