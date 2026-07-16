@@ -1,4 +1,4 @@
-import { randomBytes, randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
@@ -152,7 +152,31 @@ export interface ServerAppOptions {
   sessions?: ServerSessionStore;
   workflow?: Partial<ServerWorkflowOptions>;
   apiToken?: string;
+  accessToken?: string;
   maxRequestBodyBytes?: number;
+}
+
+const lanAccessCookie = 'lq_lan_access';
+
+function accessTokenMatches(candidate: string | undefined, expected: string) {
+  if (!candidate) return false;
+  const left = Buffer.from(candidate);
+  const right = Buffer.from(expected);
+  return left.length === right.length && timingSafeEqual(left, right);
+}
+
+function cookieValue(header: string | undefined, name: string) {
+  if (!header) return undefined;
+  for (const entry of header.split(';')) {
+    const separator = entry.indexOf('=');
+    if (separator < 0 || entry.slice(0, separator).trim() !== name) continue;
+    try {
+      return decodeURIComponent(entry.slice(separator + 1).trim());
+    } catch {
+      return undefined;
+    }
+  }
+  return undefined;
 }
 
 function externalDataError(error: ConfigValidationError | PromptValidationError) {
@@ -283,6 +307,36 @@ export function createServerApp(options: ServerAppOptions) {
     providers: options.providers ?? createProviderRegistry(),
     recordings,
   });
+
+  if (options.accessToken) {
+    app.use('*', async (context, next) => {
+      const url = new URL(context.req.url);
+      const queryToken = url.searchParams.get('access_token') ?? undefined;
+      if (queryToken !== undefined) {
+        if (!accessTokenMatches(queryToken, options.accessToken!)) {
+          return context.text('Invalid LAN access token', 401);
+        }
+        url.searchParams.delete('access_token');
+        const location = `${url.pathname}${url.search}`;
+        context.header(
+          'set-cookie',
+          `${lanAccessCookie}=${encodeURIComponent(options.accessToken!)}; Path=/; HttpOnly; SameSite=Strict`,
+        );
+        context.header('cache-control', 'no-store');
+        return context.redirect(location || '/');
+      }
+      const admitted = accessTokenMatches(
+        cookieValue(context.req.header('cookie'), lanAccessCookie),
+        options.accessToken!,
+      );
+      if (!admitted) {
+        return url.pathname.startsWith('/api/')
+          ? context.json({ error: 'LAN access token required' }, 401)
+          : context.text('LAN access token required', 401);
+      }
+      await next();
+    });
+  }
 
   app.get('/api/config', async (context) => {
     try {

@@ -4,7 +4,7 @@ SCRIPT_DIR="${0:A:h}"
 cd "$SCRIPT_DIR" || exit 1
 
 if [[ -x "$SCRIPT_DIR/LuminousQuest" ]]; then
-  exec "$SCRIPT_DIR/LuminousQuest"
+  exec "$SCRIPT_DIR/LuminousQuest" "$@"
 fi
 
 if ! command -v pnpm >/dev/null 2>&1; then
@@ -14,7 +14,7 @@ if ! command -v pnpm >/dev/null 2>&1; then
   exit 1
 fi
 
-pnpm start
+pnpm start -- "$@"
 STATUS=$?
 if [[ $STATUS -ne 0 ]]; then
   echo "[startup] LuminousQuest exited with status $STATUS."
@@ -22,4 +22,3 @@ if [[ $STATUS -ne 0 ]]; then
   read -r
 fi
 exit $STATUS
-

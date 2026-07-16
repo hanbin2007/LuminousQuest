@@ -11,15 +11,18 @@ export interface ServeOnLoopbackOptions {
   serveImplementation?: ServeImplementation;
 }
 
+export interface ServeOnHostOptions extends ServeOnLoopbackOptions {
+  hostname: '127.0.0.1' | '0.0.0.0';
+}
+
 export interface StartedLoopbackServer {
   server: ServerType;
   port: number;
 }
 
-const host = '127.0.0.1' as const;
-
 function listenOnce(
   fetch: FetchCallback,
+  hostname: ServeOnHostOptions['hostname'],
   port: number,
   serveImplementation: ServeImplementation,
 ) {
@@ -30,7 +33,7 @@ function listenOnce(
       reject(error);
     };
     try {
-      server = serveImplementation({ fetch, hostname: host, port }, (info) => {
+      server = serveImplementation({ fetch, hostname, port }, (info) => {
         server.removeListener('error', onError);
         resolve({ server, port: info.port });
       });
@@ -41,12 +44,13 @@ function listenOnce(
   });
 }
 
-export async function serveOnLoopback({
+export async function serveOnHost({
   fetch,
+  hostname,
   preferredPort,
   attempts = 100,
   serveImplementation = serve,
-}: ServeOnLoopbackOptions): Promise<StartedLoopbackServer> {
+}: ServeOnHostOptions): Promise<StartedLoopbackServer> {
   if (!Number.isInteger(preferredPort) || preferredPort < 1 || preferredPort > 65_535) {
     throw new RangeError(`Invalid preferred port: ${preferredPort}`);
   }
@@ -58,7 +62,7 @@ export async function serveOnLoopback({
     const port = preferredPort + offset;
     if (port > 65_535) break;
     try {
-      return await listenOnce(fetch, port, serveImplementation);
+      return await listenOnce(fetch, hostname, port, serveImplementation);
     } catch (error) {
       const code = (error as NodeJS.ErrnoException).code;
       if (code !== 'EADDRINUSE' && code !== 'EACCES') throw error;
@@ -66,6 +70,10 @@ export async function serveOnLoopback({
   }
 
   throw new Error(
-    `No available loopback port in range ${preferredPort}-${Math.min(65_535, preferredPort + attempts)}`,
+    `No available port on ${hostname} in range ${preferredPort}-${Math.min(65_535, preferredPort + attempts)}`,
   );
+}
+
+export function serveOnLoopback(options: ServeOnLoopbackOptions) {
+  return serveOnHost({ ...options, hostname: '127.0.0.1' });
 }
