@@ -10,7 +10,7 @@ import { loadAllConfig } from '../server/config/loader';
 import { LocalSessionStore } from '../shared/session/local-storage';
 import { createSession, exportSession, sessionConfigVersions } from '../shared/session/session';
 import { App, type AppRuntime } from '../src/App';
-import { recordChoiceAssessment } from '../src/features/pretest/choice-assessment';
+import { recordChoiceAssessment } from '../shared/workflows/choice-assessment';
 import { QuestionCard } from '../src/features/pretest/QuestionCard';
 
 describe('M2 pretest route', () => {

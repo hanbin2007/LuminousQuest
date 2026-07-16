@@ -163,6 +163,7 @@ export interface EvalHarnessOptions {
   model: string;
   provider?: LLMProvider;
   recordingsRoot?: string;
+  recordingPolicy?: 'replayable' | 'none';
   runOverride?: number;
   includeMetamorphic?: boolean;
   evaluationScope?: 'pilot' | 'full';
@@ -245,7 +246,7 @@ export async function runEvalHarness(options: EvalHarnessOptions) {
       }));
       return;
     }
-    const recordingFile = options.recordingsRoot
+    const recordingFile = options.recordingPolicy !== 'none' && options.recordingsRoot
       ? evalRecordingFile({
           recordingsRoot: options.recordingsRoot,
           providerId: options.providerId,
@@ -376,7 +377,7 @@ export async function runEvalHarness(options: EvalHarnessOptions) {
     });
     observations.push(observation);
 
-    if ((options.mode === 'live' || options.mode === 'holdout') && recordingFile) {
+    if (options.mode === 'live' && recordingFile) {
       const saved = await saveEvalRecording({
         file: recordingFile,
         evalCase,

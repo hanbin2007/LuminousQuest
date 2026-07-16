@@ -336,6 +336,34 @@ describe('eval harness production-path execution', () => {
     });
   });
 
+  it('keeps holdout provider responses in memory without writing replay recordings', async () => {
+    const root = await createTemporaryDirectory();
+    const recordingsRoot = path.join(root, 'holdout-recordings');
+    const provider: LLMProvider = {
+      id: 'fixture',
+      async chat() { throw new Error('not used'); },
+      async vision() { throw new Error('not used'); },
+      async structured() { return response(); },
+    };
+
+    const result = await runEvalHarness({
+      contentRoot: process.cwd(),
+      cases: [partialCase()],
+      config: harnessConfig(),
+      mode: 'live',
+      providerId: provider.id,
+      model: 'fixture-v1',
+      provider,
+      recordingsRoot,
+      recordingPolicy: 'none',
+      includeMetamorphic: false,
+    });
+
+    expect(result.observations).toHaveLength(1);
+    expect(result.recordingFiles).toEqual([]);
+    await expect(access(recordingsRoot)).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
   it('fails the quality gates when a deliberately wrong local provider corrupts extraction', async () => {
     const evalCase = seriousContradictionCase();
     const wrongStructured = {

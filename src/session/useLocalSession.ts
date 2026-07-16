@@ -31,6 +31,7 @@ export function useLocalSession(config: LoadedConfig) {
   const versions = useMemo(() => sessionConfigVersions(config), [config]);
   const store = useMemo(() => new LocalSessionStore(browserStorage()), []);
   const [restored] = useState(() => store.restoreLatest(versions));
+  const [historicalSessions] = useState(() => store.listSuspended());
   const [session, setSession] = useState<StudentSession>(() => restored ?? createSession({
     configVersions: versions,
   }));
@@ -62,6 +63,7 @@ export function useLocalSession(config: LoadedConfig) {
     setSession,
     resetSession,
     persistenceError,
+    historicalSessions,
     restored: restored !== null,
     store,
     versions,

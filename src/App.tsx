@@ -23,7 +23,13 @@ export interface AppProps {
 }
 
 function ConfiguredApp({ config, runtime }: { config: LoadedConfig; runtime: AppRuntime }) {
-  const { session, setSession, resetSession, persistenceError } = useLocalSession(config);
+  const {
+    session,
+    setSession,
+    resetSession,
+    persistenceError,
+    historicalSessions,
+  } = useLocalSession(config);
   const progressKey = `luminous-quest:pretest-complete.v1:${session.id}`;
   const readProgress = () => {
     try {
@@ -55,6 +61,7 @@ function ConfiguredApp({ config, runtime }: { config: LoadedConfig; runtime: App
       session,
       setSession,
       persistenceError,
+      historicalSessions,
       pretestComplete,
       setPretestComplete,
     }}>

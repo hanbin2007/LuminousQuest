@@ -145,6 +145,7 @@ export async function runEvalCli(input: {
       model: harnessMode === 'mock' ? 'eval-mock-v1' : model,
       ...(live ? { provider: live.provider } : {}),
       recordingsRoot,
+      recordingPolicy: args.mode === 'holdout' ? 'none' : 'replayable',
       evaluationScope,
       caseVisibility: args.mode === 'holdout' ? 'aggregate-only' : 'detailed',
       ...(args.runs ? { runOverride: args.runs } : {}),

@@ -203,6 +203,24 @@ describe('session persistence and staged assessment state', () => {
     expect(afterRefresh.restoreLatest()).toEqual(completeSession());
   });
 
+  it('keeps version-mismatched sessions in persistent export history', () => {
+    const storage = new MemoryStorage();
+    const beforeRefresh = new LocalSessionStore(storage);
+    const historical = completeSession();
+    beforeRefresh.save(historical);
+
+    expect(beforeRefresh.restoreLatest({
+      ...historical.configVersions,
+      configDigest: 'sha256:new-content',
+    })).toBeNull();
+    expect(beforeRefresh.listSuspended()).toEqual([historical]);
+
+    const afterRefresh = new LocalSessionStore(storage);
+    expect(afterRefresh.listSuspended()).toEqual([historical]);
+    expect(storage.getItem(`luminous-quest:session.v2:${historical.id}`)).not.toBeNull();
+    expect(storage.getItem('luminous-quest:session.v2:latest')).toBeNull();
+  });
+
   it('allows successful extraction while rule and downstream stages remain unassessed', () => {
     const answered = appendSessionEvent(startedSession(), answerEvent('event-answer-1'));
     const extractionOnly = assessmentEvent({

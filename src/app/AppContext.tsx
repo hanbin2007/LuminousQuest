@@ -10,6 +10,7 @@ export interface AppContextValue {
   session: StudentSession;
   setSession: Dispatch<SetStateAction<StudentSession>>;
   persistenceError: string | null;
+  historicalSessions: StudentSession[];
   pretestComplete: boolean;
   setPretestComplete: (complete: boolean) => void;
 }

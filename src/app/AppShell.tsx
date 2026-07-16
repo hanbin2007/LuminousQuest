@@ -7,7 +7,14 @@ import { buildLearnerProfile } from '../../shared/scoring/profile';
 import { SessionControls } from '../session/SessionControls';
 
 export function AppShell() {
-  const { config, session, setSession, persistenceError, pretestComplete } = useAppContext();
+  const {
+    config,
+    session,
+    setSession,
+    persistenceError,
+    historicalSessions,
+    pretestComplete,
+  } = useAppContext();
 
   return (
     <div className="app-shell">
@@ -29,6 +36,7 @@ export function AppShell() {
           </div>
           <SessionControls
             session={session}
+            historicalSessions={historicalSessions}
             onImport={(imported) => {
               if (JSON.stringify(imported.configVersions) !== JSON.stringify(session.configVersions)) {
                 throw new Error('导入会话与当前配置版本不匹配');

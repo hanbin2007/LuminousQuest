@@ -24,7 +24,8 @@ equations through an LLM.
   through the current production schema, citation validator, and scoring path.
 - `pnpm eval:holdout`: loads only hash-manifested `eval/holdout/cases/`, rejects
   train/holdout ID or content duplicates, runs the live provider, and suppresses
-  all case identifiers from the report.
+  all case identifiers from the report. Provider responses remain memory-only;
+  holdout runs never write replayable recordings.
 
 Set `LQ_EVAL_PROVIDER` and `LQ_EVAL_MODEL` to override the live/replay target.
 Supported live keys are `DEEPSEEK_API_KEY`, `TONGYI_API_KEY`, and

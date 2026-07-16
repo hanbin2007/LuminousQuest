@@ -2,6 +2,7 @@ import type { SessionEventInput, StudentSession } from './schema';
 import { appendSessionEvent, exportSession, importSession } from './session';
 
 const latestSessionKey = 'luminous-quest:session.v2:latest';
+const suspendedSessionIdsKey = 'luminous-quest:session.v2:suspended';
 const sessionKey = (id: string) => `luminous-quest:session.v2:${id}`;
 
 export class SessionStorageError extends Error {
@@ -20,6 +21,37 @@ export class SessionVersionMismatchError extends Error {
 
 export class LocalSessionStore {
   constructor(private readonly storage: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>) {}
+
+  private readSuspendedIds() {
+    const serialized = this.storage.getItem(suspendedSessionIdsKey);
+    if (serialized === null) return [];
+    try {
+      const value: unknown = JSON.parse(serialized);
+      if (!Array.isArray(value) || !value.every((entry) => typeof entry === 'string')) {
+        throw new Error('invalid suspended session index');
+      }
+      return [...new Set(value)];
+    } catch {
+      this.storage.removeItem(suspendedSessionIdsKey);
+      return [];
+    }
+  }
+
+  private writeSuspendedIds(ids: readonly string[]) {
+    if (ids.length === 0) {
+      this.storage.removeItem(suspendedSessionIdsKey);
+      return;
+    }
+    this.storage.setItem(suspendedSessionIdsKey, JSON.stringify(ids));
+  }
+
+  private suspend(id: string) {
+    try {
+      this.writeSuspendedIds([id, ...this.readSuspendedIds().filter((candidate) => candidate !== id)]);
+    } catch {
+      // The original session remains intact even if the small history index cannot be written.
+    }
+  }
 
   save(session: StudentSession) {
     const serialized = exportSession(session);
@@ -61,12 +93,35 @@ export class LocalSessionStore {
     try {
       return this.load(latestId, expectedVersions);
     } catch (error) {
-      if (!(error instanceof SessionVersionMismatchError)) {
+      if (error instanceof SessionVersionMismatchError) {
+        this.suspend(latestId);
+      } else {
         this.storage.removeItem(sessionKey(latestId));
       }
       this.storage.removeItem(latestSessionKey);
       return null;
     }
+  }
+
+  listSuspended() {
+    const sessions: StudentSession[] = [];
+    const validIds: string[] = [];
+    for (const id of this.readSuspendedIds()) {
+      try {
+        const session = this.load(id);
+        if (!session) continue;
+        sessions.push(session);
+        validIds.push(id);
+      } catch {
+        this.storage.removeItem(sessionKey(id));
+      }
+    }
+    try {
+      this.writeSuspendedIds(validIds);
+    } catch {
+      // Listing remains available in memory when index cleanup cannot be persisted.
+    }
+    return sessions;
   }
 
   append(id: string, event: SessionEventInput) {
@@ -81,6 +136,11 @@ export class LocalSessionStore {
     this.storage.removeItem(sessionKey(id));
     if (this.storage.getItem(latestSessionKey) === id) {
       this.storage.removeItem(latestSessionKey);
+    }
+    try {
+      this.writeSuspendedIds(this.readSuspendedIds().filter((candidate) => candidate !== id));
+    } catch {
+      // Removing the session itself is the primary operation.
     }
   }
 }

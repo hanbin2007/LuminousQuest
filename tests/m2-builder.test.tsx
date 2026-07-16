@@ -12,6 +12,7 @@ import { TopologyBuilder, type BuilderAnswer } from '../src/features/builder/Top
 import { EquationToolbar } from '../src/features/pretest/EquationToolbar';
 
 const builderConfig = pretestSchema.parse(pretestJson).builder;
+const forbiddenBuilderLeakage = /干扰|distractor|失电子场所|得电子场所|电子导体|离子导体/i;
 
 afterEach(cleanup);
 
@@ -32,11 +33,15 @@ function dataTransfer(componentId: string) {
 
 describe('M2 topology builder', () => {
   it('uses only neutral configured labels and snaps dropped components to the 24px grid', () => {
-    render(<TopologyBuilder config={builderConfig} onSubmit={vi.fn()} />);
+    const view = render(<TopologyBuilder config={builderConfig} onSubmit={vi.fn()} />);
 
     expect(screen.getByText('蔗糖水')).toBeInTheDocument();
     expect(screen.getByText('绝缘连接件')).toBeInTheDocument();
-    expect(document.body.textContent).not.toMatch(/干扰|distractor|失电子场所|得电子场所|电子导体|离子导体/i);
+    expect(view.container.innerHTML).not.toMatch(forbiddenBuilderLeakage);
+    const renderedAttributes = [...view.container.querySelectorAll('*')]
+      .flatMap((element) => element.getAttributeNames().map((name) => `${name}=${element.getAttribute(name)}`))
+      .join('\n');
+    expect(renderedAttributes).not.toMatch(forbiddenBuilderLeakage);
 
     const canvas = screen.getByTestId('builder-canvas');
     vi.spyOn(canvas, 'getBoundingClientRect').mockReturnValue({
@@ -61,6 +66,7 @@ describe('M2 topology builder', () => {
     const placed = screen.getByRole('button', { name: /画布组件.*导体棒 A/ });
     expect(placed.closest('.builder-node')).toHaveStyle({ left: '72px', top: '72px' });
     expect(canvas).toHaveAttribute('data-snap-flash', 'true');
+    expect(view.container.innerHTML).not.toMatch(forbiddenBuilderLeakage);
 
     const moveTransfer = dataTransfer('');
     fireEvent.dragStart(placed.closest('.builder-node')!, { dataTransfer: moveTransfer });

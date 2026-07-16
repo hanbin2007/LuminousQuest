@@ -9,7 +9,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import pretestJson from '../config/pretest.json';
 import { loadAllConfig } from '../server/config/loader';
 import { pretestSchema } from '../shared/config/schemas';
-import { createSession } from '../shared/session/session';
+import { LocalSessionStore } from '../shared/session/local-storage';
+import { createSession, sessionConfigVersions } from '../shared/session/session';
 import { App } from '../src/App';
 import { AppErrorBoundary } from '../src/app/AppErrorBoundary';
 import { loadPretestDraft } from '../src/features/pretest/draft';
@@ -127,5 +128,49 @@ describe('M2 draft and render resilience', () => {
 
     expect(await screen.findByText('本地保存失败，请导出会话。')).toHaveAttribute('role', 'alert');
     expect(screen.getByRole('button', { name: '导出会话 JSON' })).toBeInTheDocument();
+  });
+
+  it('offers a version-mismatched historical session for export after another reload', async () => {
+    const user = userEvent.setup();
+    const values = new Map<string, string>();
+    Object.defineProperty(window, 'localStorage', {
+      configurable: true,
+      value: {
+        get length() { return values.size; },
+        clear: () => values.clear(),
+        getItem: (key: string) => values.get(key) ?? null,
+        key: (index: number) => [...values.keys()][index] ?? null,
+        removeItem: (key: string) => values.delete(key),
+        setItem: (key: string, value: string) => values.set(key, value),
+      } satisfies Storage,
+    });
+    Object.defineProperty(URL, 'createObjectURL', { value: vi.fn(() => 'blob:history'), configurable: true });
+    Object.defineProperty(URL, 'revokeObjectURL', { value: vi.fn(), configurable: true });
+    const anchorClick = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
+    const config = await loadAllConfig(process.cwd());
+    const historical = createSession({
+      id: 'historical-session',
+      anonymousStudentId: 'anon-HISTORY1',
+      now: '2026-07-15T12:00:00.000Z',
+      configVersions: {
+        ...sessionConfigVersions(config),
+        configDigest: 'sha256:previous-content',
+      },
+    });
+    new LocalSessionStore(window.localStorage).save(historical);
+
+    const first = render(<App initialConfig={config} />);
+    expect(await screen.findByLabelText('历史会话')).toHaveValue(historical.id);
+    first.unmount();
+
+    render(<App initialConfig={config} />);
+    expect(await screen.findByLabelText('历史会话')).toHaveValue(historical.id);
+    await user.click(screen.getByRole('button', { name: '导出历史会话' }));
+
+    expect(anchorClick).toHaveBeenCalledTimes(1);
+    expect(anchorClick.mock.instances[0]).toHaveProperty(
+      'download',
+      `luminous-quest-history-${historical.id}.json`,
+    );
   });
 });

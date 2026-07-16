@@ -319,10 +319,22 @@ p {
 }
 
 .session-bar__identity,
-.session-controls {
+.session-controls,
+.session-controls__history {
   display: flex;
   align-items: center;
   gap: var(--space-3);
+}
+
+.session-controls__history select {
+  min-height: 32px;
+  max-width: 190px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--text-xs);
 }
 
 .session-bar__identity span {
