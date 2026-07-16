@@ -284,6 +284,11 @@ async function main() {
   if (!clientFiles.includes('index.html')) {
     throw new Error('dist/client/index.html is missing; run pnpm build first');
   }
+  await writeSha256Manifest({
+    root: clientRoot,
+    outputFile: path.join(projectRoot, 'dist', 'client.sha256'),
+    pathPrefix: path.posix.join('dist', 'client'),
+  });
 
   await rm(seaRoot, { recursive: true, force: true });
   await rm(releaseRoot, { recursive: true, force: true });
