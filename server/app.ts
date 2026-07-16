@@ -4,6 +4,7 @@ import { Hono, type Context } from 'hono';
 import { z } from 'zod';
 
 import { type AssistanceMetadata } from '../shared/scoring/rubric';
+import type { AssessmentCompletedEvent } from '../shared/session/schema';
 import {
   createSession,
   sessionConfigVersions,
@@ -646,14 +647,23 @@ export function createServerApp(options: ServerAppOptions) {
     if (!session) return context.json({ error: 'Session not found' }, 404);
 
     try {
-      const [config, prompt] = await Promise.all([
-        loadAllConfig(options.contentRoot),
-        loadPrompt(options.contentRoot, 'socratic-tutoring'),
-      ]);
-      if (!prompt) throw new Error('Required prompt socratic-tutoring is missing');
+      const config = await loadAllConfig(options.contentRoot);
       if (session.configVersions.configDigest !== config.configVersion) {
         return context.json({ error: 'Session config version does not match the current server config' }, 409);
       }
+      let latestAssessment: AssessmentCompletedEvent | undefined;
+      for (const event of session.events) {
+        if (event.kind !== 'assessment.completed' || event.nodeId !== parsed.data.nodeId) continue;
+        if (!latestAssessment || event.sequence > latestAssessment.sequence) latestAssessment = event;
+      }
+      if (latestAssessment) {
+        const assessedCase = config.cases.find((entry) => entry.id === latestAssessment.caseId);
+        if (latestAssessment.stageId !== 'training' || assessedCase?.caseType !== 'training') {
+          return context.json({ error: 'Tutor is only available for training-stage answers' }, 409);
+        }
+      }
+      const prompt = await loadPrompt(options.contentRoot, 'socratic-tutoring');
+      if (!prompt) throw new Error('Required prompt socratic-tutoring is missing');
       const result = await runSocraticTurn({
         service: llmService,
         config,

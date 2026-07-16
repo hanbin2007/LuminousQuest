@@ -51,6 +51,8 @@ export function createTrainingRuntime(
   options: {
     outcome?: AssessmentOutcome;
     tutorReason?: string;
+    tutorFinalRound?: boolean;
+    tutorSource?: TutorTurnResult['source'];
   } = {},
 ) {
   let serverSession: StudentSession | null = null;
@@ -175,10 +177,10 @@ export function createTrainingRuntime(
   const tutorTurn = vi.fn(async (): Promise<TutorTurnResult> => ({
     status: 'respond',
     turn: { action: 'probe', content: '先判断当前节点里的对象，再说明方向依据。' },
-    completedRounds: 1,
-    finalRound: false,
-    assistance: { kind: 'socratic', rounds: 1 },
-    source: 'preset',
+    completedRounds: options.tutorFinalRound ? 3 : 1,
+    finalRound: options.tutorFinalRound ?? false,
+    assistance: { kind: 'socratic', rounds: options.tutorFinalRound ? 3 : 1 },
+    source: options.tutorSource ?? 'preset',
     degraded: true,
     reason: options.tutorReason ?? 'provider-error',
     session: serverSession ?? current('training-session'),

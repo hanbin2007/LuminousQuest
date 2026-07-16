@@ -2,7 +2,7 @@
 
 import '@testing-library/jest-dom/vitest';
 
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -109,5 +109,28 @@ describe('M3 training flow', () => {
 
     expect(await screen.findByText('尚未达到本案例过关条件')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '进入下一案例' })).not.toBeInTheDocument();
+  });
+
+  it('closes a final tutor round and distinguishes replay degradation from a preset fallback', async () => {
+    const user = userEvent.setup();
+    const config = await loadAllConfig(process.cwd());
+    const { runtime } = createTrainingRuntime(config, {
+      outcome: 'miss',
+      tutorFinalRound: true,
+      tutorSource: 'development-cache',
+    });
+    render(<App initialConfig={config} runtime={runtime} />);
+
+    expect(await screen.findByRole('heading', { name: '锌铜原电池' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '提交案例作答' }));
+    const trigger = (await screen.findAllByRole('button', { name: '请老师提示一下' }))[0]!;
+    const feedbackItem = trigger.closest<HTMLElement>('.training-feedback-item')!;
+    await user.click(trigger);
+
+    expect(await within(feedbackItem).findByText(config.scaffoldPolicy.socratic.fallback.closing))
+      .toBeInTheDocument();
+    expect(within(feedbackItem).getByText('回放降级')).toBeInTheDocument();
+    expect(within(feedbackItem).queryByRole('button', { name: '请老师提示一下' }))
+      .not.toBeInTheDocument();
   });
 });

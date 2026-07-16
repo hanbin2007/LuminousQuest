@@ -4,6 +4,7 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { createServerApp } from '../server/app';
+import { loadAllConfig } from '../server/config/loader';
 import type { LLMProvider, LLMRequest, LLMResponse } from '../server/llm/types';
 import type { AssessmentCompletedEvent, StudentSession } from '../shared/session';
 import { createTemporaryDirectory, writeValidContentTree } from './helpers/content-fixture';
@@ -471,7 +472,8 @@ describe('server-owned assessment and tutor routes', () => {
 
     const initial = await post(app, '/api/assessment/extract', {
       sessionId,
-      questionId: 'pretest-principle-process',
+      caseId: 'zinc-copper',
+      questionId: 'zinc-copper:analysis',
       targetNodeIds: ['P4'],
       studentAnswer: '电子由Cu极流向Zn极。',
       submissionId: 'initial-p4',
@@ -496,7 +498,8 @@ describe('server-owned assessment and tutor routes', () => {
 
     const revised = await post(app, '/api/assessment/extract', {
       sessionId,
-      questionId: 'pretest-principle-process',
+      caseId: 'zinc-copper',
+      questionId: 'zinc-copper:analysis',
       targetNodeIds: ['P4'],
       studentAnswer: '电子由Zn极流向Cu极。',
       submissionId: 'revised-p4',
@@ -518,5 +521,51 @@ describe('server-owned assessment and tutor routes', () => {
       expect.objectContaining({ kind: 'tutor.cycle.terminal', reason: 'max-rounds' }),
     ]));
     expect(sessions.get(sessionId)).toEqual(payload.session);
+  });
+
+  it('rejects tutor turns for both pretest and transfer assessments', async () => {
+    const config = await loadAllConfig(process.cwd());
+    const sessions = new TestSessionStore();
+    const app = createServerApp({
+      contentRoot: process.cwd(),
+      clientRoot: path.join(process.cwd(), 'dist'),
+      apiToken,
+      sessions,
+      workflow: { now: () => Date.parse('2026-07-15T12:00:00.000Z') },
+    });
+
+    const pretest = await post(app, '/api/assessment/choice', {
+      sessionId: 'pretest-tutor-rejected',
+      questionId: 'pretest-energy',
+      optionId: 'B',
+      submissionId: 'pretest-energy-miss',
+    });
+    expect(pretest.status).toBe(200);
+    const pretestTutor = await post(app, '/api/tutor/turn', {
+      sessionId: 'pretest-tutor-rejected',
+      nodeId: 'E1',
+      studentAnswer: '请提示。',
+    });
+
+    const transferCase = config.cases.find((entry) => entry.caseType === 'transfer')!;
+    const overall = transferCase.equationSets.find((entry) => entry.electrode === 'overall')!;
+    const transfer = await post(app, '/api/assessment/equation', {
+      sessionId: 'transfer-tutor-rejected',
+      caseId: transferCase.id,
+      equationSetId: overall.id,
+      equation: 'CH4 + O2 -> CO2',
+      submissionId: 'transfer-overall-miss',
+    });
+    expect(transfer.status).toBe(200);
+    const transferTutor = await post(app, '/api/tutor/turn', {
+      sessionId: 'transfer-tutor-rejected',
+      nodeId: 'P7',
+      studentAnswer: '请提示。',
+    });
+
+    expect(pretestTutor.status).toBe(409);
+    expect(await pretestTutor.json()).toEqual({ error: 'Tutor is only available for training-stage answers' });
+    expect(transferTutor.status).toBe(409);
+    expect(await transferTutor.json()).toEqual({ error: 'Tutor is only available for training-stage answers' });
   });
 });

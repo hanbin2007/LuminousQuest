@@ -50,7 +50,14 @@ interface TutorNote {
   completedRounds: number;
   source: 'provider' | 'development-cache' | 'demo-recording' | 'preset';
   degraded: boolean;
+  terminal: boolean;
   reason?: string;
+}
+
+function tutorSourceLabel(source: TutorNote['source']) {
+  if (source === 'provider') return '实时辅导';
+  if (source === 'preset') return '预设回退';
+  return '回放降级';
 }
 
 function storage() {
@@ -474,10 +481,13 @@ export function TrainingPage() {
         setTutorNotes((current) => ({
           ...current,
           [nodeId]: {
-            content: result.turn.content,
+            content: result.finalRound
+              ? config.scaffoldPolicy.socratic.fallback.closing
+              : result.turn.content,
             completedRounds: result.completedRounds,
             source: result.source,
             degraded: result.degraded,
+            terminal: result.finalRound,
             reason: result.reason,
           },
         }));
@@ -485,10 +495,11 @@ export function TrainingPage() {
         setTutorNotes((current) => ({
           ...current,
           [nodeId]: {
-            content: result.content,
+            content: config.scaffoldPolicy.socratic.fallback.closing,
             completedRounds: result.completedRounds,
             source: result.source,
             degraded: result.degraded,
+            terminal: true,
             reason: result.reason,
           },
         }));
@@ -500,6 +511,7 @@ export function TrainingPage() {
             completedRounds: result.assistance.rounds,
             source: result.source,
             degraded: result.degraded,
+            terminal: true,
             reason: result.reason,
           },
         }));
@@ -600,7 +612,9 @@ export function TrainingPage() {
               const node = config.knowledgeModel.nodes.find((entry) => entry.id === event.nodeId);
               const dimension = config.knowledgeModel.dimensions.find((entry) => entry.id === node?.dimensionId);
               const note = tutorNotes[event.nodeId];
-              const canTutor = status === 'miss' && tutorNodeIds.has(event.nodeId);
+              const canTutor = status === 'miss'
+                && tutorNodeIds.has(event.nodeId)
+                && !note?.terminal;
               return (
                 <div className="training-feedback-item" key={event.nodeId}>
                   <AnnotationCard
@@ -628,7 +642,7 @@ export function TrainingPage() {
                       <header>
                         <strong>蓝笔追问</strong>
                         <span>第 {note.completedRounds} / {config.scaffoldPolicy.socratic.maxRounds} 轮</span>
-                        {note.source === 'preset' || note.degraded ? <span>预设回退</span> : <span>实时辅导</span>}
+                        <span>{tutorSourceLabel(note.source)}</span>
                       </header>
                       <p>{note.content}</p>
                       {note.reason ? <small>故障状态：{note.reason}</small> : null}
