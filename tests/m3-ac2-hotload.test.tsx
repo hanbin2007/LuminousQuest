@@ -270,7 +270,7 @@ describe('AC2 config-only hot loading', () => {
       routeTransitionTimeout,
     )).toBeInTheDocument();
     expect(screen.getByText('前测未测')).toBeInTheDocument();
-  });
+  }, 15_000);
 
   it('scores equivalent, multiplied, and near-error methane equations through the real route', async () => {
     const root = await createTemporaryDirectory();

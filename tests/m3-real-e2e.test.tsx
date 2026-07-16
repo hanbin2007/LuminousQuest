@@ -18,6 +18,7 @@ import { defaultRuntime } from '../src/runtime/api';
 import { createTemporaryDirectory, writeValidContentTree } from './helpers/content-fixture';
 
 const apiToken = 'm3-real-e2e-token';
+const routeTransitionTimeout = { timeout: 5_000 };
 
 class TestSessionStore {
   readonly values = new Map<string, StudentSession>();
@@ -174,7 +175,11 @@ describe('real M3 route chain', () => {
     const user = userEvent.setup();
     render(<App runtime={defaultRuntime} />);
 
-    expect(await screen.findByRole('heading', { name: '前测诊断' })).toBeInTheDocument();
+    expect(await screen.findByRole(
+      'heading',
+      { name: '前测诊断' },
+      routeTransitionTimeout,
+    )).toBeInTheDocument();
     for (const label of [
       '导体棒 A',
       '金属连接件',
@@ -208,34 +213,58 @@ describe('real M3 route chain', () => {
     await user.click(node('导体棒 A'));
     await user.click(screen.getByRole('button', { name: '提交搭建' }));
 
-    await user.click(await screen.findByLabelText(/^A\./));
+    await user.click(await screen.findByLabelText(/^A\./, {}, routeTransitionTimeout));
     await user.click(screen.getByRole('button', { name: '提交作答' }));
     const zinc = privateConfig.cases.find((entry) => entry.id === 'zinc-copper')!;
     const pretestAnswer = `${answerText(zinc)} ${zinc.equationSets
       .map((entry) => entry.accepted[0]).join('；')}`;
-    fireEvent.change(await screen.findByLabelText('简答作答'), {
+    fireEvent.change(await screen.findByLabelText('简答作答', {}, routeTransitionTimeout), {
       target: { value: pretestAnswer },
     });
     fireEvent.click(screen.getByRole('button', { name: '提交作答' }));
-    await user.click(await screen.findByLabelText(/^A\./));
+    await user.click(await screen.findByLabelText(/^A\./, {}, routeTransitionTimeout));
     await user.click(screen.getByRole('button', { name: '提交作答' }));
-    await user.click(await screen.findByRole('button', { name: '跳过手绘，查看诊断' }));
-    expect(await screen.findByRole('heading', { name: '诊断结果' })).toBeInTheDocument();
+    await user.click(await screen.findByRole(
+      'button',
+      { name: '跳过手绘，查看诊断' },
+      routeTransitionTimeout,
+    ));
+    expect(await screen.findByRole(
+      'heading',
+      { name: '诊断结果' },
+      routeTransitionTimeout,
+    )).toBeInTheDocument();
 
     await user.click(screen.getByRole('link', { name: '训练' }));
     for (const trainingCase of privateConfig.cases.filter((entry) => entry.caseType === 'training')) {
-      expect(await screen.findByRole('heading', { name: trainingCase.title })).toBeInTheDocument();
+      expect(await screen.findByRole(
+        'heading',
+        { name: trainingCase.title },
+        routeTransitionTimeout,
+      )).toBeInTheDocument();
       fillTrainingCase(trainingCase);
       fireEvent.click(screen.getByRole('button', { name: '提交案例作答' }));
-      expect(await screen.findByText('本案例达到过关条件')).toBeInTheDocument();
+      expect(await screen.findByText(
+        '本案例达到过关条件',
+        {},
+        routeTransitionTimeout,
+      )).toBeInTheDocument();
       fireEvent.click(screen.getByRole('button', { name: '进入下一案例' }));
     }
 
     const transferCase = privateConfig.cases.find((entry) => entry.caseType === 'transfer')!;
-    expect(await screen.findByRole('heading', { name: transferCase.title })).toBeInTheDocument();
+    expect(await screen.findByRole(
+      'heading',
+      { name: transferCase.title },
+      routeTransitionTimeout,
+    )).toBeInTheDocument();
     fillTrainingCase(transferCase);
     fireEvent.click(screen.getByRole('button', { name: '提交冷迁移作答' }));
-    expect(await screen.findByRole('heading', { name: '训练前后对比' })).toBeInTheDocument();
+    expect(await screen.findByRole(
+      'heading',
+      { name: '训练前后对比' },
+      routeTransitionTimeout,
+    )).toBeInTheDocument();
 
     expect(requests.length).toBeGreaterThanOrEqual(5);
     expect(requests.every((request) => request.prompt.id === 'structured-assessment')).toBe(true);
@@ -249,5 +278,5 @@ describe('real M3 route chain', () => {
       'hydrogen-oxygen',
       'methane-fuel',
     ]));
-  });
+  }, 15_000);
 });

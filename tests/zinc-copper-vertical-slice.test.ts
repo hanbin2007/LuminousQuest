@@ -289,6 +289,33 @@ describe('zinc-copper M1a vertical slice', () => {
       now: '2026-07-15T12:00:00.000Z',
       configVersions: sessionConfigVersions(config),
     });
+    const { verified: _verified, ...unverifiedFacts } = assessment.facts;
+    expect(() => recordStructuredTextAssessment({
+      session,
+      config,
+      answer: {
+        id: 'answer-unverified',
+        occurredAt: '2026-07-15T12:01:00.000Z',
+        caseId: 'zinc-copper',
+        stageId: 'analysis',
+        attemptId: 'attempt-unverified',
+        questionId: 'zinc-analysis',
+        value: 'Zn',
+      },
+      extraction: {
+        anchors: [],
+        assessments: [{ ...assessment, facts: unverifiedFacts }],
+      },
+      provenance: {
+        promptId: 'assessment',
+        promptVersion: 'prompt.v1',
+        cacheKey: 'cache-key-unverified',
+        model: 'mock-v1',
+      },
+      assessmentEventIdPrefix: 'unverified',
+      assessedAt: '2026-07-15T12:01:01.000Z',
+    })).toThrow(/lacks server-verified classification flags/);
+
     expect(() => recordStructuredTextAssessment({
       session,
       config,

@@ -188,6 +188,10 @@ describe('runtime adjudication policy contracts', () => {
     changed.terminology.colloquialCorrectOutcome = 'partial';
     expect(evaluateExtractedFacts({ facts, requirements: oneRequirement, policy: changed }).status)
       .toBe('partial');
+    const strictTerms = structuredClone(config.rubrics.policy);
+    strictTerms.terminology.requireModelTermsForHit = true;
+    expect(evaluateExtractedFacts({ facts, requirements: oneRequirement, policy: strictTerms }).status)
+      .toBe('partial');
   });
 
   it('§4: changing beyondSyllabus.correctOutcome changes correct beyond-syllabus credit', async () => {
@@ -241,6 +245,10 @@ describe('runtime adjudication policy contracts', () => {
     changed.typos.unambiguousStrategy = 'penalize';
     expect(evaluateExtractedFacts({ facts, requirements: oneRequirement, policy: changed }).status)
       .toBe('partial');
+    const ignored = structuredClone(config.rubrics.policy);
+    ignored.typos.unambiguousStrategy = 'ignore';
+    expect(evaluateExtractedFacts({ facts, requirements: oneRequirement, policy: ignored }))
+      .toMatchObject({ status: 'hit', warnings: [] });
   });
 
   it('§8: changing equation.mediumMismatchOutcome changes cross-medium scoring', async () => {
