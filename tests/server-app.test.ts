@@ -49,6 +49,7 @@ describe('Hono server responsibilities', () => {
         builder: { components: Array<Record<string, unknown>> };
         questions: Array<Record<string, unknown>>;
       };
+      cases: unknown[];
       prompts?: unknown;
     };
     const choice = payload.pretest.questions.find((question) => question.type === 'choice')!;
@@ -57,6 +58,7 @@ describe('Hono server responsibilities', () => {
 
     expect(response.headers.get('x-lq-api-token')).toBe(apiToken);
     expect(payload).not.toHaveProperty('prompts');
+    expect(payload.cases).toEqual([]);
     for (const option of choice.options as Array<Record<string, unknown>>) {
       expect(option).not.toHaveProperty('correct');
       expect(option).not.toHaveProperty('misconceptionIds');

@@ -2,6 +2,7 @@ import type { LoadedConfig } from '../../shared/config/schemas';
 
 export function createPublicConfigView(config: LoadedConfig) {
   const view = structuredClone(config) as LoadedConfig;
+  view.cases = [];
 
   for (const component of view.pretest.builder.components) {
     component.allowedRoles = [
