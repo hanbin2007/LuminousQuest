@@ -97,6 +97,11 @@ describe('AC2 config-only hot loading', () => {
 
     const root = await createTemporaryDirectory();
     await writeValidContentTree(root);
+    const baselineRubricFile = path.join(root, 'config', 'rubrics.json');
+    const baselineRubrics = JSON.parse(await readFile(baselineRubricFile, 'utf8'));
+    baselineRubrics.version = 'rubrics.v1.1';
+    baselineRubrics.policy.weakness.threshold = 0.6;
+    await writeFile(baselineRubricFile, JSON.stringify(baselineRubrics, null, 2));
     const app = createServerApp({
       contentRoot: root,
       clientRoot: path.join(root, 'client'),
