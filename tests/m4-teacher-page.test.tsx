@@ -48,7 +48,13 @@ describe('M4 teacher page', () => {
     expect(await screen.findByRole('heading', { name: '教师视图' })).toBeInTheDocument();
     expect(screen.getAllByText('anon-TEACH001').length).toBeGreaterThan(0);
     expect(screen.getByRole('heading', { name: '诊断证据链' })).toBeInTheDocument();
-    expect(screen.getByText('电子从铜极经导线流向锌极。')).toBeInTheDocument();
+    expect(screen.getByText('电子从铜极经导线流向锌极。', { selector: 'mark' })).toHaveAttribute('data-start', '0');
+    expect(screen.getByText('[0, 13) 电子从铜极经导线流向锌极。')).toBeInTheDocument();
+    const p4Score = screen.getByRole('button', { name: /P4 分数.*0 \/ 2/u });
+    p4Score.focus();
+    expect(p4Score).toHaveFocus();
+    await user.click(p4Score);
+    expect(document.getElementById('teacher-evidence-detail-P4')).toHaveFocus();
     expect(screen.getByRole('heading', { name: '待复核清单' })).toBeInTheDocument();
     expect(screen.getByText('回放证据与原文无法可靠对齐')).toBeInTheDocument();
 
@@ -60,8 +66,9 @@ describe('M4 teacher page', () => {
       { type: 'application/json' },
     )));
 
-    expect(await screen.findByText('3 份会话参与汇总')).toBeInTheDocument();
-    expect(screen.getByText(/session-a\.json.*重复文件未计入/u)).toBeInTheDocument();
+    expect(await screen.findByText('3 名学生参与汇总')).toBeInTheDocument();
+    expect(screen.getByText(/批次文件 1.*重复文件未计入/u)).toBeInTheDocument();
+    expect(screen.queryByText(/session-a\.json/u)).not.toBeInTheDocument();
     expect(screen.getByRole('img', { name: /班级三维雷达/u })).toBeInTheDocument();
     const p4Bar = screen.getByTestId('node-error-P4');
     expect(within(p4Bar).getByText('100%')).toBeInTheDocument();

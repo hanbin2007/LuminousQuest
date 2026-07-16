@@ -17,6 +17,9 @@ import {
   buildClassSummary,
   buildTeacherStudentReport,
   importClassSessionFiles,
+  MAX_CLASS_SESSION_FILES,
+  MAX_CLASS_SESSION_FILE_BYTES,
+  readClassSessionFileBatch,
   type AcceptedClassSession,
   type RejectedClassSession,
 } from './teacher-data';
@@ -52,6 +55,42 @@ function displayTime(value: string) {
   }).format(new Date(value));
 }
 
+function HighlightedAnswer({
+  text,
+  evidence,
+}: {
+  text: string;
+  evidence: readonly { quote: string; start: number; end: number }[];
+}) {
+  const ranges = evidence
+    .map((item) => ({
+      start: Math.max(0, Math.min(text.length, item.start)),
+      end: Math.max(0, Math.min(text.length, item.end)),
+    }))
+    .filter((item) => item.end > item.start)
+    .sort((left, right) => left.start - right.start || left.end - right.end)
+    .reduce<Array<{ start: number; end: number }>>((merged, item) => {
+      const previous = merged.at(-1);
+      if (!previous || item.start > previous.end) return [...merged, item];
+      previous.end = Math.max(previous.end, item.end);
+      return merged;
+    }, []);
+  if (ranges.length === 0) return <p className="teacher-answer-text">{text}</p>;
+  const fragments: React.ReactNode[] = [];
+  let cursor = 0;
+  ranges.forEach((range) => {
+    if (range.start > cursor) fragments.push(text.slice(cursor, range.start));
+    fragments.push(
+      <mark data-start={range.start} data-end={range.end} key={`${range.start}-${range.end}`}>
+        {text.slice(range.start, range.end)}
+      </mark>,
+    );
+    cursor = range.end;
+  });
+  if (cursor < text.length) fragments.push(text.slice(cursor));
+  return <p className="teacher-answer-text">{fragments}</p>;
+}
+
 function StudentEvidence({ session }: { session: StudentSession }) {
   const { config } = useAppContext();
   const report = useMemo(() => buildTeacherStudentReport(session, config), [config, session]);
@@ -69,7 +108,7 @@ function StudentEvidence({ session }: { session: StudentSession }) {
         <div className="teacher-evidence-table" role="table" aria-label="量表证据链">
           <div className="teacher-evidence-table__header" role="row">
             <span role="columnheader">节点</span>
-            <span role="columnheader">判定</span>
+            <span role="columnheader">判定 / 分数</span>
             <span role="columnheader">量表规则</span>
             <span role="columnheader">证据</span>
           </div>
@@ -82,11 +121,29 @@ function StudentEvidence({ session }: { session: StudentSession }) {
             >
               <summary>
                 <span className="teacher-node-id">{item.nodeId}<small>{item.dimensionLabel}</small></span>
-                <span className="teacher-status">{statusLabels[item.outcome ?? item.status]}</span>
+                <button
+                  aria-controls={`teacher-evidence-detail-${item.nodeId}`}
+                  aria-label={`${item.nodeId} 分数，${statusLabels[item.outcome ?? item.status]}${item.earned === null ? '' : `，${item.earned} / ${item.possible}`}`}
+                  className="teacher-status teacher-score-entry"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    const details = event.currentTarget.closest('details');
+                    if (details) details.open = true;
+                    document.getElementById(`teacher-evidence-detail-${item.nodeId}`)?.focus();
+                  }}
+                  type="button"
+                >
+                  <span>{statusLabels[item.outcome ?? item.status]}</span>
+                  {item.earned === null ? null : <small>{item.earned} / {item.possible}</small>}
+                </button>
                 <span>{item.ruleId ?? '尚无判分规则'}</span>
                 <span>{item.evidenceQuotes.length > 0 ? `${item.evidenceQuotes.length} 条原文` : '无原文证据'}</span>
               </summary>
-              <div className="teacher-evidence-detail">
+              <div
+                className="teacher-evidence-detail"
+                id={`teacher-evidence-detail-${item.nodeId}`}
+                tabIndex={-1}
+              >
                 <div>
                   <h3>{item.rubricId} · {item.rubricVersion}</h3>
                   <p>{item.ruleDescription ?? '尚未形成自动判定。'}</p>
@@ -100,7 +157,20 @@ function StudentEvidence({ session }: { session: StudentSession }) {
                 </div>
                 <div className="teacher-original-answer">
                   <h3>学生原文</h3>
-                  {item.originalAnswer ? <mark>{item.originalAnswer}</mark> : <p>本节点未测到，不能视为错误。</p>}
+                  {item.originalAnswer ? (
+                    <>
+                      <HighlightedAnswer text={item.originalAnswer} evidence={item.evidence} />
+                      {item.evidence.length > 0 ? (
+                        <ul className="teacher-evidence-ranges" aria-label={`${item.nodeId} 证据区间`}>
+                          {item.evidence.map((evidence) => (
+                            <li key={`${evidence.start}-${evidence.end}-${evidence.quote}`}>
+                              [{evidence.start}, {evidence.end}) {evidence.quote}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : null}
+                    </>
+                  ) : <p>本节点未测到，不能视为错误。</p>}
                   {item.misconceptionIds.length > 0 ? (
                     <p>闭集误区：{item.misconceptionIds.join('、')}</p>
                   ) : null}
@@ -201,7 +271,7 @@ function ClassSummary({
         <div>
           <span>AC6 · 纯前端聚合</span>
           <h2 id="class-import-title">批量导入会话</h2>
-          <p>仅接收当前量表版本的 session.v2 文件；重复会话不会重复计数。</p>
+          <p>最多 {MAX_CLASS_SESSION_FILES} 份、每份最大 {Math.floor(MAX_CLASS_SESSION_FILE_BYTES / 1024)} KiB；同一匿名编号只取最新会话。</p>
         </div>
         <button className="secondary-button" type="button" onClick={() => input.current?.click()}>
           <Upload aria-hidden="true" />选择多份 JSON
@@ -230,7 +300,7 @@ function ClassSummary({
       <section className="teacher-section" aria-labelledby="class-overview-title">
         <header className="teacher-section__heading">
           <div><span>{summary.rubricVersion}</span><h2 id="class-overview-title">班级三维分布</h2></div>
-          <strong>{summary.sessionCount} 份会话参与汇总</strong>
+          <strong>{summary.sessionCount} 名学生参与汇总</strong>
         </header>
         <div className="class-overview-grid">
           <ClassRadar dimensions={summary.dimensions} />
@@ -249,7 +319,7 @@ function ClassSummary({
       <div className="teacher-two-column teacher-two-column--class">
         <section className="teacher-section" aria-labelledby="node-error-title">
           <header className="teacher-section__heading">
-            <div><span>partial + miss / 已测人数</span><h2 id="node-error-title">节点错误率</h2></div>
+            <div><span>partial + miss / 已测学生</span><h2 id="node-error-title">节点错误率</h2></div>
             <FileJson aria-hidden="true" />
           </header>
           <div className="node-error-bars">
@@ -344,10 +414,10 @@ export default function TeacherPage() {
           sessions={classSessions}
           rejected={rejected}
           onImport={async (files) => {
-            const sources = await Promise.all([...files].map(async (file) => ({ name: file.name, text: await file.text() })));
-            const result = importClassSessionFiles(sources, config, classSessions);
+            const batch = await readClassSessionFileBatch([...files]);
+            const result = importClassSessionFiles(batch.files, config, classSessions);
             setImported((current) => [...current, ...result.accepted]);
-            setRejected(result.rejected);
+            setRejected([...batch.rejected, ...result.rejected]);
           }}
         />
       )}
