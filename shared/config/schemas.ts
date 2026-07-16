@@ -584,6 +584,7 @@ const caseMaterialSchema = z
     kind: z.enum(['apparatus-diagram', 'cross-section']),
     materialRef: z.string().trim().startsWith('assets/').nullable(),
     status: z.enum(['pending-assets', 'ready']),
+    revealAfterNodeIds: z.array(idSchema).default([]),
   })
   .strict()
   .superRefine((value, context) => {
@@ -592,6 +593,13 @@ const caseMaterialSchema = z
     }
     if (value.status === 'pending-assets' && value.materialRef !== null) {
       context.addIssue({ code: 'custom', path: ['materialRef'], message: 'pending materialRef must be null' });
+    }
+    if (value.kind === 'cross-section' && value.revealAfterNodeIds.length === 0) {
+      context.addIssue({
+        code: 'custom',
+        path: ['revealAfterNodeIds'],
+        message: 'cross-section material requires a configured reveal condition',
+      });
     }
   });
 
@@ -725,6 +733,22 @@ export const caseSchema = z
     reportDuplicateStrings(value.tutoring.map((entry) => entry.nodeId), ['tutoring'], context);
     reportDuplicateIds(value.evidencePaths, ['evidencePaths'], context);
     reportDuplicateStrings(value.targetNodeIds, ['targetNodeIds'], context);
+    value.materials.forEach((material, materialIndex) => {
+      reportDuplicateStrings(
+        material.revealAfterNodeIds,
+        ['materials', materialIndex, 'revealAfterNodeIds'],
+        context,
+      );
+      material.revealAfterNodeIds.forEach((nodeId, nodeIndex) => {
+        if (!value.targetNodeIds.includes(nodeId)) {
+          context.addIssue({
+            code: 'custom',
+            path: ['materials', materialIndex, 'revealAfterNodeIds', nodeIndex],
+            message: `material reveal targets non-case node ${nodeId}`,
+          });
+        }
+      });
+    });
     if (value.caseType === 'transfer' && value.tutoring.length > 0) {
       context.addIssue({
         code: 'custom',

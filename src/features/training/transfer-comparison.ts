@@ -7,6 +7,7 @@ import {
   type AssessmentCompletedEvent,
   sessionSchema,
 } from '../../../shared/session';
+import { classifyDimensionLevel, type DimensionProfile } from '../../../shared/scoring/profile';
 
 type DimensionId = KnowledgeModelConfig['dimensions'][number]['id'];
 type ScoredAssessment = AssessmentCompletedEvent & {
@@ -17,6 +18,7 @@ export interface NormalizedDimensionResult {
   weightedEarned: number;
   assessedWeight: number;
   ratio: number | null;
+  level: DimensionProfile['level'];
   assessedNodeIds: string[];
   unassessedNodeIds: string[];
 }
@@ -62,7 +64,7 @@ function nodeWeight(
     ?? (node.weight === 2 ? policy.weighting.coreWeight : policy.weighting.secondaryWeight);
 }
 
-function latestScoredByNode(
+export function latestScoredByNode(
   events: readonly AssessmentCompletedEvent[],
   caseId: string,
   commonNodeIds: ReadonlySet<string>,
@@ -74,7 +76,10 @@ function latestScoredByNode(
       && commonNodeIds.has(event.nodeId)
       && event.score.status === 'scored'
     ) {
-      result.set(event.nodeId, event as ScoredAssessment);
+      const current = result.get(event.nodeId);
+      if (!current || event.sequence > current.sequence) {
+        result.set(event.nodeId, event as ScoredAssessment);
+      }
     }
   }
   return result;
@@ -102,10 +107,12 @@ function normalizeDimension(
     assessedNodeIds.push(node.id);
   }
 
+  const ratio = assessedWeight === 0 ? null : weightedEarned / assessedWeight;
   return {
     weightedEarned,
     assessedWeight,
-    ratio: assessedWeight === 0 ? null : weightedEarned / assessedWeight,
+    ratio,
+    level: classifyDimensionLevel(ratio, policy.weakness.threshold),
     assessedNodeIds,
     unassessedNodeIds,
   };

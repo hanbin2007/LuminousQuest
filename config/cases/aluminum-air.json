@@ -1,5 +1,5 @@
 {
-  "version": "case.v1.4",
+  "version": "case.v1.5",
   "id": "aluminum-air",
   "sequence": 2,
   "title": "碱性铝-空气电池",
@@ -7,8 +7,8 @@
   "caseType": "training",
   "medium": "alkaline",
   "materials": [
-    { "id": "apparatus", "kind": "apparatus-diagram", "materialRef": "assets/cases/aluminum-air/schematic.png", "status": "ready" },
-    { "id": "cross-section", "kind": "cross-section", "materialRef": "assets/cases/aluminum-air/cross-section.png", "status": "ready" }
+    { "id": "apparatus", "kind": "apparatus-diagram", "materialRef": "assets/cases/aluminum-air/schematic.png", "status": "ready", "revealAfterNodeIds": [] },
+    { "id": "cross-section", "kind": "cross-section", "materialRef": "assets/cases/aluminum-air/cross-section.png", "status": "ready", "revealAfterNodeIds": ["P2", "P3"] }
   ],
   "followingAnchors": [
     { "id": "case-polarity", "statement": "铝极为负极，多孔碳空气极为正极。", "correctValue": "negative=Al;positive=porous-carbon" }

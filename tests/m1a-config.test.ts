@@ -113,6 +113,16 @@ describe('M1a external teaching configuration', () => {
     expect(config.cases.every((trainingCase) => trainingCase.scaffold.length === 3)).toBe(true);
     expect(config.cases.flatMap((trainingCase) => trainingCase.materials)
       .every((material) => material.status === 'ready' && material.materialRef !== null)).toBe(true);
+    expect(config.cases.flatMap((trainingCase) => trainingCase.materials)
+      .every((material) => Array.isArray(material.revealAfterNodeIds))).toBe(true);
+    for (const trainingCase of config.cases) {
+      for (const material of trainingCase.materials) {
+        expect(material.revealAfterNodeIds.every((nodeId) => trainingCase.targetNodeIds.includes(nodeId)))
+          .toBe(true);
+        expect(material.kind === 'cross-section' ? material.revealAfterNodeIds : [])
+          .toEqual(material.kind === 'cross-section' ? ['P2', 'P3'] : []);
+      }
+    }
     expect(config.cases.find((trainingCase) => trainingCase.id === 'zinc-copper')?.materials)
       .toHaveLength(1);
     expect(config.pretest.questions).toHaveLength(3);
@@ -159,7 +169,7 @@ describe('M1a external teaching configuration', () => {
     expect(config.pretest.version).toBe('pretest.v1.1');
     expect(config.scaffoldPolicy.version).toBe('scaffold-policy.v1.5');
     expect(config.scaffoldPolicy.extraction.temperature).toBe(0.1);
-    expect(config.cases.every((entry) => entry.version === 'case.v1.4')).toBe(true);
+    expect(config.cases.every((entry) => entry.version === 'case.v1.5')).toBe(true);
     expect(config.knowledgeModel.nodes.find((node) => node.id === 'D4')?.statement)
       .toContain('惰性电极');
     expect(config.knowledgeModel.nodes.find((node) => node.id === 'D4')?.statement)

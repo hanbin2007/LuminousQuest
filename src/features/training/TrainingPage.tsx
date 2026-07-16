@@ -22,6 +22,7 @@ import {
   upsertScaffoldHistory,
   type ScaffoldViewState,
 } from './scaffold-adapter';
+import { mediumLabel, visibleCaseMaterials } from './materials';
 import { TransferRadarComparison } from './TransferRadarComparison';
 import { buildTransferComparison, type TransferComparison } from './transfer-comparison';
 
@@ -141,12 +142,18 @@ function transitionPresentation(
   return transition.changeReason;
 }
 
-function MaterialPanel({ trainingCase }: { trainingCase: CaseConfig }) {
-  const [materialIndex, setMaterialIndex] = useState(0);
-  const available = trainingCase.materials.filter((entry) => entry.status === 'ready');
-  const material = available[materialIndex] ?? available[0];
+function MaterialPanel({
+  trainingCase,
+  completedNodeIds,
+}: {
+  trainingCase: CaseConfig;
+  completedNodeIds: readonly string[];
+}) {
+  const [materialId, setMaterialId] = useState<string | null>(null);
+  const available = visibleCaseMaterials(trainingCase, completedNodeIds);
+  const material = available.find((entry) => entry.id === materialId) ?? available[0];
 
-  useEffect(() => setMaterialIndex(0), [trainingCase.id]);
+  useEffect(() => setMaterialId(null), [trainingCase.id]);
 
   return (
     <section className="training-material" aria-labelledby="training-material-title">
@@ -156,12 +163,12 @@ function MaterialPanel({ trainingCase }: { trainingCase: CaseConfig }) {
       </header>
       {available.length > 1 ? (
         <div className="segmented-control training-material__switch" aria-label="案例素材视图">
-          {available.map((entry, index) => (
+          {available.map((entry) => (
             <button
               key={entry.id}
               type="button"
-              className={index === materialIndex ? 'is-active' : undefined}
-              onClick={() => setMaterialIndex(index)}
+              className={entry.id === material?.id ? 'is-active' : undefined}
+              onClick={() => setMaterialId(entry.id)}
             >
               {entry.kind === 'cross-section' ? '查看结构剖面' : '查看装置简图'}
             </button>
@@ -175,7 +182,7 @@ function MaterialPanel({ trainingCase }: { trainingCase: CaseConfig }) {
             alt={`${trainingCase.title} ${material.kind === 'cross-section' ? '结构剖面图' : '装置简图'}`}
           />
           <figcaption>
-            {material.kind === 'cross-section' ? '结构剖面' : '装置简图'} · {trainingCase.medium} medium
+            {material.kind === 'cross-section' ? '结构剖面' : '装置简图'} · {mediumLabel(trainingCase.medium)}
           </figcaption>
         </figure>
       ) : (
@@ -565,7 +572,10 @@ export function TrainingPage() {
       </section>
 
       <div className="training-layout">
-        <MaterialPanel trainingCase={trainingCase} />
+        <MaterialPanel
+          trainingCase={trainingCase}
+          completedNodeIds={feedbackEvents.map((event) => event.nodeId)}
+        />
         <AnswerWorkspace
           trainingCase={trainingCase}
           draft={draft}

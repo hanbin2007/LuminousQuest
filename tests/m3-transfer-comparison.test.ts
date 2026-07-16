@@ -4,11 +4,15 @@ import { loadAllConfig } from '../server/config/loader';
 import { resolveRubricDecision } from '../shared/scoring/rubric';
 import {
   appendSessionEvent,
+  type AssessmentCompletedEvent,
   createSession,
   sessionConfigVersions,
   type SessionEventInput,
 } from '../shared/session';
-import { buildTransferComparison } from '../src/features/training/transfer-comparison';
+import {
+  buildTransferComparison,
+  latestScoredByNode,
+} from '../src/features/training/transfer-comparison';
 
 const occurredAt = '2026-07-15T12:00:00.000Z';
 
@@ -182,6 +186,18 @@ describe('cold-transfer pre/post comparison', () => {
     appendAbsent(transferCase.id, 'P4', 'unassessed');
     appendAbsent(transferCase.id, 'E1', 'needs-review');
 
+    const pretestD1 = session.events.filter((event): event is AssessmentCompletedEvent =>
+      event.kind === 'assessment.completed'
+      && event.caseId === 'pretest'
+      && event.nodeId === 'D1');
+    const latestD1 = pretestD1.reduce((latest, event) =>
+      event.sequence > latest.sequence ? event : latest);
+    expect(latestScoredByNode(
+      [...pretestD1].reverse(),
+      'pretest',
+      new Set(['D1']),
+    ).get('D1')?.id).toBe(latestD1.id);
+
     const comparison = buildTransferComparison(session, config, transferCase.id);
 
     expect(comparison.commonNodeIds).toEqual(['D1', 'D2', 'P4', 'E1']);
@@ -194,6 +210,7 @@ describe('cold-transfer pre/post comparison', () => {
           weightedEarned: 1,
           assessedWeight: 2,
           ratio: 0.5,
+          level: 'weak',
           assessedNodeIds: ['D1', 'D2'],
           unassessedNodeIds: [],
         },
@@ -201,6 +218,7 @@ describe('cold-transfer pre/post comparison', () => {
           weightedEarned: 1,
           assessedWeight: 1,
           ratio: 1,
+          level: 'mastered',
           assessedNodeIds: ['D1'],
           unassessedNodeIds: ['D2'],
         },
@@ -213,6 +231,7 @@ describe('cold-transfer pre/post comparison', () => {
           weightedEarned: 1,
           assessedWeight: 2,
           ratio: 0.5,
+          level: 'weak',
           assessedNodeIds: ['P4'],
           unassessedNodeIds: [],
         },
@@ -220,6 +239,7 @@ describe('cold-transfer pre/post comparison', () => {
           weightedEarned: 0,
           assessedWeight: 0,
           ratio: null,
+          level: 'unassessed',
           assessedNodeIds: [],
           unassessedNodeIds: ['P4'],
         },
@@ -232,6 +252,7 @@ describe('cold-transfer pre/post comparison', () => {
           weightedEarned: 0,
           assessedWeight: 0,
           ratio: null,
+          level: 'unassessed',
           assessedNodeIds: [],
           unassessedNodeIds: ['E1'],
         },
@@ -239,6 +260,7 @@ describe('cold-transfer pre/post comparison', () => {
           weightedEarned: 0,
           assessedWeight: 0,
           ratio: null,
+          level: 'unassessed',
           assessedNodeIds: [],
           unassessedNodeIds: ['E1'],
         },

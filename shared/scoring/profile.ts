@@ -51,6 +51,16 @@ export interface DimensionProfile {
   needsReviewNodeIds: string[];
 }
 
+export function classifyDimensionLevel(
+  ratio: number | null,
+  weaknessThreshold: number,
+): DimensionProfile['level'] {
+  if (ratio === null) return 'unassessed';
+  if (ratio < weaknessThreshold) return 'weak';
+  if (ratio < 1) return 'developing';
+  return 'mastered';
+}
+
 function originalAnswer(answer: AnswerSubmittedEvent) {
   return answer.answer.format === 'text'
     ? answer.answer.value
@@ -253,13 +263,7 @@ export function buildLearnerProfile(
     );
     const possible = assessed.reduce((total, node) => total + node.weight, 0);
     const ratio = possible === 0 ? null : earned / possible;
-    const level = ratio === null
-      ? 'unassessed' as const
-      : ratio < rubrics.policy.weakness.threshold
-        ? 'weak' as const
-        : ratio < 1
-          ? 'developing' as const
-          : 'mastered' as const;
+    const level = classifyDimensionLevel(ratio, rubrics.policy.weakness.threshold);
     return {
       dimensionId: dimension.id,
       earned,

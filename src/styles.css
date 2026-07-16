@@ -1576,6 +1576,10 @@ p {
   font-family: var(--font-mono);
 }
 
+.transfer-comparison__scores dd strong[data-level='unassessed'] {
+  color: var(--status-unassessed);
+}
+
 .transfer-comparison__scores small {
   grid-column: 2 / -1;
 }

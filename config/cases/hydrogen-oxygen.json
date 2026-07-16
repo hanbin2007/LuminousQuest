@@ -1,5 +1,5 @@
 {
-  "version": "case.v1.4",
+  "version": "case.v1.5",
   "id": "hydrogen-oxygen",
   "sequence": 3,
   "title": "酸性氢氧燃料电池",
@@ -7,8 +7,8 @@
   "caseType": "training",
   "medium": "acidic",
   "materials": [
-    { "id": "apparatus", "kind": "apparatus-diagram", "materialRef": "assets/cases/hydrogen-oxygen/schematic.png", "status": "ready" },
-    { "id": "cross-section", "kind": "cross-section", "materialRef": "assets/cases/hydrogen-oxygen/cross-section.png", "status": "ready" }
+    { "id": "apparatus", "kind": "apparatus-diagram", "materialRef": "assets/cases/hydrogen-oxygen/schematic.png", "status": "ready", "revealAfterNodeIds": [] },
+    { "id": "cross-section", "kind": "cross-section", "materialRef": "assets/cases/hydrogen-oxygen/cross-section.png", "status": "ready", "revealAfterNodeIds": ["P2", "P3"] }
   ],
   "followingAnchors": [
     { "id": "case-polarity", "statement": "通入氢气的 Pt 极为负极，通入氧气的 Pt 极为正极。", "correctValue": "negative=hydrogen-Pt;positive=oxygen-Pt" }

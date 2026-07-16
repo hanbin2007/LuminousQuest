@@ -1,5 +1,5 @@
 {
-  "version": "case.v1.4",
+  "version": "case.v1.5",
   "id": "zinc-copper",
   "sequence": 1,
   "title": "锌铜原电池",
@@ -7,7 +7,7 @@
   "caseType": "training",
   "medium": "neutral",
   "materials": [
-    { "id": "apparatus", "kind": "apparatus-diagram", "materialRef": "assets/cases/zinc-copper/schematic.png", "status": "ready" }
+    { "id": "apparatus", "kind": "apparatus-diagram", "materialRef": "assets/cases/zinc-copper/schematic.png", "status": "ready", "revealAfterNodeIds": [] }
   ],
   "followingAnchors": [
     { "id": "case-polarity", "statement": "锌极为负极，铜极为正极。", "correctValue": "negative=Zn;positive=Cu" }

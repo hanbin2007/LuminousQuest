@@ -1,12 +1,12 @@
 import { RadarChart } from 'echarts/charts';
-import { AriaComponent, TooltipComponent } from 'echarts/components';
+import { AriaComponent, GraphicComponent, TooltipComponent } from 'echarts/components';
 import * as echarts from 'echarts/core';
 import { SVGRenderer } from 'echarts/renderers';
 import { useEffect, useRef } from 'react';
 
 import type { TransferComparison } from './transfer-comparison';
 
-echarts.use([RadarChart, TooltipComponent, AriaComponent, SVGRenderer]);
+echarts.use([RadarChart, TooltipComponent, AriaComponent, GraphicComponent, SVGRenderer]);
 
 interface TransferRadarComparisonProps {
   comparison: TransferComparison;
@@ -26,6 +26,19 @@ function percent(value: number | null) {
   return value === null ? '未测' : `${Math.round(value * 100)}%`;
 }
 
+const levelLabels = {
+  unassessed: '未测',
+  weak: '薄弱',
+  developing: '发展中',
+  mastered: '掌握',
+} as const;
+
+function resultLabel(result: TransferComparison['dimensions'][number]['pretest']) {
+  return result.ratio === null
+    ? levelLabels.unassessed
+    : `${percent(result.ratio)} · ${levelLabels[result.level]}`;
+}
+
 export function TransferRadarComparison({ comparison }: TransferRadarComparisonProps) {
   const container = useRef<HTMLDivElement>(null);
   const hasUnassessedPretest = comparison.dimensions.some((entry) => entry.pretest.ratio === null);
@@ -35,6 +48,11 @@ export function TransferRadarComparison({ comparison }: TransferRadarComparisonP
     if (!element) return undefined;
     const styles = getComputedStyle(document.documentElement);
     const token = (name: string) => styles.getPropertyValue(name).trim();
+    const axisColors = {
+      device: token('--dim-device'),
+      principle: token('--dim-principle'),
+      energy: token('--dim-energy'),
+    } as const;
     let chart: ReturnType<typeof echarts.init> | null = null;
 
     const render = () => {
@@ -42,13 +60,23 @@ export function TransferRadarComparison({ comparison }: TransferRadarComparisonP
       if (width <= 0 || height <= 0) return;
       chart ??= echarts.init(element, undefined, { renderer: 'svg' });
       chart.resize({ width, height });
+      const center = [width / 2, height * 0.52] as const;
+      const radius = Math.min(width * 0.3, height * 0.29);
+      const endpoints = comparison.dimensions.map((dimension, index) => {
+        const angle = (-90 + index * 120) * Math.PI / 180;
+        return {
+          dimension,
+          x: center[0] + Math.cos(angle) * radius,
+          y: center[1] + Math.sin(angle) * radius,
+        };
+      });
       chart.setOption({
         animationDuration: Number.parseFloat(token('--dur-base')) || 0,
         aria: {
           enabled: true,
           decal: { show: false },
           description: comparison.dimensions.map((dimension) =>
-            `${dimension.label}前测${percent(dimension.pretest.ratio)}，后测${percent(dimension.transfer.ratio)}`).join('；'),
+            `${dimension.label}前测${resultLabel(dimension.pretest)}，后测${resultLabel(dimension.transfer)}`).join('；'),
         },
         tooltip: {
           trigger: 'item',
@@ -57,15 +85,50 @@ export function TransferRadarComparison({ comparison }: TransferRadarComparisonP
           textStyle: { color: token('--ink'), fontFamily: token('--font-body') },
         },
         radar: {
-          center: ['50%', '52%'],
-          radius: '58%',
+          center,
+          radius,
           splitNumber: 4,
           indicator: comparison.dimensions.map((dimension) => ({ name: dimension.label, max: 100 })),
-          axisLine: { lineStyle: { color: token('--hairline') } },
+          axisLine: { show: false },
           splitLine: { lineStyle: { color: token('--hairline') } },
           splitArea: { areaStyle: { color: [token('--paper-raised'), token('--paper-sunken')] } },
           axisName: { color: token('--ink'), fontFamily: token('--font-body') },
         },
+        graphic: [
+          ...endpoints.map(({ dimension, x, y }) => ({
+            type: 'line',
+            silent: true,
+            shape: { x1: center[0], y1: center[1], x2: x, y2: y },
+            style: { stroke: axisColors[dimension.dimensionId], lineWidth: 2 },
+          })),
+          ...endpoints.flatMap(({ dimension, x, y }) =>
+            dimension.pretest.ratio === null || dimension.transfer.ratio === null ? [{
+              type: 'group',
+              silent: true,
+              children: [
+                {
+                  type: 'circle',
+                  shape: { cx: x, cy: y, r: 6 },
+                  style: {
+                    fill: token('--paper-raised'),
+                    stroke: token('--status-unassessed'),
+                    lineWidth: 3,
+                  },
+                },
+                {
+                  type: 'text',
+                  style: {
+                    x,
+                    y: y + 12,
+                    text: '未测',
+                    textAlign: 'center',
+                    fill: token('--status-unassessed'),
+                    font: `12px ${token('--font-body')}`,
+                  },
+                },
+              ],
+            }] : []),
+        ],
         series: [{
           type: 'radar',
           data: [
@@ -117,8 +180,8 @@ export function TransferRadarComparison({ comparison }: TransferRadarComparisonP
           {comparison.dimensions.map((dimension) => (
             <div key={dimension.dimensionId} data-dimension={dimension.dimensionId}>
               <dt>{dimension.label}</dt>
-              <dd><span>训练前</span><strong>{percent(dimension.pretest.ratio)}</strong></dd>
-              <dd><span>后测</span><strong>{percent(dimension.transfer.ratio)}</strong></dd>
+              <dd><span>训练前</span><strong data-level={dimension.pretest.level}>{resultLabel(dimension.pretest)}</strong></dd>
+              <dd><span>后测</span><strong data-level={dimension.transfer.level}>{resultLabel(dimension.transfer)}</strong></dd>
               <small>共同节点 {dimension.commonNodeIds.length} · 缺测不计分母</small>
             </div>
           ))}

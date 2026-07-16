@@ -76,15 +76,16 @@ describe('M3 training flow', () => {
     expect(screen.getByLabelText('装置维度作答')).toBeInTheDocument();
     expect(screen.getByLabelText('原理维度作答')).toBeInTheDocument();
     expect(screen.getByLabelText('能量维度作答')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '查看结构剖面' })).not.toBeInTheDocument();
+
+    await fillVisibleAnswers(user);
+    await user.click(screen.getByRole('button', { name: '提交案例作答' }));
+    expect(await screen.findByText('连续 1 次无辅助答对，下一案例进入三级脚手架。')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: '查看结构剖面' }));
     expect(screen.getByRole('img', { name: '碱性铝-空气电池 结构剖面图' })).toHaveAttribute(
       'src',
       '/assets/cases/aluminum-air/cross-section.png',
     );
-
-    await fillVisibleAnswers(user);
-    await user.click(screen.getByRole('button', { name: '提交案例作答' }));
-    expect(await screen.findByText('连续 1 次无辅助答对，下一案例进入三级脚手架。')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: '进入下一案例' }));
 
     expect(screen.getByRole('heading', { name: '酸性氢氧燃料电池' })).toBeInTheDocument();

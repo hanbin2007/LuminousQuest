@@ -1,5 +1,5 @@
 {
-  "version": "case.v1.4",
+  "version": "case.v1.5",
   "id": "methane-fuel",
   "sequence": 4,
   "title": "酸性甲烷燃料电池冷迁移",
@@ -11,7 +11,8 @@
       "id": "apparatus",
       "kind": "apparatus-diagram",
       "materialRef": "assets/cases/methane-fuel/schematic.png",
-      "status": "ready"
+      "status": "ready",
+      "revealAfterNodeIds": []
     }
   ],
   "followingAnchors": [
