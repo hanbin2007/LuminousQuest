@@ -1,0 +1,13 @@
+diff --git a/config/rubrics.json b/config/rubrics.json
+index 4d5042b..71c37e1 100644
+--- a/config/rubrics.json
++++ b/config/rubrics.json
+@@ -53,7 +53,7 @@
+       }
+     },
+     "weakness": {
+-      "threshold": 0.6,
++      "threshold": 0.61,
+       "partialVisualization": "half-lit"
+     },
+     "repeatedAnswers": {

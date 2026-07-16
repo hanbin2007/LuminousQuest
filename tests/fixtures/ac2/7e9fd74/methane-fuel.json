@@ -1,0 +1,189 @@
+{
+  "version": "case.v1.4",
+  "id": "methane-fuel",
+  "sequence": 4,
+  "title": "酸性甲烷燃料电池冷迁移",
+  "type": "analysis",
+  "caseType": "transfer",
+  "medium": "acidic",
+  "materials": [
+    {
+      "id": "apparatus",
+      "kind": "apparatus-diagram",
+      "materialRef": "assets/cases/methane-fuel/schematic.png",
+      "status": "ready"
+    }
+  ],
+  "followingAnchors": [
+    {
+      "id": "case-polarity",
+      "statement": "甲烷侧为负极，氧气侧为正极。",
+      "correctValue": "negative=methane-side;positive=oxygen-side"
+    }
+  ],
+  "scaffold": [
+    {
+      "level": 1,
+      "fields": [
+        { "id": "d5-site", "dimensionId": "device", "nodeId": "D5", "prompt": "两极分别由什么材料提供反应场所？" },
+        { "id": "d5-participation", "dimensionId": "device", "nodeId": "D5", "prompt": "两极材料本身是否参与并被消耗？" },
+        { "id": "d5-reactant", "dimensionId": "device", "nodeId": "D5", "prompt": "每一极真正得失电子的反应物是谁？" },
+        { "id": "d5-source", "dimensionId": "device", "nodeId": "D5", "prompt": "这些反应物从电极本身还是外部气体中来？" },
+        { "id": "p2-reactants", "dimensionId": "principle", "nodeId": "P2", "prompt": "先判断氧化剂、还原剂，并与两极场所对应。" },
+        { "id": "p3-products", "dimensionId": "principle", "nodeId": "P3", "prompt": "结合酸性介质判断两极产物和 H+、H2O 的位置。" },
+        { "id": "p4-process", "dimensionId": "principle", "nodeId": "P4", "prompt": "沿闭合回路追踪电子与 H+ 的移动方向。" },
+        { "id": "p5-observation", "dimensionId": "principle", "nodeId": "P5", "prompt": "由两极过程推出物质消耗与生成现象。" },
+        { "id": "energy-chain", "dimensionId": "energy", "nodeId": "E1", "prompt": "说明能量来自哪个自发反应、转化为什么能量以及是否存在损耗。" }
+      ],
+      "answerPoints": [
+        "两片 Pt 只提供反应场所，外部通入的 CH4 和 O2 才是反应物。",
+        "酸性介质下甲烷侧生成 CO2、H+ 和电子，氧气侧消耗 O2、H+ 和电子生成水。",
+        "电子由甲烷侧经外电路流向氧气侧，H+ 经质子交换膜移向氧气侧。",
+        "CH4 与 O2 的化学能直接转化为电能，同时存在能量损耗。"
+      ]
+    },
+    {
+      "level": 2,
+      "dimensionIds": ["device", "principle", "energy"],
+      "answerPoints": [
+        "两片 Pt、外电路和质子交换膜构成电子与离子的闭合通路。",
+        "CH4 被氧化、O2 被还原；两极反应满足守恒并与酸性介质匹配。",
+        "自发反应的化学能直接转化为电能但并非百分之百。"
+      ]
+    },
+    {
+      "level": 3,
+      "prompt": "请独立分析这个酸性甲烷燃料电池，并写出两极反应式与总反应式。",
+      "answerPoints": [
+        "完整覆盖功能四要素、场所与反应物区分、酸性介质下的过程及能量转化。",
+        "两条电极反应式满足元素、电荷和电子守恒，合并后得到甲烷完全氧化总反应。"
+      ]
+    }
+  ],
+  "equationSets": [
+    {
+      "id": "methane-negative",
+      "electrode": "negative",
+      "medium": "acidic",
+      "expectedElectronSide": "product",
+      "accepted": ["CH4 + 2H2O -> CO2 + 8H^+ + 8e^-"]
+    },
+    {
+      "id": "oxygen-positive",
+      "electrode": "positive",
+      "medium": "acidic",
+      "expectedElectronSide": "reactant",
+      "accepted": ["2O2 + 8H^+ + 8e^- -> 4H2O"]
+    },
+    {
+      "id": "methane-overall",
+      "electrode": "overall",
+      "medium": "acidic",
+      "expectedElectronSide": "none",
+      "accepted": ["CH4 + 2O2 -> CO2 + 2H2O"]
+    }
+  ],
+  "evidencePaths": [
+    {
+      "id": "mf-d1", "nodeId": "D1", "description": "指出甲烷侧 Pt 是失电子场所且自身不消耗。", "source": "answer",
+      "referenceAnswerPoints": ["甲烷侧 Pt 是氧化反应发生的失电子场所，Pt 自身不消耗。"],
+      "factRequirements": [
+        { "id": "oxidation-site", "acceptedValues": ["methane-Pt"] },
+        { "id": "site-consumed", "acceptedValues": ["false"] }
+      ]
+    },
+    {
+      "id": "mf-d2", "nodeId": "D2", "description": "指出外电路由电子导体连接两片 Pt。", "source": "answer",
+      "referenceAnswerPoints": ["外电路用电子导体连接两片 Pt 并传导电子。"],
+      "factRequirements": [{ "id": "external-carrier", "acceptedValues": ["electron"] }]
+    },
+    {
+      "id": "mf-d3", "nodeId": "D3", "description": "指出酸性电解质或质子交换膜提供离子通路。", "source": "answer",
+      "referenceAnswerPoints": ["酸性电解质或质子交换膜通过 H+ 迁移提供离子通路。"],
+      "factRequirements": [
+        { "id": "internal-carrier", "acceptedValues": ["H+"] },
+        { "id": "ion-path", "acceptedValues": ["proton-exchange-membrane", "acidic-electrolyte"] }
+      ]
+    },
+    {
+      "id": "mf-d4", "nodeId": "D4", "description": "指出氧气侧 Pt 是得电子场所且自身不消耗。", "source": "answer",
+      "referenceAnswerPoints": ["氧气侧 Pt 是还原反应发生的得电子场所，Pt 自身不消耗。"],
+      "factRequirements": [
+        { "id": "reduction-site", "acceptedValues": ["oxygen-Pt"] },
+        { "id": "site-consumed", "acceptedValues": ["false"] }
+      ]
+    },
+    {
+      "id": "mf-d5", "nodeId": "D5", "description": "区分两片 Pt 场所与外部通入的 CH4、O2 反应物。", "source": "answer",
+      "referenceAnswerPoints": ["两片 Pt 是反应场所，外部通入的 CH4 和 O2 才是反应物。"],
+      "factRequirements": [
+        { "id": "negative-reactant", "acceptedValues": ["CH4"] },
+        { "id": "positive-reactant", "acceptedValues": ["O2"] }
+      ]
+    },
+    {
+      "id": "mf-p1", "nodeId": "P1", "description": "指出 CH4 与 O2 的自发反应分处两极进行。", "source": "answer",
+      "referenceAnswerPoints": ["CH4 与 O2 的自发氧化还原反应分处两极进行。"],
+      "factRequirements": [
+        { "id": "spontaneous", "acceptedValues": ["true"] },
+        { "id": "half-reactions-separated", "acceptedValues": ["true"] }
+      ]
+    },
+    {
+      "id": "mf-p2", "nodeId": "P2", "description": "确定 CH4 为还原剂、O2 为氧化剂。", "source": "answer",
+      "referenceAnswerPoints": ["CH4 是还原剂，O2 是氧化剂。"],
+      "factRequirements": [
+        { "id": "reducing-agent", "acceptedValues": ["CH4"] },
+        { "id": "oxidizing-agent", "acceptedValues": ["O2"] }
+      ]
+    },
+    { "id": "mf-p3", "nodeId": "P3", "description": "按酸性介质确定 CO2、H+ 和 H2O 的存在位置。", "source": "equation" },
+    {
+      "id": "mf-p4", "nodeId": "P4", "description": "说明电子和 H+ 的通路方向。", "source": "answer",
+      "referenceAnswerPoints": ["电子由甲烷侧 Pt 经外电路流向氧气侧 Pt，H+ 经膜移向氧气侧。"],
+      "factRequirements": [
+        { "id": "electron-from", "acceptedValues": ["methane-Pt"] },
+        { "id": "electron-to", "acceptedValues": ["oxygen-Pt"] },
+        { "id": "permitted-ion", "acceptedValues": ["H+"] },
+        { "id": "ion-toward", "acceptedValues": ["oxygen-Pt"] }
+      ]
+    },
+    {
+      "id": "mf-p5", "nodeId": "P5", "description": "由过程解释 CH4、O2 消耗及 CO2、H2O 生成。", "source": "answer",
+      "referenceAnswerPoints": ["CH4 和 O2 被消耗，并生成 CO2 和 H2O。"],
+      "factRequirements": [
+        { "id": "consumed", "acceptedValues": ["CH4+O2"] },
+        { "id": "generated", "acceptedValues": ["CO2+H2O"] }
+      ]
+    },
+    { "id": "mf-p6", "nodeId": "P6", "description": "酸性两极反应式通过守恒和等价式校验。", "source": "equation" },
+    { "id": "mf-p7", "nodeId": "P7", "description": "配平电子后合成 CH4 + 2O2 -> CO2 + 2H2O。", "source": "equation" },
+    {
+      "id": "mf-e1", "nodeId": "E1", "description": "指出化学能不经燃烧直接转化为电能。", "source": "answer",
+      "referenceAnswerPoints": ["CH4 与 O2 的化学能不经燃烧而直接转化为电能。"],
+      "factRequirements": [
+        { "id": "energy-from", "acceptedValues": ["chemical"] },
+        { "id": "energy-to", "acceptedValues": ["electric"] }
+      ]
+    },
+    {
+      "id": "mf-e2", "nodeId": "E2", "description": "把电能来源追溯到 CH4 与 O2 的自发反应。", "source": "answer",
+      "referenceAnswerPoints": ["电能来自 CH4 与 O2 的自发反应。"],
+      "factRequirements": [{ "id": "energy-source-reaction", "acceptedValues": ["CH4+O2"] }]
+    },
+    {
+      "id": "mf-e3", "nodeId": "E3", "description": "指出燃料电池转化率较高但仍存在损耗。", "source": "answer",
+      "referenceAnswerPoints": ["燃料电池转化率较高，但仍存在能量损耗。"],
+      "factRequirements": [
+        { "id": "complete-conversion", "acceptedValues": ["false"] },
+        { "id": "comparison", "acceptedValues": ["fuel-cell-over-thermal-power"] }
+      ]
+    }
+  ],
+  "tutoring": [],
+  "targetNodeIds": [
+    "D1", "D2", "D3", "D4", "D5",
+    "P1", "P2", "P3", "P4", "P5", "P6", "P7",
+    "E1", "E2", "E3"
+  ]
+}
