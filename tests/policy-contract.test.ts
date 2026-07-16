@@ -260,11 +260,22 @@ describe('runtime adjudication policy contracts', () => {
   });
 
   it('§11: changing weakness.threshold changes weak classification', async () => {
-    const { config, session } = await sessionWithScores([{ nodeId: 'P4', outcome: 'partial' }]);
-    expect(buildLearnerProfile(session, config).weakNodeIds).toEqual(['P4']);
-    const changed = structuredClone(config);
-    changed.rubrics.policy.weakness.threshold = 0.4;
-    expect(buildLearnerProfile(session, changed).weakNodeIds).toEqual([]);
+    const { config, session } = await sessionWithScores([
+      { nodeId: 'P4', outcome: 'hit' },
+      { nodeId: 'P5', outcome: 'hit' },
+      { nodeId: 'P2', outcome: 'miss' },
+    ]);
+    const threshold60 = structuredClone(config);
+    threshold60.rubrics.policy.weakness.threshold = 0.60;
+    const threshold61 = structuredClone(config);
+    threshold61.rubrics.policy.weakness.threshold = 0.61;
+    const at60 = buildLearnerProfile(session, threshold60).dimensions
+      .find((dimension) => dimension.dimensionId === 'principle')!;
+    const at61 = buildLearnerProfile(session, threshold61).dimensions
+      .find((dimension) => dimension.dimensionId === 'principle')!;
+
+    expect(at60).toMatchObject({ ratio: 0.6, level: 'developing', weak: false });
+    expect(at61).toMatchObject({ ratio: 0.6, level: 'weak', weak: true });
   });
 
   it('§12: changing repeatedAnswers.strategy changes selected completed mastery', async () => {

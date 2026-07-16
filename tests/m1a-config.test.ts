@@ -70,8 +70,7 @@ describe('M1a external teaching configuration', () => {
 
       expect(decision).toMatchObject({ id, configField, status });
       const actualDefault = readConfigField(config, configField);
-      if (id === '11') expect([0.6, 0.61]).toContain(actualDefault);
-      else expect(actualDefault).toEqual(expectedDefault);
+      expect(actualDefault).toEqual(expectedDefault);
       expect(decision?.reviewDueAt).toBe(
         status === 'teacher-confirmed' ? null : '2026-07-17T23:59:59+08:00',
       );

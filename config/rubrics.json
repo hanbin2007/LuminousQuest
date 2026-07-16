@@ -53,7 +53,7 @@
       }
     },
     "weakness": {
-      "threshold": 0.61,
+      "threshold": 0.60,
       "partialVisualization": "half-lit"
     },
     "repeatedAnswers": {
