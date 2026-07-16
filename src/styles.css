@@ -1888,3 +1888,13 @@ p {
 @media (max-width: 960px) {
   .model-stage__body { grid-template-columns: 1fr; }
 }
+
+/* 暗舞台上的纸卡:雷达延续全局纸白身份 */
+.model-stage__radar {
+  background: var(--paper);
+  color: var(--ink);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
+}
+.model-stage__radar h2 { color: var(--ink); font-size: var(--text-base); }

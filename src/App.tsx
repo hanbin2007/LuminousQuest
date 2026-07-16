@@ -94,7 +94,7 @@ function ConfiguredApp({ config, runtime }: { config: LoadedConfig; runtime: App
             <Route path="pretest" element={<PretestPage />} />
             <Route path="training" element={<TrainingPage />} />
             <Route path="model" element={(
-              <Suspense fallback={<div className="stage-dark model-stage" aria-busy="true" />}>
+              <Suspense fallback={<div className="stage-dark model-stage model-stage--on" aria-busy="true"><p style={{ padding: 'var(--space-6)', opacity: 0.6 }}>正在点亮舞台…</p></div>}>
                 <ModelPage />
               </Suspense>
             )} />

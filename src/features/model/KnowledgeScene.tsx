@@ -59,8 +59,8 @@ function NodeVisual({ node, ignitionStart, reducedMotion, selected, onSelect }: 
 
   const { color, emissiveIntensity, glowScale, opacity } = useMemo(() => {
     switch (node.light) {
-      case 'full-lit': return { color: dimGlow, emissiveIntensity: 1.4, glowScale: 2.2, opacity: 1 };
-      case 'half-lit': return { color: dimGlow, emissiveIntensity: 0.6, glowScale: 1.4, opacity: 0.85 };
+      case 'full-lit': return { color: dimGlow, emissiveIntensity: 1.6, glowScale: 2.8, opacity: 1 };
+      case 'half-lit': return { color: dimGlow, emissiveIntensity: 0.7, glowScale: 1.8, opacity: 0.85 };
       case 'needs-review': return { color: STAGE.needsReview, emissiveIntensity: 0.25, glowScale: 0, opacity: 0.9 };
       case 'unassessed': return { color: STAGE.unassessed, emissiveIntensity: 0, glowScale: 0, opacity: 0.45 };
       default: return { color: STAGE.unlit, emissiveIntensity: 0, glowScale: 0, opacity: 0.9 };
@@ -94,7 +94,7 @@ function NodeVisual({ node, ignitionStart, reducedMotion, selected, onSelect }: 
     }
   });
 
-  const position: [number, number, number] = [node.position.x, node.position.y, node.position.z];
+  const position: [number, number, number] = [node.position.x * 1.45, node.position.y * 1.45, node.position.z * 1.45];
   return (
     <group position={position}>
       <mesh
@@ -103,7 +103,7 @@ function NodeVisual({ node, ignitionStart, reducedMotion, selected, onSelect }: 
         onPointerOver={() => { document.body.style.cursor = 'pointer'; }}
         onPointerOut={() => { document.body.style.cursor = ''; }}
       >
-        <sphereGeometry args={[0.28, 32, 32]} />
+        <sphereGeometry args={[0.34, 32, 32]} />
         <meshStandardMaterial
           color={color}
           emissive={lit || node.light === 'needs-review' ? color : '#000000'}
@@ -139,8 +139,8 @@ function Edges({ scene }: { scene: ModelScene }) {
       const to = nodeById.get(edge.to);
       if (!from || !to) continue;
       const pair = [
-        new THREE.Vector3(from.position.x, from.position.y, from.position.z),
-        new THREE.Vector3(to.position.x, to.position.y, to.position.z),
+        new THREE.Vector3(from.position.x * 1.45, from.position.y * 1.45, from.position.z * 1.45),
+        new THREE.Vector3(to.position.x * 1.45, to.position.y * 1.45, to.position.z * 1.45),
       ];
       (edge.crossAxis && edge.bothLit ? crossLit : plain).push(...pair);
     }
@@ -165,9 +165,9 @@ function Edges({ scene }: { scene: ModelScene }) {
 
 function AxisRails() {
   const axes = useMemo(() => ([
-    { color: STAGE.glow.device, points: [new THREE.Vector3(-4.2, 0, 0), new THREE.Vector3(4.2, 0, 0)], label: '装置', at: new THREE.Vector3(4.7, 0, 0) },
-    { color: STAGE.glow.principle, points: [new THREE.Vector3(0, -0.6, 0), new THREE.Vector3(0, 6.4, 0)], label: '原理', at: new THREE.Vector3(0, 6.9, 0) },
-    { color: STAGE.glow.energy, points: [new THREE.Vector3(0, 0, 0), new THREE.Vector3(-2.8, -2.4, 1.6)], label: '能量', at: new THREE.Vector3(-3.2, -2.8, 1.9) },
+    { color: STAGE.glow.device, points: [new THREE.Vector3(-6.1, 0, 0), new THREE.Vector3(6.1, 0, 0)], label: '装置', at: new THREE.Vector3(6.7, 0, 0) },
+    { color: STAGE.glow.principle, points: [new THREE.Vector3(0, -0.9, 0), new THREE.Vector3(0, 9.3, 0)], label: '原理', at: new THREE.Vector3(0, 9.9, 0) },
+    { color: STAGE.glow.energy, points: [new THREE.Vector3(0, 0, 0), new THREE.Vector3(-4.1, -3.5, 2.3)], label: '能量', at: new THREE.Vector3(-4.6, -4.0, 2.7) },
   ]), []);
   return (
     <group>
@@ -187,7 +187,7 @@ function AxisRails() {
 
 function Rig({ reducedMotion }: { reducedMotion: boolean }) {
   const { camera, gl } = useThree();
-  const state = useRef({ yaw: 0.6, pitch: 0.35, radius: 13, dragging: false, lastX: 0, lastY: 0, idleAt: 0 });
+  const state = useRef({ yaw: 0.6, pitch: 0.35, radius: 11.5, dragging: false, lastX: 0, lastY: 0, idleAt: 0 });
 
   useEffect(() => {
     const element = gl.domElement;
@@ -227,7 +227,7 @@ function Rig({ reducedMotion }: { reducedMotion: boolean }) {
     const current = state.current;
     const idle = performance.now() - current.idleAt > 3000;
     if (!reducedMotion && idle && !current.dragging) current.yaw += delta * 0.08;
-    const target = new THREE.Vector3(0, 2.6, 0);
+    const target = new THREE.Vector3(0, 3.6, 0);
     camera.position.set(
       target.x + current.radius * Math.cos(current.pitch) * Math.sin(current.yaw),
       target.y + current.radius * Math.sin(current.pitch),
