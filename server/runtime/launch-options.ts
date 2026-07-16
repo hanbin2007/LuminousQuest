@@ -1,5 +1,6 @@
 export interface LaunchOptions {
   lan: boolean;
+  lockDemo: boolean;
   hostname: '127.0.0.1' | '0.0.0.0';
 }
 
@@ -10,10 +11,19 @@ export interface NetworkAddressLike {
 }
 
 export function parseLaunchOptions(args: readonly string[]): LaunchOptions {
-  const unknown = args.filter((argument) => argument !== '--lan' && argument !== '--');
+  const unknown = args.filter((argument) =>
+    argument !== '--lan' && argument !== '--lock-demo' && argument !== '--');
   if (unknown.length > 0) throw new Error(`Unknown argument: ${unknown[0]}`);
   const lan = args.includes('--lan');
-  return { lan, hostname: lan ? '0.0.0.0' : '127.0.0.1' };
+  return {
+    lan,
+    lockDemo: args.includes('--lock-demo'),
+    hostname: lan ? '0.0.0.0' : '127.0.0.1',
+  };
+}
+
+export function demoLockEnabled(value: string | undefined) {
+  return /^(1|true|yes|on)$/iu.test(value?.trim() ?? '');
 }
 
 function privateIpv4(address: string) {

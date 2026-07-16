@@ -49,10 +49,10 @@ function installHonoFetch(app: ReturnType<typeof createServerApp>) {
 }
 
 async function addTrainingCases(root: string) {
-  await Promise.all(['aluminum-air', 'hydrogen-oxygen'].flatMap((caseId) => {
+  await Promise.all(['aluminum-air', 'hydrogen-oxygen'].map(async (caseId) => {
     const assetRoot = path.join(root, 'assets', 'cases', caseId);
-    return [
-      mkdir(assetRoot, { recursive: true }),
+    await mkdir(assetRoot, { recursive: true });
+    await Promise.all([
       copyFile(
         path.join(process.cwd(), 'config', 'cases', `${caseId}.json`),
         path.join(root, 'config', 'cases', `${caseId}.json`),
@@ -65,7 +65,7 @@ async function addTrainingCases(root: string) {
         path.join(process.cwd(), 'assets', 'cases', caseId, 'cross-section.png'),
         path.join(assetRoot, 'cross-section.png'),
       ),
-    ];
+    ]);
   }));
 }
 

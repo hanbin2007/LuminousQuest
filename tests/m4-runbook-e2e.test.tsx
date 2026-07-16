@@ -51,7 +51,7 @@ afterEach(() => {
   globalThis.__LQ_API_TOKEN__ = undefined;
 });
 
-describe('M4.1 competition runbook click path', () => {
+describe('M4.2 competition runbook click path', () => {
   it('follows the documented labels through the real routes from the versioned demo start', async () => {
     const runbook = await readFile(
       path.join(process.cwd(), 'docs', 'superpowers', 'specs', '2026-07-16-competition-runbook.md'),
@@ -71,6 +71,7 @@ describe('M4.1 competition runbook click path', () => {
       clientRoot: path.join(process.cwd(), 'dist', 'client'),
       providers: new Map([[provider.id, provider]]),
       workflow: { executionMode: 'live', provider: provider.id, model: 'offline-v1' },
+      lockDemo: true,
       apiToken,
     });
     installHonoFetch(app);
@@ -94,9 +95,10 @@ describe('M4.1 competition runbook click path', () => {
     const user = userEvent.setup();
 
     render(<App runtime={defaultRuntime} />);
-    expect(await screen.findByRole('heading', { name: '前测诊断' })).toBeInTheDocument();
-
-    await user.click(screen.getByRole('switch', { name: '演示回放' }));
+    const demoSwitch = await screen.findByRole('switch', { name: '演示回放' });
+    expect(await screen.findByText('executionMode=demo')).toBeInTheDocument();
+    expect(demoSwitch).toHaveAttribute('aria-checked', 'true');
+    await user.click(screen.getByRole('link', { name: '训练' }));
     expect(await screen.findByRole('heading', { name: '本轮证据批注' })).toBeInTheDocument();
     expect(screen.getByText('先定位发生氧化的场所，再沿外电路检查你写的方向。')).toBeInTheDocument();
 

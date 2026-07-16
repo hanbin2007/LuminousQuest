@@ -35,6 +35,35 @@ async function post(app: ReturnType<typeof createServerApp>, route: string, body
 }
 
 describe('M4.1 server execution-mode authority', () => {
+  it.each([
+    ['startup option', false],
+    ['LQ_LOCK_DEMO environment variable', true],
+  ])('hard-locks demo mode from the %s and rejects mode switching', async (_source, fromEnvironment) => {
+    if (fromEnvironment) vi.stubEnv('LQ_LOCK_DEMO', '1');
+    try {
+      const app = createServerApp({
+        contentRoot: process.cwd(),
+        clientRoot: path.join(process.cwd(), 'dist', 'client'),
+        apiToken,
+        ...(fromEnvironment ? {} : { lockDemo: true }),
+        workflow: { executionMode: 'live' },
+      });
+
+      const state = await app.request('/api/runtime');
+      expect(await state.json()).toEqual({ executionMode: 'demo' });
+      const switchAttempt = await post(app, '/api/runtime/execution-mode', {
+        executionMode: 'live',
+      });
+      expect(switchAttempt.status).toBe(403);
+      expect(await switchAttempt.json()).toEqual({
+        error: 'Demo mode is locked by startup configuration',
+      });
+      expect(await (await app.request('/api/runtime')).json()).toEqual({ executionMode: 'demo' });
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
   it('overrides live client claims in global demo mode across every LLM entry point', async () => {
     const spy = providerSpy();
     const config = await loadAllConfig(process.cwd());

@@ -9,8 +9,26 @@ import { serveOnHost } from '../server/runtime/serve-on-loopback';
 
 describe('M4 LAN mode', () => {
   it('keeps loopback as the default and binds all interfaces only for --lan', () => {
-    expect(parseLaunchOptions([])).toEqual({ lan: false, hostname: '127.0.0.1' });
-    expect(parseLaunchOptions(['--lan'])).toEqual({ lan: true, hostname: '0.0.0.0' });
+    expect(parseLaunchOptions([])).toEqual({
+      lan: false,
+      lockDemo: false,
+      hostname: '127.0.0.1',
+    });
+    expect(parseLaunchOptions(['--lan'])).toEqual({
+      lan: true,
+      lockDemo: false,
+      hostname: '0.0.0.0',
+    });
+    expect(parseLaunchOptions(['--lock-demo'])).toEqual({
+      lan: false,
+      lockDemo: true,
+      hostname: '127.0.0.1',
+    });
+    expect(parseLaunchOptions(['--lan', '--lock-demo'])).toEqual({
+      lan: true,
+      lockDemo: true,
+      hostname: '0.0.0.0',
+    });
     expect(() => parseLaunchOptions(['--unknown'])).toThrow(/unknown argument/i);
   });
 

@@ -36,6 +36,7 @@ import {
   runAssessmentExtraction,
 } from './workflows/assessment-extraction';
 import { runSocraticTurn } from './workflows/socratic-tutoring';
+import { demoLockEnabled } from './runtime/launch-options';
 
 const llmRequestSchema = z
   .object({
@@ -170,6 +171,7 @@ export interface ServerAppOptions {
   apiToken?: string;
   accessToken?: string;
   maxRequestBodyBytes?: number;
+  lockDemo?: boolean;
 }
 
 const lanAccessCookie = 'lq_lan_access';
@@ -280,8 +282,10 @@ function invalidRequest(context: Context, label: string, error: z.ZodError) {
   }, 400);
 }
 
-function configuredWorkflow(options: ServerAppOptions): ServerWorkflowOptions {
-  const requestedMode = options.workflow?.executionMode ?? process.env.LQ_LLM_EXECUTION_MODE;
+function configuredWorkflow(options: ServerAppOptions, lockDemo: boolean): ServerWorkflowOptions {
+  const requestedMode = lockDemo
+    ? 'demo'
+    : options.workflow?.executionMode ?? process.env.LQ_LLM_EXECUTION_MODE;
   const executionMode: LLMExecutionMode = requestedMode === 'live' || requestedMode === 'demo'
     ? requestedMode
     : 'development';
@@ -317,7 +321,8 @@ export function createServerApp(options: ServerAppOptions) {
   const recordings = new RecordingStore(options.contentRoot);
   const evalCandidates = new EvalCandidateStore(options.contentRoot);
   const sessions = options.sessions ?? new InMemorySessionStore();
-  const workflow = configuredWorkflow(options);
+  const lockDemo = options.lockDemo ?? demoLockEnabled(process.env.LQ_LOCK_DEMO);
+  const workflow = configuredWorkflow(options, lockDemo);
   const startupWorkflow = { ...workflow };
   const llmService = new LLMService({
     providers: options.providers ?? createProviderRegistry(),
@@ -375,6 +380,9 @@ export function createServerApp(options: ServerAppOptions) {
   app.post('/api/runtime/execution-mode', async (context) => {
     const requestBody = await readProtectedJson(context, apiToken, maxRequestBodyBytes);
     if (!requestBody.ok) return requestBody.response;
+    if (lockDemo) {
+      return context.json({ error: 'Demo mode is locked by startup configuration' }, 403);
+    }
     const parsed = executionModeRequestSchema.safeParse(requestBody.body);
     if (!parsed.success) return invalidRequest(context, 'execution mode', parsed.error);
     workflow.executionMode = parsed.data.executionMode;

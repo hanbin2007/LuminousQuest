@@ -10,13 +10,18 @@ import { RecordingStore, RecordingValidationError } from './llm/recording-store'
 import { loadAllPrompts, PromptValidationError } from './prompts/loader';
 import { resolveClientRoot, resolveContentRoot } from './runtime/content-root';
 import { openBrowser } from './runtime/open-browser';
-import { lanAccessUrls, parseLaunchOptions } from './runtime/launch-options';
+import {
+  demoLockEnabled,
+  lanAccessUrls,
+  parseLaunchOptions,
+} from './runtime/launch-options';
 import { serveOnHost } from './runtime/serve-on-loopback';
 
 async function main() {
   const launch = parseLaunchOptions(process.argv.slice(2));
   const contentRoot = resolveContentRoot();
   loadEnvironment({ path: path.join(contentRoot, '.env'), quiet: true });
+  const lockDemo = launch.lockDemo || demoLockEnabled(process.env.LQ_LOCK_DEMO);
 
   const [loadedConfig, prompts] = await Promise.all([
     loadAllConfig(contentRoot),
@@ -34,6 +39,7 @@ async function main() {
     contentRoot,
     clientRoot: resolveClientRoot(contentRoot),
     ...(accessToken ? { accessToken } : {}),
+    lockDemo,
   });
   const { server, port } = await serveOnHost({
     fetch: app.fetch,
@@ -50,6 +56,7 @@ async function main() {
     : `http://127.0.0.1:${port}`;
   console.log(`[startup] LuminousQuest is ready at ${localUrl}`);
   console.log(`[startup] External content: ${contentRoot}`);
+  if (lockDemo) console.log('[startup] Demo mode is locked for this process.');
   if (accessToken) {
     const addresses = Object.values(networkInterfaces()).flatMap((entries) => entries ?? []);
     console.log(`[startup] LAN access token: ${accessToken}`);

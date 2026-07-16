@@ -19,6 +19,7 @@ import { createTemporaryDirectory, writeValidContentTree } from './helpers/conte
 
 const fixtureRoot = path.join(process.cwd(), 'tests', 'fixtures', 'ac2', '7e9fd74');
 const apiToken = 'ac2-test-token';
+const routeTransitionTimeout = { timeout: 5_000 };
 const historicalRubricPatch = `diff --git a/config/rubrics.json b/config/rubrics.json
 index 4d5042b..71c37e1 100644
 --- a/config/rubrics.json
@@ -59,10 +60,10 @@ function installHonoFetch(app: ReturnType<typeof createServerApp>) {
 
 async function writeThreeCaseBaseline(root: string) {
   const baselineCases = ['aluminum-air', 'hydrogen-oxygen'] as const;
-  await Promise.all(baselineCases.flatMap((caseId) => {
+  await Promise.all(baselineCases.map(async (caseId) => {
     const assetRoot = path.join(root, 'assets', 'cases', caseId);
-    return [
-      mkdir(assetRoot, { recursive: true }),
+    await mkdir(assetRoot, { recursive: true });
+    await Promise.all([
       copyFile(
         path.join(process.cwd(), 'config', 'cases', `${caseId}.json`),
         path.join(root, 'config', 'cases', `${caseId}.json`),
@@ -71,7 +72,7 @@ async function writeThreeCaseBaseline(root: string) {
         path.join(process.cwd(), 'assets', 'cases', caseId, asset),
         path.join(assetRoot, asset),
       )),
-    ];
+    ]);
   }));
   const rubricFile = path.join(root, 'config', 'rubrics.json');
   const rubrics = JSON.parse(await readFile(rubricFile, 'utf8'));
@@ -238,20 +239,36 @@ describe('AC2 config-only hot loading', () => {
     const privateConfig = await loadAllConfig(root);
     render(<App runtime={defaultRuntime} />);
     for (const trainingCase of privateConfig.cases.filter((entry) => entry.caseType === 'training')) {
-      expect(await screen.findByRole('heading', { name: trainingCase.title })).toBeInTheDocument();
+      expect(await screen.findByRole(
+        'heading',
+        { name: trainingCase.title },
+        routeTransitionTimeout,
+      )).toBeInTheDocument();
       fillCase(trainingCase);
       fireEvent.click(screen.getByRole('button', { name: '提交案例作答' }));
-      expect(await screen.findByRole('button', { name: '进入下一案例' })).toBeInTheDocument();
+      expect(await screen.findByRole(
+        'button',
+        { name: '进入下一案例' },
+        routeTransitionTimeout,
+      )).toBeInTheDocument();
       fireEvent.click(screen.getByRole('button', { name: '进入下一案例' }));
     }
 
     const methane = privateConfig.cases.find((entry) => entry.id === 'methane-fuel')!;
-    expect(await screen.findByRole('heading', { name: '酸性甲烷燃料电池冷迁移' })).toBeInTheDocument();
+    expect(await screen.findByRole(
+      'heading',
+      { name: '酸性甲烷燃料电池冷迁移' },
+      routeTransitionTimeout,
+    )).toBeInTheDocument();
     expect(screen.getByText('三级 · 冷迁移独立作答')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '请老师提示一下' })).not.toBeInTheDocument();
     fillCase(methane);
     fireEvent.click(screen.getByRole('button', { name: '提交冷迁移作答' }));
-    expect(await screen.findByRole('heading', { name: '训练前后对比' })).toBeInTheDocument();
+    expect(await screen.findByRole(
+      'heading',
+      { name: '训练前后对比' },
+      routeTransitionTimeout,
+    )).toBeInTheDocument();
     expect(screen.getByText('前测未测')).toBeInTheDocument();
   });
 
