@@ -122,6 +122,17 @@ const drawingReviewRequestSchema = z
   .object({ imageData: z.string().min(1) })
   .strict();
 
+const drawingFeedbackFallback = '手绘已保留；请人工检查四个功能要素与电子、离子路径标注。';
+const unsafeDrawingFeedback = /(?:\bhit\b|\bpartial\b|\bmiss\b|量表|rubric|得分|分数|满分|评分|系统提示词|system\s*prompt|参考答案|正确答案|执行.{0,12}指令|ignore.{0,12}instruction)/iu;
+
+function guardedDrawingFeedback(content: string) {
+  const normalized = content.trim();
+  if (normalized.length === 0 || normalized.length > 400 || unsafeDrawingFeedback.test(normalized)) {
+    return drawingFeedbackFallback;
+  }
+  return normalized;
+}
+
 const tutorRouteRequestSchema = z
   .object({
     sessionId: z.string().trim().min(1).max(128),
@@ -512,7 +523,7 @@ export function createServerApp(options: ServerAppOptions) {
       const content = result.response.content;
       const feedback = workflow.provider === 'mock' || content.startsWith('Mock vision extraction')
         ? '演示占位：已收到手绘表达。请检查电子路径、离子路径与方向标注是否一致。'
-        : content;
+        : guardedDrawingFeedback(content);
       return context.json({ feedback });
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
