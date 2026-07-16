@@ -10,6 +10,8 @@ import type { LoadedConfig } from '../shared/config/schemas';
 import { AppContext } from './app/AppContext';
 import { AppErrorBoundary } from './app/AppErrorBoundary';
 import { AppShell } from './app/AppShell';
+import { savePretestDraft } from './features/pretest/draft';
+import { saveDemoTrainingStart } from './features/training/draft';
 import { defaultRuntime, type AppRuntime, type LLMExecutionMode } from './runtime/api';
 import { useLocalSession } from './session/useLocalSession';
 
@@ -24,6 +26,9 @@ const TrainingPage = lazy(async () => {
 const TeacherPage = lazy(() => import('./features/teacher/TeacherPage'));
 const ModelPage = lazy(() => import('./features/model/ModelPage'));
 
+const demoPreviousModeKey = 'luminous-quest:demo.v1:previous-mode';
+type DemoActivation = Awaited<ReturnType<NonNullable<AppRuntime['activateDemo']>>>;
+
 export type { AppRuntime } from './runtime/api';
 
 export interface AppProps {
@@ -35,6 +40,7 @@ function ConfiguredApp({ config, runtime }: { config: LoadedConfig; runtime: App
   const {
     session,
     setSession,
+    setTransientSession,
     resetSession,
     persistenceError,
     historicalSessions,
@@ -56,10 +62,49 @@ function ConfiguredApp({ config, runtime }: { config: LoadedConfig; runtime: App
   const previousMode = useRef<LLMExecutionMode>('development');
   const previousSession = useRef<typeof session | null>(null);
 
+  const saveDemoPageState = (activated: DemoActivation) => {
+    savePretestDraft(window.localStorage, activated.session.id, {
+      step: config.pretest.questions.length + 1,
+      builder: { components: [], connections: [] },
+      answers: {},
+    });
+    saveDemoTrainingStart(window.localStorage, activated.session.id, activated.uiState.training);
+  };
+
   useEffect(() => {
     let active = true;
     runtime.getRuntimeState?.()
-      .then((state) => { if (active) setExecutionModeState(state.executionMode); })
+      .then(async (state) => {
+        if (!active) return;
+        if (state.executionMode !== 'demo' || !runtime.activateDemo) {
+          setExecutionModeState(state.executionMode);
+          return;
+        }
+        previousSession.current = session;
+        try {
+          const persistedMode = window.localStorage.getItem(demoPreviousModeKey);
+          previousMode.current = persistedMode === 'live' || persistedMode === 'development'
+            ? persistedMode
+            : 'development';
+        } catch {
+          previousMode.current = 'development';
+        }
+        const activated = await runtime.activateDemo();
+        if (!active) return;
+        try {
+          saveDemoPageState(activated);
+          const pretestKey = `luminous-quest:pretest-complete.v1:${activated.session.id}`;
+          const trainingKey = `luminous-quest:training-complete.v1:${activated.session.id}`;
+          if (activated.progress.pretestComplete) window.localStorage.setItem(pretestKey, 'true');
+          else window.localStorage.removeItem(pretestKey);
+          if (activated.progress.trainingComplete) window.localStorage.setItem(trainingKey, 'true');
+          else window.localStorage.removeItem(trainingKey);
+        } catch {
+          // The versioned server state still initializes the in-memory demo session.
+        }
+        setTransientSession(activated.session);
+        setExecutionModeState(activated.executionMode);
+      })
       .catch(() => undefined);
     return () => { active = false; };
   }, [runtime]);
@@ -105,14 +150,25 @@ function ConfiguredApp({ config, runtime }: { config: LoadedConfig; runtime: App
           setSession(previousSession.current);
           previousSession.current = null;
         }
+        try {
+          window.localStorage.removeItem(demoPreviousModeKey);
+        } catch {
+          // The server mode and in-memory session still restore correctly.
+        }
         setExecutionModeState(state.executionMode);
         return state.executionMode;
       }
       previousMode.current = executionMode;
       previousSession.current = session;
+      try {
+        window.localStorage.setItem(demoPreviousModeKey, executionMode);
+      } catch {
+        // In-memory refs preserve the same-tab exit path.
+      }
       if (!runtime.activateDemo) throw new Error('当前运行环境未提供演示回放。');
       const activated = await runtime.activateDemo();
       try {
+        saveDemoPageState(activated);
         const pretestKey = `luminous-quest:pretest-complete.v1:${activated.session.id}`;
         const trainingKey = `luminous-quest:training-complete.v1:${activated.session.id}`;
         if (activated.progress.pretestComplete) window.localStorage.setItem(pretestKey, 'true');
@@ -122,7 +178,7 @@ function ConfiguredApp({ config, runtime }: { config: LoadedConfig; runtime: App
       } catch {
         // The in-memory demo remains usable when browser persistence is unavailable.
       }
-      setSession(activated.session);
+      setTransientSession(activated.session);
       setExecutionModeState(activated.executionMode);
       return activated.executionMode;
     } catch (error) {
@@ -133,7 +189,7 @@ function ConfiguredApp({ config, runtime }: { config: LoadedConfig; runtime: App
     } finally {
       setDemoModePending(false);
     }
-  }, [executionMode, runtime, session, setSession]);
+  }, [executionMode, runtime, session, setSession, setTransientSession]);
 
   return (
     <AppContext.Provider value={{

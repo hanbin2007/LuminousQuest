@@ -1,7 +1,7 @@
 {
   "schemaVersion": "session.v2",
-  "id": "teacher-fixture-session-a",
-  "anonymousStudentId": "anon-TEACH001",
+  "id": "demo-primary-session",
+  "anonymousStudentId": "anon-DEMO0001",
   "startedAt": "2026-07-16T01:00:00.000Z",
   "updatedAt": "2026-07-16T01:02:30.000Z",
   "configVersions": {

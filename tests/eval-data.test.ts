@@ -60,6 +60,13 @@ describe('eval golden data', () => {
       'contradiction',
       'beyond-syllabus-correct',
     ]) expect(tags.has(boundary)).toBe(true);
+    expect(cases.filter((entry) => entry.tags.includes('adversarial'))).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ tags: expect.arrayContaining(['prompt-injection']) }),
+        expect.objectContaining({ tags: expect.arrayContaining(['rubric-gaming']) }),
+        expect.objectContaining({ tags: expect.arrayContaining(['sycophancy']) }),
+      ]),
+    );
     expect(cases.find((entry) => entry.id === 'synthetic-e1-m2-stored-electricity'))
       .toMatchObject({ expectedScore: 'miss', expectedExtraction: { slots: [] } });
     expect(cases.filter((entry) => entry.tags.includes('following-error'))).toEqual(

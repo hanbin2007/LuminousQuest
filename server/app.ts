@@ -7,6 +7,7 @@ import { z } from 'zod';
 
 import { type AssistanceMetadata } from '../shared/scoring/rubric';
 import { buildLearnerProfile } from '../shared/scoring/profile';
+import { demoStartStateSchema } from '../shared/demo/start-state';
 import type { AssessmentCompletedEvent } from '../shared/session/schema';
 import { sessionSchema } from '../shared/session/schema';
 import {
@@ -38,7 +39,7 @@ import { runSocraticTurn } from './workflows/socratic-tutoring';
 
 const llmRequestSchema = z
   .object({
-    executionMode: z.enum(['live', 'development', 'demo']),
+    executionMode: z.enum(['live', 'development', 'demo']).optional(),
     capability: z.enum(['chat', 'vision', 'structured']),
     provider: z.string().trim().min(1),
     model: z.string().trim().min(1),
@@ -73,13 +74,6 @@ const llmRequestSchema = z
         code: 'custom',
         path: ['schema'],
         message: 'is required for structured capability',
-      });
-    }
-    if (request.executionMode === 'demo' && request.stepId === undefined) {
-      context.addIssue({
-        code: 'custom',
-        path: ['stepId'],
-        message: 'is required in demo mode',
       });
     }
   });
@@ -119,19 +113,30 @@ const choiceRouteRequestSchema = z
   .strict();
 
 const drawingReviewRequestSchema = z
-  .object({ imageData: z.string().min(1) })
+  .object({
+    imageData: z.string().min(1).refine((value) => {
+      const encoded = value.startsWith('data:image/png;base64,')
+        ? value.slice('data:image/png;base64,'.length)
+        : value;
+      const bytes = Buffer.from(encoded, 'base64');
+      return bytes.length >= 8
+        && bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
+    }, 'must be a base64-encoded PNG image'),
+  })
   .strict();
 
 const drawingFeedbackFallback = '手绘已保留；请人工检查四个功能要素与电子、离子路径标注。';
-const unsafeDrawingFeedback = /(?:\bhit\b|\bpartial\b|\bmiss\b|量表|rubric|得分|分数|满分|评分|系统提示词|system\s*prompt|参考答案|正确答案|执行.{0,12}指令|ignore.{0,12}instruction)/iu;
-
-function guardedDrawingFeedback(content: string) {
-  const normalized = content.trim();
-  if (normalized.length === 0 || normalized.length > 400 || unsafeDrawingFeedback.test(normalized)) {
-    return drawingFeedbackFallback;
-  }
-  return normalized;
-}
+const drawingFeedbackResponseSchema = z
+  .object({ comment: z.string().trim().min(1).max(400) })
+  .strict();
+const drawingFeedbackJsonSchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['comment'],
+  properties: {
+    comment: { type: 'string', minLength: 1, maxLength: 400 },
+  },
+} as const;
 
 const tutorRouteRequestSchema = z
   .object({
@@ -387,12 +392,25 @@ export function createServerApp(options: ServerAppOptions) {
     if (!parsed.success) return invalidRequest(context, 'demo activation', parsed.error);
 
     try {
-      const [config, source] = await Promise.all([
+      const [config, startSource] = await Promise.all([
         loadAllConfig(options.contentRoot),
-        readFile(path.join(options.contentRoot, 'recordings', 'demo', 'session.json'), 'utf8'),
+        readFile(path.join(options.contentRoot, 'recordings', 'demo', 'start-state.json'), 'utf8'),
+      ]);
+      const startState = demoStartStateSchema.parse(JSON.parse(startSource) as unknown);
+      const [source, ...classSources] = await Promise.all([
+        readFile(path.join(options.contentRoot, ...startState.sessionRef.split('/')), 'utf8'),
+        ...startState.classSessionRefs.map((reference) =>
+          readFile(path.join(options.contentRoot, ...reference.split('/')), 'utf8')),
       ]);
       const demoSession = sessionSchema.parse(JSON.parse(source) as unknown);
       buildLearnerProfile(demoSession, config);
+      const classSessions = classSources.map((classSource) =>
+        sessionSchema.parse(JSON.parse(classSource) as unknown));
+      classSessions.forEach((classSession) => buildLearnerProfile(classSession, config));
+      const ids = new Set([demoSession.id, ...classSessions.map((session) => session.id)]);
+      if (ids.size !== classSessions.length + 1) {
+        throw new Error('Demo sessions must use distinct session ids');
+      }
       sessions.set(demoSession);
       workflow.executionMode = 'demo';
       workflow.extractionStepId = 'demo-extraction';
@@ -400,7 +418,13 @@ export function createServerApp(options: ServerAppOptions) {
       return context.json({
         executionMode: workflow.executionMode,
         session: demoSession,
-        progress: { pretestComplete: true, trainingComplete: false },
+        progress: startState.progress,
+        uiState: {
+          version: startState.version,
+          route: startState.route,
+          pretest: startState.pretest,
+          training: startState.training,
+        },
       });
     } catch (error) {
       console.error(`[demo] activation failed: ${error instanceof Error ? error.message : String(error)}`);
@@ -428,9 +452,16 @@ export function createServerApp(options: ServerAppOptions) {
       if (!prompt) return context.json({ error: 'Unknown prompt id' }, 400);
       const request: LLMRequest = {
         ...parsed.data,
+        executionMode: workflow.executionMode,
         prompt,
         configVersion: config.configVersion,
       };
+      if (request.executionMode === 'demo' && request.stepId === undefined) {
+        return context.json({
+          error: 'Invalid LLM request',
+          issues: [{ field: 'stepId', reason: 'is required by the server demo mode' }],
+        }, 400);
+      }
       return context.json(await llmService.execute(request));
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
@@ -510,7 +541,7 @@ export function createServerApp(options: ServerAppOptions) {
       if (!prompt) throw new Error('Required prompt hand-drawing-feedback is missing');
       const result = await llmService.execute({
         executionMode: workflow.executionMode,
-        capability: 'vision',
+        capability: 'structured',
         provider: workflow.provider,
         model: workflow.model,
         prompt,
@@ -518,12 +549,13 @@ export function createServerApp(options: ServerAppOptions) {
         configVersion: config.configVersion,
         input: { task: '只用自然语言点评手绘表达，不判分，不写入学习者画像。' },
         images: [{ mediaType: 'image/png', data: parsed.data.imageData }],
+        schema: drawingFeedbackJsonSchema,
         ...(workflow.executionMode === 'demo' ? { stepId: 'hand-drawing-feedback' } : {}),
       });
-      const content = result.response.content;
-      const feedback = workflow.provider === 'mock' || content.startsWith('Mock vision extraction')
+      const feedbackValue = drawingFeedbackResponseSchema.safeParse(result.response.structured);
+      const feedback = workflow.provider === 'mock'
         ? '演示占位：已收到手绘表达。请检查电子路径、离子路径与方向标注是否一致。'
-        : guardedDrawingFeedback(content);
+        : feedbackValue.success ? feedbackValue.data.comment : drawingFeedbackFallback;
       return context.json({ feedback });
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);

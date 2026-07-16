@@ -15,7 +15,13 @@
     {
       "id": "demo-tutor-p4",
       "recording": "demo/tutor-p4.json",
-      "resourceRefs": ["recordings/demo/session.json"],
+      "resourceRefs": [
+        "recordings/demo/start-state.json",
+        "recordings/demo/session.json",
+        "recordings/demo/class/student-01.json",
+        "recordings/demo/class/student-02.json",
+        "recordings/demo/class/student-03.json"
+      ],
       "configVersion": "sha256:1b49a6fac91ab7cf1fc708b0d766e647030077d51613c991171b010ead4f757d",
       "schemaVersion": "socratic-action.v2",
       "schema": {
@@ -38,9 +44,17 @@
       "resourceRefs": [],
       "configVersion": "sha256:1b49a6fac91ab7cf1fc708b0d766e647030077d51613c991171b010ead4f757d",
       "schemaVersion": "hand-drawing-feedback.v1",
+      "schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["comment"],
+        "properties": {
+          "comment": { "type": "string", "minLength": 1, "maxLength": 400 }
+        }
+      },
       "prompt": {
         "id": "hand-drawing-feedback",
-        "version": "sha256:4587416f26a728ff1955761fc4220180f346be5056ab1ce02a7876bc76bee461"
+        "version": "sha256:d9d0e7f28736c5783cb38e5225ca2cdf6d30ee4b5d67d55cb5fb83fdf581f98e"
       }
     }
   ]

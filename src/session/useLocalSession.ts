@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import type { LoadedConfig } from '../../shared/config/schemas';
 import { LocalSessionStore } from '../../shared/session/local-storage';
@@ -35,11 +35,12 @@ export function useLocalSession(config: LoadedConfig) {
   const [session, setSession] = useState<StudentSession>(() => restored ?? createSession({
     configVersions: versions,
   }));
+  const transientSessionIds = useRef(new Set<string>());
   const [persistenceError, setPersistenceError] = useState<string | null>(null);
 
   useEffect(() => {
     try {
-      store.save(session);
+      store.save(session, { makeLatest: !transientSessionIds.current.has(session.id) });
       setPersistenceError(null);
     } catch {
       setPersistenceError('本地保存失败，请导出会话。');
@@ -47,6 +48,7 @@ export function useLocalSession(config: LoadedConfig) {
   }, [session, store]);
 
   const resetSession = () => {
+    transientSessionIds.current.delete(session.id);
     store.remove(session.id);
     try {
       window.localStorage.removeItem(`luminous-quest:pretest-ui.v1:${session.id}`);
@@ -58,9 +60,15 @@ export function useLocalSession(config: LoadedConfig) {
     setPersistenceError(null);
   };
 
+  const setTransientSession = (next: StudentSession) => {
+    transientSessionIds.current.add(next.id);
+    setSession(next);
+  };
+
   return {
     session,
     setSession,
+    setTransientSession,
     resetSession,
     persistenceError,
     historicalSessions,
