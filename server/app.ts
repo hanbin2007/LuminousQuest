@@ -656,11 +656,12 @@ export function createServerApp(options: ServerAppOptions) {
         if (event.kind !== 'assessment.completed' || event.nodeId !== parsed.data.nodeId) continue;
         if (!latestAssessment || event.sequence > latestAssessment.sequence) latestAssessment = event;
       }
-      if (latestAssessment) {
-        const assessedCase = config.cases.find((entry) => entry.id === latestAssessment.caseId);
-        if (latestAssessment.stageId !== 'training' || assessedCase?.caseType !== 'training') {
-          return context.json({ error: 'Tutor is only available for training-stage answers' }, 409);
-        }
+      if (!latestAssessment) {
+        return context.json({ error: 'Tutor requires an assessed training-stage answer' }, 409);
+      }
+      const assessedCase = config.cases.find((entry) => entry.id === latestAssessment.caseId);
+      if (latestAssessment.stageId !== 'training' || assessedCase?.caseType !== 'training') {
+        return context.json({ error: 'Tutor is only available for training-stage answers' }, 409);
       }
       const prompt = await loadPrompt(options.contentRoot, 'socratic-tutoring');
       if (!prompt) throw new Error('Required prompt socratic-tutoring is missing');
