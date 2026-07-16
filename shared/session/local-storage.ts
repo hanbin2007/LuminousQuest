@@ -11,6 +11,13 @@ export class SessionStorageError extends Error {
   }
 }
 
+export class SessionVersionMismatchError extends Error {
+  constructor() {
+    super('Persisted session configuration versions do not match the active content');
+    this.name = 'SessionVersionMismatchError';
+  }
+}
+
 export class LocalSessionStore {
   constructor(private readonly storage: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>) {}
 
@@ -43,7 +50,7 @@ export class LocalSessionStore {
       expectedVersions
       && JSON.stringify(session.configVersions) !== JSON.stringify(expectedVersions)
     ) {
-      throw new Error('Persisted session configuration versions do not match the active content');
+      throw new SessionVersionMismatchError();
     }
     return session;
   }
@@ -53,8 +60,10 @@ export class LocalSessionStore {
     if (latestId === null) return null;
     try {
       return this.load(latestId, expectedVersions);
-    } catch {
-      this.storage.removeItem(sessionKey(latestId));
+    } catch (error) {
+      if (!(error instanceof SessionVersionMismatchError)) {
+        this.storage.removeItem(sessionKey(latestId));
+      }
       this.storage.removeItem(latestSessionKey);
       return null;
     }

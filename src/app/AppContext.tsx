@@ -9,6 +9,7 @@ export interface AppContextValue {
   runtime: AppRuntime;
   session: StudentSession;
   setSession: Dispatch<SetStateAction<StudentSession>>;
+  persistenceError: string | null;
   pretestComplete: boolean;
   setPretestComplete: (complete: boolean) => void;
 }

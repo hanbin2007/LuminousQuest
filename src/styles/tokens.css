@@ -40,7 +40,7 @@
   --eflow-track: #cfe9e8;      /* 流动轨道底色 */
 
   /* ---- 字体 ---- */
-  --font-display: "Source Han Serif SC", "Noto Serif SC", "Songti SC", serif; /* 章节标题,子集化打包 */
+  --font-display: "Source Han Serif SC", "Noto Serif SC", "Songti SC", serif; /* 本地文件源为 Noto Serif SC,以兼容别名用于模块标题 */
   --font-body: -apple-system, "PingFang SC", "HarmonyOS Sans SC", "Microsoft YaHei", "Noto Sans SC", sans-serif;
   --font-mono: "SF Mono", "JetBrains Mono", ui-monospace, monospace; /* 分数/坐标/数据 */
 
@@ -73,7 +73,7 @@
   --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
   --dur-fast: 150ms;           /* hover/按压 */
   --dur-base: 250ms;           /* 面板/状态切换 */
-  --dur-eflow-answer: 600ms;   /* 答对反馈电子流 */
+  --dur-eflow-answer: 600ms;   /* 模块二训练答题反馈 */
   --delay-eflow-answer: 150ms;
   --dur-eflow-complete: 2000ms;/* 完成步骤后的电子流,只运行一次 */
   --dur-stage: 900ms;          /* 全项目唯一的大动效:关灯时刻 */

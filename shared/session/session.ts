@@ -4,6 +4,7 @@ import {
   type StudentSession,
   sessionSchema,
 } from './schema';
+import { z } from 'zod';
 import type { LoadedConfig } from '../config/schemas';
 
 export interface CreateSessionInput {
@@ -72,10 +73,17 @@ export function importSession(source: string) {
   let value: unknown;
   try {
     value = JSON.parse(source);
-  } catch (error) {
-    throw new Error(`Session import is not valid JSON: ${(error as Error).message}`);
+  } catch {
+    throw new Error('会话文件不是有效的 JSON。');
   }
-  return sessionSchema.parse(value);
+  try {
+    return sessionSchema.parse(value);
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      throw new Error('会话文件格式不正确，请确认它由 LuminousQuest 导出。');
+    }
+    throw error;
+  }
 }
 
 export interface ScoreSummary {

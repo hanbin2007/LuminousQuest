@@ -336,6 +336,11 @@ p {
   font-size: var(--text-xs);
 }
 
+.session-persistence-error {
+  color: var(--status-miss);
+  font-size: var(--text-sm);
+}
+
 .session-controls .secondary-button {
   min-height: 32px;
   padding: var(--space-1) var(--space-3);
@@ -561,7 +566,8 @@ p {
 }
 
 .select-control select,
-.builder-node__material select {
+.builder-node__material select,
+.builder-node__role select {
   min-height: 32px;
   border: 1px solid var(--hairline);
   border-radius: var(--radius-sm);
@@ -646,7 +652,7 @@ p {
   position: absolute;
   z-index: 2;
   width: 120px;
-  min-height: 132px;
+  height: 176px;
   padding: var(--space-1);
   border: 1px solid var(--hairline);
   border-radius: var(--radius-sm);
@@ -687,7 +693,8 @@ p {
   height: 36px;
 }
 
-.builder-node__material {
+.builder-node__material,
+.builder-node__role {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
@@ -696,7 +703,8 @@ p {
   font-size: var(--text-xs);
 }
 
-.builder-node__material select {
+.builder-node__material select,
+.builder-node__role select {
   min-width: 0;
   width: 100%;
   font-size: var(--text-xs);
@@ -774,25 +782,10 @@ p {
 
 .question-card h2 {
   margin: var(--space-4) 0 var(--space-5);
-  font-size: var(--text-xl);
+  font-family: var(--font-body);
+  font-size: var(--text-lg);
+  font-weight: 700;
   line-height: var(--leading-body);
-}
-
-.question-card--correct::after {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 8px;
-  height: 8px;
-  content: '';
-  border-radius: var(--radius-pill);
-  background: var(--eflow);
-  animation: answer-eflow var(--dur-eflow-answer) linear var(--delay-eflow-answer) forwards;
-}
-
-@keyframes answer-eflow {
-  from { left: 0; }
-  to { left: calc(100% - 8px); }
 }
 
 .choice-list {
@@ -1081,6 +1074,11 @@ p {
   border-left-color: var(--status-unassessed);
 }
 
+.annotation-card[data-status='needs-review'] {
+  border-left-color: var(--annotate-blue);
+  background: var(--paper-sunken);
+}
+
 .annotation-card > header {
   display: flex;
   flex-wrap: wrap;
@@ -1092,6 +1090,12 @@ p {
 
 .annotation-card > header strong {
   color: var(--ink);
+}
+
+.annotation-card__status {
+  margin-left: auto;
+  color: var(--ink-soft);
+  font-family: var(--font-body);
 }
 
 .annotation-card__quote {
@@ -1167,6 +1171,11 @@ p {
   color: var(--status-unassessed);
 }
 
+.annotation-card[data-status='needs-review'] .annotation-card__incorrect dt,
+.annotation-card[data-status='needs-review'] .annotation-card__next dt {
+  color: var(--annotate-blue);
+}
+
 .placeholder-page {
   min-height: 70vh;
 }
@@ -1220,6 +1229,12 @@ p {
   min-height: 70vh;
   margin: 0 auto;
   padding-top: var(--space-8);
+}
+
+.fatal-state__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
 }
 
 .loading-state::before {

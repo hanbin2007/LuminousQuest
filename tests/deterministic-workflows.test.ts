@@ -460,10 +460,13 @@ describe('deterministic workflow and persistence contracts', () => {
       },
     });
 
-    const store = new LocalSessionStore(new MemoryStorage());
+    const storage = new MemoryStorage();
+    const store = new LocalSessionStore(storage);
     store.save(session);
     expect(store.restoreLatest(session.configVersions)).toEqual(session);
     expect(store.restoreLatest({ ...session.configVersions, configDigest: 'sha256:changed' })).toBeNull();
+    expect(storage.getItem(`luminous-quest:session.v2:${session.id}`)).not.toBeNull();
+    expect(storage.getItem('luminous-quest:session.v2:latest')).toBeNull();
 
     const changed = structuredClone(config);
     changed.configVersion = 'sha256:changed';

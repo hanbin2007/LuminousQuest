@@ -17,7 +17,10 @@ class MemoryStorage implements Storage {
 
 function browserStorage(): Storage {
   try {
-    if (typeof window !== 'undefined' && window.localStorage) return window.localStorage;
+    if (typeof window !== 'undefined' && window.localStorage) {
+      window.localStorage.getItem('luminous-quest:storage-probe');
+      return window.localStorage;
+    }
   } catch {
     // Privacy modes can expose localStorage but throw when it is accessed.
   }
@@ -31,10 +34,36 @@ export function useLocalSession(config: LoadedConfig) {
   const [session, setSession] = useState<StudentSession>(() => restored ?? createSession({
     configVersions: versions,
   }));
+  const [persistenceError, setPersistenceError] = useState<string | null>(null);
 
   useEffect(() => {
-    store.save(session);
+    try {
+      store.save(session);
+      setPersistenceError(null);
+    } catch {
+      setPersistenceError('本地保存失败，请导出会话。');
+    }
   }, [session, store]);
 
-  return { session, setSession, restored: restored !== null, store, versions };
+  const resetSession = () => {
+    store.remove(session.id);
+    try {
+      window.localStorage.removeItem(`luminous-quest:pretest-ui.v1:${session.id}`);
+      window.localStorage.removeItem(`luminous-quest:pretest-complete.v1:${session.id}`);
+    } catch {
+      // Reset still replaces the in-memory session when storage is unavailable.
+    }
+    setSession(createSession({ configVersions: versions }));
+    setPersistenceError(null);
+  };
+
+  return {
+    session,
+    setSession,
+    resetSession,
+    persistenceError,
+    restored: restored !== null,
+    store,
+    versions,
+  };
 }

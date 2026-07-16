@@ -22,6 +22,7 @@ interface DiagnosisViewProps {
 }
 
 function annotationStatus(node: ReturnType<typeof buildLearnerProfile>['nodes'][number]): AnnotationStatus {
+  if (node.status === 'needs-review') return 'needs-review';
   if (node.status !== 'scored') return 'unassessed';
   if (node.outcome === 'hit' || node.outcome === 'hit-with-help') return 'hit';
   return node.outcome ?? 'unassessed';
@@ -46,7 +47,7 @@ export function DiagnosisView({ config, session }: DiagnosisViewProps) {
             <DiagnosisRadar dimensions={profile.dimensions.map((dimension) => ({
               id: dimension.dimensionId as 'device' | 'principle' | 'energy',
               label: dimensionById.get(dimension.dimensionId)?.label ?? dimension.dimensionId,
-              value: dimension.ratio ?? 0,
+              value: dimension.ratio,
             }))} />
           </Suspense>
           <p className="model-axis-terms">
@@ -56,6 +57,7 @@ export function DiagnosisView({ config, session }: DiagnosisViewProps) {
         <div className="dimension-scores" aria-label="三维度分数">
           {profile.dimensions.map((dimension) => {
             const label = dimensionById.get(dimension.dimensionId)?.label ?? dimension.dimensionId;
+            const awaitingReview = dimension.ratio === null && dimension.needsReviewNodeIds.length > 0;
             return (
               <button
                 className={`dimension-score dimension-score--${dimension.dimensionId}`}
@@ -64,8 +66,12 @@ export function DiagnosisView({ config, session }: DiagnosisViewProps) {
                 type="button"
               >
                 <span>{label}</span>
-                <strong>{dimension.ratio === null ? '未测到' : `${Math.round(dimension.ratio * 100)}`}</strong>
-                <small>{dimension.ratio === null ? 'unassessed' : dimension.level}</small>
+                <strong>{dimension.ratio === null
+                  ? awaitingReview ? '待复核' : '未测到'
+                  : `${Math.round(dimension.ratio * 100)}`}</strong>
+                <small>{dimension.ratio === null
+                  ? awaitingReview ? 'needs-review' : 'unassessed'
+                  : dimension.level}</small>
               </button>
             );
           })}
@@ -90,6 +96,7 @@ export function DiagnosisView({ config, session }: DiagnosisViewProps) {
                     : undefined;
                   const requirement = rubric.evidenceRequirements[0]?.description ?? '完成对应证据表达。';
                   const isUnassessed = status === 'unassessed';
+                  const isNeedsReview = status === 'needs-review';
                   const originalAnswer = node.trace?.originalAnswer;
                   const quote = originalAnswer && originalAnswer.length > 220
                     ? `${originalAnswer.slice(0, 220)}…`
@@ -103,15 +110,21 @@ export function DiagnosisView({ config, session }: DiagnosisViewProps) {
                       status={status}
                       correct={isUnassessed
                         ? '尚无可引用证据。'
+                        : isNeedsReview
+                          ? '已作答，待教师复核。'
                         : status === 'hit'
                           ? matchedRule?.description ?? '本项证据达到量表要求。'
                           : '已完成与本节点相关的作答。'}
                       incorrect={isUnassessed
                         ? '本项未测到，不能视为错误。'
+                        : isNeedsReview
+                          ? '当前结果尚未完成自动判定，不能视为错误或未作答。'
                         : status === 'hit'
                           ? '本次证据未显示关键错误。'
                           : matchedRule?.description ?? '当前证据尚未达到量表要求。'}
-                      next={status === 'hit' ? `换一个案例，再次验证：${requirement}` : requirement}
+                      next={isNeedsReview
+                        ? '等待教师复核本次证据。'
+                        : status === 'hit' ? `换一个案例，再次验证：${requirement}` : requirement}
                       quote={quote}
                       fullQuote={originalAnswer && originalAnswer.length > 220 ? originalAnswer : undefined}
                     />

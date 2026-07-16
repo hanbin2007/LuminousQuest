@@ -1,4 +1,12 @@
-export type AnnotationStatus = 'hit' | 'partial' | 'miss' | 'unassessed';
+export type AnnotationStatus = 'hit' | 'partial' | 'miss' | 'unassessed' | 'needs-review';
+
+const statusLabels: Record<AnnotationStatus, string> = {
+  hit: '达到要求',
+  partial: '部分达到',
+  miss: '需要加强',
+  unassessed: '未测到',
+  'needs-review': '已作答，待教师复核',
+};
 
 interface AnnotationCardProps {
   dimensionLabel: string;
@@ -29,6 +37,7 @@ export function AnnotationCard({
         <span>{dimensionLabel}</span>
         <strong>{nodeId}</strong>
         <span>{rubricId}</span>
+        <span className="annotation-card__status">{statusLabels[status]}</span>
       </header>
       {quote ? <p className="annotation-card__quote">学生原文：<mark>{quote}</mark></p> : null}
       {fullQuote ? (

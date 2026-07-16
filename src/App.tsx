@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   BrowserRouter,
   Navigate,
@@ -8,6 +8,7 @@ import {
 
 import type { LoadedConfig } from '../shared/config/schemas';
 import { AppContext } from './app/AppContext';
+import { AppErrorBoundary } from './app/AppErrorBoundary';
 import { AppShell } from './app/AppShell';
 import { PlaceholderPage } from './app/PlaceholderPage';
 import { PretestPage } from './features/pretest/PretestPage';
@@ -22,8 +23,30 @@ export interface AppProps {
 }
 
 function ConfiguredApp({ config, runtime }: { config: LoadedConfig; runtime: AppRuntime }) {
-  const { session, setSession } = useLocalSession(config);
-  const [pretestComplete, setPretestComplete] = useState(false);
+  const { session, setSession, resetSession, persistenceError } = useLocalSession(config);
+  const progressKey = `luminous-quest:pretest-complete.v1:${session.id}`;
+  const readProgress = () => {
+    try {
+      return window.localStorage.getItem(progressKey) === 'true';
+    } catch {
+      return false;
+    }
+  };
+  const [pretestComplete, setStoredPretestComplete] = useState(readProgress);
+
+  useEffect(() => {
+    setStoredPretestComplete(readProgress());
+  }, [progressKey]);
+
+  const setPretestComplete = useCallback((complete: boolean) => {
+    setStoredPretestComplete(complete);
+    try {
+      if (complete) window.localStorage.setItem(progressKey, 'true');
+      else window.localStorage.removeItem(progressKey);
+    } catch {
+      // Session persistence already exposes the primary storage failure state.
+    }
+  }, [progressKey]);
 
   return (
     <AppContext.Provider value={{
@@ -31,11 +54,13 @@ function ConfiguredApp({ config, runtime }: { config: LoadedConfig; runtime: App
       runtime,
       session,
       setSession,
+      persistenceError,
       pretestComplete,
       setPretestComplete,
     }}>
-      <BrowserRouter>
-        <Routes>
+      <AppErrorBoundary session={session} onReset={resetSession}>
+        <BrowserRouter>
+          <Routes>
           <Route element={<AppShell />}>
             <Route index element={<Navigate replace to="/pretest" />} />
             <Route path="pretest" element={<PretestPage />} />
@@ -62,8 +87,9 @@ function ConfiguredApp({ config, runtime }: { config: LoadedConfig; runtime: App
             )} />
             <Route path="*" element={<Navigate replace to="/pretest" />} />
           </Route>
-        </Routes>
-      </BrowserRouter>
+          </Routes>
+        </BrowserRouter>
+      </AppErrorBoundary>
     </AppContext.Provider>
   );
 }

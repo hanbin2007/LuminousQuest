@@ -13,7 +13,13 @@ echarts.use([RadarChart, TooltipComponent, AriaComponent, GraphicComponent, SVGR
 export interface RadarDimension {
   id: 'device' | 'principle' | 'energy';
   label: string;
-  value: number;
+  value: number | null;
+}
+
+export function radarSeriesValues(dimensions: readonly RadarDimension[]) {
+  return dimensions.map((dimension) => dimension.value === null
+    ? '-' as const
+    : Math.round(Math.max(0, Math.min(1, dimension.value)) * 100));
 }
 
 const axisTerms: Record<RadarDimension['id'], string> = {
@@ -31,7 +37,7 @@ export function DiagnosisRadar({ dimensions }: DiagnosisRadarProps) {
 
   useEffect(() => {
     const element = container.current;
-    if (!element || element.getBoundingClientRect().width === 0) return undefined;
+    if (!element) return undefined;
     const styles = getComputedStyle(document.documentElement);
     const token = (name: string) => styles.getPropertyValue(name).trim();
     const tokenPixels = (name: string) => {
@@ -52,16 +58,20 @@ export function DiagnosisRadar({ dimensions }: DiagnosisRadarProps) {
       principle: token('--dim-principle'),
       energy: token('--dim-energy'),
     };
-    const chart = echarts.init(element, undefined, { renderer: 'svg' });
+    let chart: ReturnType<typeof echarts.init> | null = null;
 
     const render = () => {
       const { width, height } = element.getBoundingClientRect();
+      if (width <= 0 || height <= 0) return;
+      chart ??= echarts.init(element, undefined, { renderer: 'svg' });
       chart.resize({ width, height });
       const center = [width / 2, height * 0.52] as const;
       const radius = Math.min(width * 0.3, height * 0.29);
       const ordered = dimensions.map((dimension) => ({
         ...dimension,
-        value: Math.round(Math.max(0, Math.min(1, dimension.value)) * 100),
+        score: dimension.value === null
+          ? null
+          : Math.round(Math.max(0, Math.min(1, dimension.value)) * 100),
       }));
       const endpoints = ordered.map((dimension, index) => {
         const angle = (-90 + index * 120) * Math.PI / 180;
@@ -77,7 +87,8 @@ export function DiagnosisRadar({ dimensions }: DiagnosisRadarProps) {
         aria: {
           enabled: true,
           decal: { show: false },
-          description: `前测诊断雷达图。${ordered.map((item) => `${item.label}${item.value}分`).join('，')}。`,
+          description: `前测诊断雷达图。${ordered.map((item) =>
+            item.score === null ? `${item.label}未测` : `${item.label}${item.score}分`).join('，')}。`,
         },
         tooltip: {
           trigger: 'item',
@@ -108,12 +119,40 @@ export function DiagnosisRadar({ dimensions }: DiagnosisRadarProps) {
             lineHeight: 18,
           },
         },
-        graphic: endpoints.map(({ dimension, x, y }) => ({
-          type: 'line',
-          silent: true,
-          shape: { x1: center[0], y1: center[1], x2: x, y2: y },
-          style: { stroke: axisColors[dimension.id], lineWidth: 2 },
-        })),
+        graphic: [
+          ...endpoints.map(({ dimension, x, y }) => ({
+            type: 'line',
+            silent: true,
+            shape: { x1: center[0], y1: center[1], x2: x, y2: y },
+            style: { stroke: axisColors[dimension.id], lineWidth: 2 },
+          })),
+          ...endpoints.flatMap(({ dimension, x, y }) => dimension.value === null ? [{
+            type: 'group',
+            silent: true,
+            children: [
+              {
+                type: 'circle',
+                shape: { cx: x, cy: y, r: 6 },
+                style: {
+                  fill: token('--paper-raised'),
+                  stroke: token('--status-unassessed'),
+                  lineWidth: 3,
+                },
+              },
+              {
+                type: 'text',
+                style: {
+                  x,
+                  y: y + 12,
+                  text: '未测',
+                  textAlign: 'center',
+                  fill: token('--status-unassessed'),
+                  font: `${tokenPixels('--text-xs') ?? 12}px ${token('--font-body')}`,
+                },
+              },
+            ],
+          }] : []),
+        ],
         series: [{
           name: '前测',
           type: 'radar',
@@ -122,7 +161,7 @@ export function DiagnosisRadar({ dimensions }: DiagnosisRadarProps) {
           lineStyle: { color: token('--ink'), width: 2 },
           itemStyle: { color: token('--ink') },
           areaStyle: { color: token('--ink'), opacity: 0.4 },
-          data: [{ name: '前测', value: ordered.map((dimension) => dimension.value) }],
+          data: [{ name: '前测', value: radarSeriesValues(dimensions) }],
         }],
       }, true);
     };
@@ -134,7 +173,7 @@ export function DiagnosisRadar({ dimensions }: DiagnosisRadarProps) {
     return () => {
       observer?.disconnect();
       window.removeEventListener('resize', render);
-      chart.dispose();
+      chart?.dispose();
     };
   }, [dimensions]);
 

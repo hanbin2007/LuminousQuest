@@ -6,6 +6,7 @@ import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { AnnotationCard } from '../src/features/diagnosis/AnnotationCard';
+import { radarSeriesValues } from '../src/features/diagnosis/DiagnosisRadar';
 
 afterEach(cleanup);
 
@@ -48,5 +49,32 @@ describe('diagnostic annotation card', () => {
     expect(card).toHaveAttribute('data-status', 'unassessed');
     expect(card).not.toHaveAttribute('data-status', 'miss');
     expect(screen.getByText('本项未测到，不能视为错误。')).toBeInTheDocument();
+  });
+
+  it('renders needs-review as an answered fourth state', () => {
+    render(
+      <AnnotationCard
+        dimensionLabel="原理"
+        nodeId="P4"
+        rubricId="rubric-p4"
+        status="needs-review"
+        correct="已作答，待教师复核。"
+        incorrect="当前结果尚未完成自动判定，不能视为错误或未作答。"
+        next="等待教师复核本次证据。"
+      />,
+    );
+
+    const card = screen.getByTestId('annotation-P4');
+    expect(card).toHaveAttribute('data-status', 'needs-review');
+    expect(screen.getByText('已作答，待教师复核')).toBeInTheDocument();
+    expect(card).not.toHaveTextContent('本项未测到');
+  });
+
+  it('keeps unassessed radar dimensions missing instead of converting them to zero', () => {
+    expect(radarSeriesValues([
+      { id: 'device', label: '装置', value: 0.75 },
+      { id: 'principle', label: '原理', value: null },
+      { id: 'energy', label: '能量', value: 0 },
+    ])).toEqual([75, '-', 0]);
   });
 });

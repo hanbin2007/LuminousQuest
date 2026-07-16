@@ -380,6 +380,11 @@ describe('session persistence and staged assessment state', () => {
     expect(storage.getItem('luminous-quest:session.v2:broken')).toBeNull();
   });
 
+  it('reports malformed session schemas in Chinese', () => {
+    expect(() => importSession(JSON.stringify({ schemaVersion: 'session.v2' })))
+      .toThrow('会话文件格式不正确，请确认它由 LuminousQuest 导出。');
+  });
+
   it('surfaces quota failures without publishing a latest-session pointer', () => {
     const storage = new MemoryStorage();
     storage.failWrites = true;
