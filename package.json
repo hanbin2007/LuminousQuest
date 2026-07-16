@@ -24,7 +24,8 @@
     "eval:live": "tsx eval/cli.ts --mode live",
     "eval:holdout": "tsx eval/cli.ts --mode holdout",
     "eval:import-candidates": "tsx eval/import-cli.ts",
-    "package:app": "pnpm run build && node scripts/package.mjs"
+    "package:app": "pnpm run build && node scripts/package.mjs",
+    "package:mac-arm64": "pnpm run build && node scripts/package.mjs --mac-arm64"
   },
   "dependencies": {
     "@hono/node-server": "^1.19.9",
