@@ -1,4 +1,5 @@
 import type { LoadedConfig } from '../../shared/config/schemas';
+import type { DemoStartState } from '../../shared/demo/start-state';
 import type { StudentSession } from '../../shared/session/schema';
 
 export interface ExtractAssessmentInput {
@@ -65,6 +66,12 @@ export interface AppRuntime {
     executionMode: 'demo';
     session: StudentSession;
     progress: { pretestComplete: boolean; trainingComplete: boolean };
+    uiState: {
+      version: DemoStartState['version'];
+      route: DemoStartState['route'];
+      pretest: DemoStartState['pretest'];
+      training: DemoStartState['training'];
+    };
   }>;
   setExecutionMode?: (executionMode: LLMExecutionMode) => Promise<{
     executionMode: LLMExecutionMode;
@@ -115,6 +122,12 @@ export const defaultRuntime: AppRuntime = {
       executionMode: 'demo';
       session: StudentSession;
       progress: { pretestComplete: boolean; trainingComplete: boolean };
+      uiState: {
+        version: DemoStartState['version'];
+        route: DemoStartState['route'];
+        pretest: DemoStartState['pretest'];
+        training: DemoStartState['training'];
+      };
     }>(response);
   },
 

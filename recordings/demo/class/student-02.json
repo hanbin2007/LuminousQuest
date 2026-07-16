@@ -1,0 +1,265 @@
+{
+  "schemaVersion": "session.v2",
+  "id": "demo-class-session-02",
+  "anonymousStudentId": "anon-DEMO0002",
+  "startedAt": "2026-07-16T02:00:00.000Z",
+  "updatedAt": "2026-07-16T02:06:01.000Z",
+  "configVersions": {
+    "configDigest": "sha256:1b49a6fac91ab7cf1fc708b0d766e647030077d51613c991171b010ead4f757d",
+    "knowledgeModel": "knowledge-model.v1.1",
+    "rubrics": "rubrics.v1.1",
+    "pretest": "pretest.v1.1",
+    "scaffoldPolicy": "scaffold-policy.v1.5",
+    "cases": {
+      "zinc-copper": "case.v1.5",
+      "aluminum-air": "case.v1.5",
+      "hydrogen-oxygen": "case.v1.5",
+      "methane-fuel": "case.v1.5"
+    },
+    "grammar": "equation-grammar.v2",
+    "engines": {
+      "rubric": "rubric-policy.v2",
+      "topology": "builder-topology.v2",
+      "equation": "equation-scoring.v3"
+    }
+  },
+  "events": [
+    {
+      "schemaVersion": "event.v2",
+      "id": "b-answer-p4",
+      "sequence": 0,
+      "occurredAt": "2026-07-16T02:01:00.000Z",
+      "caseId": "zinc-copper",
+      "stageId": "training",
+      "attemptId": "b-p4-1",
+      "kind": "answer.submitted",
+      "pipelineStage": "answer",
+      "questionId": "zinc-copper:analysis",
+      "answer": {
+        "format": "text",
+        "value": "电子从铜极流向锌极。"
+      }
+    },
+    {
+      "schemaVersion": "event.v2",
+      "id": "b-assessment-p4",
+      "sequence": 1,
+      "occurredAt": "2026-07-16T02:01:01.000Z",
+      "caseId": "zinc-copper",
+      "stageId": "training",
+      "attemptId": "b-p4-1",
+      "kind": "assessment.completed",
+      "pipelineStage": "score",
+      "sourceAnswerEventId": "b-answer-p4",
+      "nodeId": "P4",
+      "misconceptionIds": [
+        "P4-M1"
+      ],
+      "rubric": {
+        "id": "rubric-p4",
+        "version": "rubrics.v1.1"
+      },
+      "assistance": {
+        "kind": "none",
+        "rounds": 0
+      },
+      "objectiveOutcome": "miss",
+      "extraction": {
+        "status": "assessed",
+        "evidence": [
+          {
+            "quote": "电子从铜极流向锌极。",
+            "start": 0,
+            "end": 10
+          }
+        ],
+        "model": "fixture-v1",
+        "provenance": {
+          "promptId": "structured-assessment",
+          "promptVersion": "fixture-prompt.v1",
+          "cacheKey": "fixture-b-p4"
+        }
+      },
+      "ruleDecision": {
+        "status": "miss",
+        "ruleId": "p4-miss",
+        "reason": "P4-M1：电子流向写反。",
+        "engine": {
+          "id": "rubric-policy",
+          "version": "rubric-policy.v2"
+        }
+      },
+      "following": {
+        "status": "not-followed",
+        "anchorNodeId": null,
+        "anchorOutcome": null,
+        "policy": "score-logical-chain"
+      },
+      "score": {
+        "status": "scored",
+        "earned": 0,
+        "possible": 2,
+        "annotations": [],
+        "outcome": "miss"
+      }
+    },
+    {
+      "schemaVersion": "event.v2",
+      "id": "b-answer-d3",
+      "sequence": 2,
+      "occurredAt": "2026-07-16T02:03:00.000Z",
+      "caseId": "zinc-copper",
+      "stageId": "training",
+      "attemptId": "b-d3-1",
+      "kind": "answer.submitted",
+      "pipelineStage": "answer",
+      "questionId": "zinc-copper:analysis-d3",
+      "answer": {
+        "format": "text",
+        "value": "盐桥传电子就能闭合回路。"
+      }
+    },
+    {
+      "schemaVersion": "event.v2",
+      "id": "b-assessment-d3",
+      "sequence": 3,
+      "occurredAt": "2026-07-16T02:03:01.000Z",
+      "caseId": "zinc-copper",
+      "stageId": "training",
+      "attemptId": "b-d3-1",
+      "kind": "assessment.completed",
+      "pipelineStage": "score",
+      "sourceAnswerEventId": "b-answer-d3",
+      "nodeId": "D3",
+      "misconceptionIds": [
+        "D3-M1"
+      ],
+      "rubric": {
+        "id": "rubric-d3",
+        "version": "rubrics.v1.1"
+      },
+      "assistance": {
+        "kind": "none",
+        "rounds": 0
+      },
+      "objectiveOutcome": "miss",
+      "extraction": {
+        "status": "assessed",
+        "evidence": [
+          {
+            "quote": "盐桥传电子就能闭合回路。",
+            "start": 0,
+            "end": 12
+          }
+        ],
+        "model": "fixture-v1",
+        "provenance": {
+          "promptId": "structured-assessment",
+          "promptVersion": "fixture-prompt.v1",
+          "cacheKey": "fixture-b-d3"
+        }
+      },
+      "ruleDecision": {
+        "status": "miss",
+        "ruleId": "d3-miss",
+        "reason": "D3-M1：把盐桥误作电子导体。",
+        "engine": {
+          "id": "rubric-policy",
+          "version": "rubric-policy.v2"
+        }
+      },
+      "following": {
+        "status": "not-followed",
+        "anchorNodeId": null,
+        "anchorOutcome": null,
+        "policy": "score-logical-chain"
+      },
+      "score": {
+        "status": "scored",
+        "earned": 0,
+        "possible": 2,
+        "annotations": [],
+        "outcome": "miss"
+      }
+    },
+    {
+      "schemaVersion": "event.v2",
+      "id": "b-answer-e1",
+      "sequence": 4,
+      "occurredAt": "2026-07-16T02:06:00.000Z",
+      "caseId": "zinc-copper",
+      "stageId": "training",
+      "attemptId": "b-e1-1",
+      "kind": "answer.submitted",
+      "pipelineStage": "answer",
+      "questionId": "zinc-copper:analysis-e1",
+      "answer": {
+        "format": "text",
+        "value": "原电池先变成热能再发电。"
+      }
+    },
+    {
+      "schemaVersion": "event.v2",
+      "id": "b-assessment-e1",
+      "sequence": 5,
+      "occurredAt": "2026-07-16T02:06:01.000Z",
+      "caseId": "zinc-copper",
+      "stageId": "training",
+      "attemptId": "b-e1-1",
+      "kind": "assessment.completed",
+      "pipelineStage": "score",
+      "sourceAnswerEventId": "b-answer-e1",
+      "nodeId": "E1",
+      "misconceptionIds": [
+        "E1-M1"
+      ],
+      "rubric": {
+        "id": "rubric-e1",
+        "version": "rubrics.v1.1"
+      },
+      "assistance": {
+        "kind": "none",
+        "rounds": 0
+      },
+      "objectiveOutcome": "partial",
+      "extraction": {
+        "status": "assessed",
+        "evidence": [
+          {
+            "quote": "原电池先变成热能再发电。",
+            "start": 0,
+            "end": 12
+          }
+        ],
+        "model": "fixture-v1",
+        "provenance": {
+          "promptId": "structured-assessment",
+          "promptVersion": "fixture-prompt.v1",
+          "cacheKey": "fixture-b-e1"
+        }
+      },
+      "ruleDecision": {
+        "status": "partial",
+        "ruleId": "e1-partial",
+        "reason": "E1-M1：混入热能中转。",
+        "engine": {
+          "id": "rubric-policy",
+          "version": "rubric-policy.v2"
+        }
+      },
+      "following": {
+        "status": "not-followed",
+        "anchorNodeId": null,
+        "anchorOutcome": null,
+        "policy": "score-logical-chain"
+      },
+      "score": {
+        "status": "scored",
+        "earned": 1,
+        "possible": 2,
+        "annotations": [],
+        "outcome": "partial"
+      }
+    }
+  ]
+}

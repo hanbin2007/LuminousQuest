@@ -1,0 +1,37 @@
+{
+  "version": "demo-start-state.v1",
+  "sessionRef": "recordings/demo/session.json",
+  "route": "/training",
+  "progress": {
+    "pretestComplete": true,
+    "trainingComplete": false
+  },
+  "pretest": {
+    "page": "drawing"
+  },
+  "training": {
+    "draft": {
+      "schemaVersion": "training-draft.v2",
+      "activeCaseId": "zinc-copper",
+      "currentLevel": 1,
+      "answers": {
+        "zinc-copper": {
+          "p4-process": "电子从铜极经导线流向锌极。"
+        }
+      },
+      "equations": {
+        "zinc-copper": {}
+      },
+      "scaffoldHistory": []
+    },
+    "feedbackRound": {
+      "caseId": "zinc-copper",
+      "attemptIds": ["demo-p4-1"]
+    }
+  },
+  "classSessionRefs": [
+    "recordings/demo/class/student-01.json",
+    "recordings/demo/class/student-02.json",
+    "recordings/demo/class/student-03.json"
+  ]
+}

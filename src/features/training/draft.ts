@@ -1,4 +1,5 @@
 import type { ScaffoldHistoryEntry } from './scaffold-adapter';
+import type { DemoStartState } from '../../../shared/demo/start-state';
 
 export interface TrainingDraft {
   schemaVersion: 'training-draft.v2';
@@ -71,4 +72,47 @@ export function saveTrainingDraft(
   draft: TrainingDraft,
 ) {
   storage?.setItem(`luminous-quest:training-draft.v2:${sessionId}`, JSON.stringify(draft));
+}
+
+const demoStartKey = (sessionId: string) =>
+  `luminous-quest:training-demo-start.v1:${sessionId}`;
+
+export function saveDemoTrainingStart(
+  storage: Pick<Storage, 'setItem'> | null,
+  sessionId: string,
+  state: DemoStartState['training'],
+) {
+  saveTrainingDraft(storage, sessionId, state.draft);
+  storage?.setItem(demoStartKey(sessionId), JSON.stringify({
+    version: 'demo-training-start.v1',
+    feedbackRound: state.feedbackRound,
+  }));
+}
+
+export function loadDemoTrainingRound(
+  storage: Pick<Storage, 'getItem'> | null,
+  sessionId: string,
+  caseIds: readonly string[],
+) {
+  if (!storage) return null;
+  try {
+    const source = storage.getItem(demoStartKey(sessionId));
+    if (!source) return null;
+    const value = JSON.parse(source) as {
+      version?: unknown;
+      feedbackRound?: { caseId?: unknown; attemptIds?: unknown };
+    };
+    const round = value.feedbackRound;
+    if (
+      value.version !== 'demo-training-start.v1'
+      || typeof round?.caseId !== 'string'
+      || !caseIds.includes(round.caseId)
+      || !Array.isArray(round.attemptIds)
+      || round.attemptIds.length === 0
+      || !round.attemptIds.every((attemptId) => typeof attemptId === 'string' && attemptId.length > 0)
+    ) return null;
+    return { caseId: round.caseId, attemptIds: round.attemptIds as string[] };
+  } catch {
+    return null;
+  }
 }

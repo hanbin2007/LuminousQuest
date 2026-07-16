@@ -3,13 +3,17 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 
 import type { CaseConfig } from '../../../shared/config/schemas';
 import type { ScaffoldScoreInput } from '../../../shared/scoring/scaffold';
-import type { AssessmentCompletedEvent, StudentSession } from '../../../shared/session';
+import type {
+  AssessmentCompletedEvent,
+  StudentSession,
+  TutorTurnCompletedEvent,
+} from '../../../shared/session';
 import { useAppContext } from '../../app/AppContext';
 import { AnnotationCard, type AnnotationStatus } from '../diagnosis/AnnotationCard';
 import { EquationToolbar } from '../pretest/EquationToolbar';
 import { mergeServerSession } from '../pretest/session-merge';
 import {
-  emptyTrainingDraft,
+  loadDemoTrainingRound,
   loadTrainingDraft,
   saveTrainingDraft,
   type TrainingDraft,
@@ -48,11 +52,59 @@ interface CompletedRound {
 
 interface TutorNote {
   content: string;
+  closing?: string;
   completedRounds: number;
   source: 'provider' | 'development-cache' | 'demo-recording' | 'preset';
   degraded: boolean;
   terminal: boolean;
   reason?: string;
+}
+
+function restoredDemoRound(
+  session: StudentSession,
+  config: ReturnType<typeof useAppContext>['config'],
+  cases: readonly CaseConfig[],
+  draft: TrainingDraft,
+): CompletedRound | null {
+  const stored = loadDemoTrainingRound(storage(), session.id, cases.map((entry) => entry.id));
+  if (!stored) return null;
+  const trainingCase = cases.find((entry) => entry.id === stored.caseId);
+  if (!trainingCase) return null;
+  const scaffoldScore = deriveCaseScaffoldScore(session.events, stored.caseId, stored.attemptIds);
+  const casePass = deriveCasePassEvaluation(session.events, trainingCase, stored.attemptIds, config);
+  const scores = draft.scaffoldHistory.map((entry) => entry.score);
+  if (scaffoldScore) scores.push(scaffoldScore);
+  const transition = trainingCase.caseType === 'training'
+    ? advanceScaffold(trainingCase.caseType, draft.currentLevel, scores, config.scaffoldPolicy)
+    : null;
+  return { ...stored, scaffoldScore, transition, casePass };
+}
+
+function restoredTutorNotes(
+  session: StudentSession,
+  round: CompletedRound | null,
+): Record<string, TutorNote> {
+  if (!round) return {};
+  const attemptIds = new Set(round.attemptIds);
+  const turns = session.events.filter((event): event is TutorTurnCompletedEvent =>
+    event.kind === 'tutor.turn.completed'
+    && event.caseId === round.caseId
+    && attemptIds.has(event.attemptId));
+  const notes: Record<string, TutorNote> = {};
+  turns.forEach((turn) => {
+    const completedRounds = turns.filter((event) => event.cycleId === turn.cycleId).length;
+    const terminal = session.events.find((event) =>
+      event.kind === 'tutor.cycle.terminal' && event.cycleId === turn.cycleId);
+    notes[turn.nodeId] = {
+      content: terminal?.kind === 'tutor.cycle.terminal' ? terminal.content : turn.turn.content,
+      completedRounds,
+      source: turn.source,
+      degraded: turn.degraded,
+      terminal: Boolean(terminal),
+      ...(terminal?.kind === 'tutor.cycle.terminal' ? { reason: terminal.reason } : {}),
+    };
+  });
+  return notes;
 }
 
 function tutorSourceLabel(source: TutorNote['source']) {
@@ -317,10 +369,13 @@ export function TrainingPage() {
   const firstLevel = firstCase
     ? initialScaffold(firstCase.caseType, config.scaffoldPolicy).level
     : 1;
-  const [draft, setDraft] = useState<TrainingDraft>(() =>
-    loadTrainingDraft(storage(), session.id, cases.map((entry) => entry.id), firstLevel));
-  const [round, setRound] = useState<CompletedRound | null>(null);
-  const [tutorNotes, setTutorNotes] = useState<Record<string, TutorNote>>({});
+  const initialDraft = () =>
+    loadTrainingDraft(storage(), session.id, cases.map((entry) => entry.id), firstLevel);
+  const [draft, setDraft] = useState<TrainingDraft>(initialDraft);
+  const [round, setRound] = useState<CompletedRound | null>(() =>
+    restoredDemoRound(session, config, cases, initialDraft()));
+  const [tutorNotes, setTutorNotes] = useState<Record<string, TutorNote>>(() =>
+    restoredTutorNotes(session, restoredDemoRound(session, config, cases, initialDraft())));
   const [comparison, setComparison] = useState<TransferComparison | null>(null);
   const [busy, setBusy] = useState(false);
   const [tutorBusyNode, setTutorBusyNode] = useState<string | null>(null);
@@ -336,11 +391,12 @@ export function TrainingPage() {
 
   useEffect(() => {
     const next = loadTrainingDraft(storage(), session.id, cases.map((entry) => entry.id), firstLevel);
+    const restoredRound = restoredDemoRound(session, config, cases, next);
     setDraft(next);
-    setRound(null);
-    setTutorNotes({});
+    setRound(restoredRound);
+    setTutorNotes(restoredTutorNotes(session, restoredRound));
     setComparison(null);
-  }, [cases, firstLevel, session.id]);
+  }, [cases, config, firstLevel, session.id]);
 
   useEffect(() => {
     try {
@@ -490,9 +546,8 @@ export function TrainingPage() {
         setTutorNotes((current) => ({
           ...current,
           [nodeId]: {
-            content: result.finalRound
-              ? config.scaffoldPolicy.socratic.fallback.closing
-              : result.turn.content,
+            content: result.turn.content,
+            ...(result.finalRound ? { closing: config.scaffoldPolicy.socratic.fallback.closing } : {}),
             completedRounds: result.completedRounds,
             source: result.source,
             degraded: result.degraded,
@@ -657,6 +712,7 @@ export function TrainingPage() {
                         <span>{tutorSourceLabel(note.source)}</span>
                       </header>
                       <p>{note.content}</p>
+                      {note.closing ? <p className="training-tutor-note__closing">{note.closing}</p> : null}
                       {note.reason ? <small>故障状态：{note.reason}</small> : null}
                     </aside>
                   ) : null}

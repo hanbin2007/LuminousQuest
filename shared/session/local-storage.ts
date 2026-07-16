@@ -53,14 +53,15 @@ export class LocalSessionStore {
     }
   }
 
-  save(session: StudentSession) {
+  save(session: StudentSession, options: { makeLatest?: boolean } = {}) {
     const serialized = exportSession(session);
     const key = sessionKey(session.id);
     const previousSession = this.storage.getItem(key);
     const previousLatest = this.storage.getItem(latestSessionKey);
+    const makeLatest = options.makeLatest ?? true;
     try {
       this.storage.setItem(key, serialized);
-      this.storage.setItem(latestSessionKey, session.id);
+      if (makeLatest) this.storage.setItem(latestSessionKey, session.id);
     } catch (error) {
       try {
         if (previousSession === null) this.storage.removeItem(key);

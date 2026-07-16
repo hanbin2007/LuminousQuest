@@ -6,27 +6,38 @@
     "schemaVersion": "hand-drawing-feedback.v1",
     "prompt": {
       "id": "hand-drawing-feedback",
-      "version": "sha256:4587416f26a728ff1955761fc4220180f346be5056ab1ce02a7876bc76bee461"
+      "version": "sha256:d9d0e7f28736c5783cb38e5225ca2cdf6d30ee4b5d67d55cb5fb83fdf581f98e"
     }
   },
   "request": {
     "executionMode": "demo",
-    "capability": "vision",
+    "capability": "structured",
     "provider": "recorded-demo",
     "model": "recorded-demo.v1",
     "prompt": {
       "id": "hand-drawing-feedback",
-      "version": "sha256:4587416f26a728ff1955761fc4220180f346be5056ab1ce02a7876bc76bee461",
+      "version": "sha256:d9d0e7f28736c5783cb38e5225ca2cdf6d30ee4b5d67d55cb5fb83fdf581f98e",
       "text": "recorded outside the distributable artifact"
     },
     "schemaVersion": "hand-drawing-feedback.v1",
     "configVersion": "sha256:1b49a6fac91ab7cf1fc708b0d766e647030077d51613c991171b010ead4f757d",
     "input": { "step": "scripted drawing review" },
     "images": [],
+    "schema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["comment"],
+      "properties": {
+        "comment": { "type": "string", "minLength": 1, "maxLength": 400 }
+      }
+    },
     "stepId": "hand-drawing-feedback"
   },
   "response": {
-    "content": "失电子场所和得电子场所已经分开；请再检查外电路与内电路的载流粒子标注是否各自清楚。",
-    "model": "recorded-demo.v1"
+    "content": "{\"comment\":\"失电子场所和得电子场所已经分开；请再检查外电路与内电路的载流粒子标注是否各自清楚。\"}",
+    "model": "recorded-demo.v1",
+    "structured": {
+      "comment": "失电子场所和得电子场所已经分开；请再检查外电路与内电路的载流粒子标注是否各自清楚。"
+    }
   }
 }

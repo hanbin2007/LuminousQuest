@@ -1,0 +1,259 @@
+{
+  "schemaVersion": "session.v2",
+  "id": "demo-class-session-03",
+  "anonymousStudentId": "anon-DEMO0003",
+  "startedAt": "2026-07-16T03:00:00.000Z",
+  "updatedAt": "2026-07-16T03:06:01.000Z",
+  "configVersions": {
+    "configDigest": "sha256:1b49a6fac91ab7cf1fc708b0d766e647030077d51613c991171b010ead4f757d",
+    "knowledgeModel": "knowledge-model.v1.1",
+    "rubrics": "rubrics.v1.1",
+    "pretest": "pretest.v1.1",
+    "scaffoldPolicy": "scaffold-policy.v1.5",
+    "cases": {
+      "zinc-copper": "case.v1.5",
+      "aluminum-air": "case.v1.5",
+      "hydrogen-oxygen": "case.v1.5",
+      "methane-fuel": "case.v1.5"
+    },
+    "grammar": "equation-grammar.v2",
+    "engines": {
+      "rubric": "rubric-policy.v2",
+      "topology": "builder-topology.v2",
+      "equation": "equation-scoring.v3"
+    }
+  },
+  "events": [
+    {
+      "schemaVersion": "event.v2",
+      "id": "c-answer-p4",
+      "sequence": 0,
+      "occurredAt": "2026-07-16T03:01:00.000Z",
+      "caseId": "zinc-copper",
+      "stageId": "training",
+      "attemptId": "c-p4-1",
+      "kind": "answer.submitted",
+      "pipelineStage": "answer",
+      "questionId": "zinc-copper:analysis",
+      "answer": {
+        "format": "text",
+        "value": "电子会经过盐桥再到正极。"
+      }
+    },
+    {
+      "schemaVersion": "event.v2",
+      "id": "c-assessment-p4",
+      "sequence": 1,
+      "occurredAt": "2026-07-16T03:01:01.000Z",
+      "caseId": "zinc-copper",
+      "stageId": "training",
+      "attemptId": "c-p4-1",
+      "kind": "assessment.completed",
+      "pipelineStage": "score",
+      "sourceAnswerEventId": "c-answer-p4",
+      "nodeId": "P4",
+      "misconceptionIds": [
+        "P4-M2"
+      ],
+      "rubric": {
+        "id": "rubric-p4",
+        "version": "rubrics.v1.1"
+      },
+      "assistance": {
+        "kind": "none",
+        "rounds": 0
+      },
+      "objectiveOutcome": "miss",
+      "extraction": {
+        "status": "assessed",
+        "evidence": [
+          {
+            "quote": "电子会经过盐桥再到正极。",
+            "start": 0,
+            "end": 12
+          }
+        ],
+        "model": "fixture-v1",
+        "provenance": {
+          "promptId": "structured-assessment",
+          "promptVersion": "fixture-prompt.v1",
+          "cacheKey": "fixture-c-p4"
+        }
+      },
+      "ruleDecision": {
+        "status": "miss",
+        "ruleId": "p4-miss",
+        "reason": "P4-M2：电子被误认为经过盐桥。",
+        "engine": {
+          "id": "rubric-policy",
+          "version": "rubric-policy.v2"
+        }
+      },
+      "following": {
+        "status": "not-followed",
+        "anchorNodeId": null,
+        "anchorOutcome": null,
+        "policy": "score-logical-chain"
+      },
+      "score": {
+        "status": "scored",
+        "earned": 0,
+        "possible": 2,
+        "annotations": [],
+        "outcome": "miss"
+      }
+    },
+    {
+      "schemaVersion": "event.v2",
+      "id": "c-answer-d3",
+      "sequence": 2,
+      "occurredAt": "2026-07-16T03:03:00.000Z",
+      "caseId": "zinc-copper",
+      "stageId": "training",
+      "attemptId": "c-d3-1",
+      "kind": "answer.submitted",
+      "pipelineStage": "answer",
+      "questionId": "zinc-copper:analysis-d3",
+      "answer": {
+        "format": "text",
+        "value": "盐桥中的离子移动维持电中性。"
+      }
+    },
+    {
+      "schemaVersion": "event.v2",
+      "id": "c-assessment-d3",
+      "sequence": 3,
+      "occurredAt": "2026-07-16T03:03:01.000Z",
+      "caseId": "zinc-copper",
+      "stageId": "training",
+      "attemptId": "c-d3-1",
+      "kind": "assessment.completed",
+      "pipelineStage": "score",
+      "sourceAnswerEventId": "c-answer-d3",
+      "nodeId": "D3",
+      "rubric": {
+        "id": "rubric-d3",
+        "version": "rubrics.v1.1"
+      },
+      "assistance": {
+        "kind": "none",
+        "rounds": 0
+      },
+      "objectiveOutcome": "hit",
+      "extraction": {
+        "status": "assessed",
+        "evidence": [
+          {
+            "quote": "盐桥中的离子移动维持电中性。",
+            "start": 0,
+            "end": 14
+          }
+        ],
+        "model": "fixture-v1",
+        "provenance": {
+          "promptId": "structured-assessment",
+          "promptVersion": "fixture-prompt.v1",
+          "cacheKey": "fixture-c-d3"
+        }
+      },
+      "ruleDecision": {
+        "status": "hit",
+        "ruleId": "d3-hit",
+        "reason": "离子迁移与电中性均正确。",
+        "engine": {
+          "id": "rubric-policy",
+          "version": "rubric-policy.v2"
+        }
+      },
+      "following": {
+        "status": "not-followed",
+        "anchorNodeId": null,
+        "anchorOutcome": null,
+        "policy": "score-logical-chain"
+      },
+      "score": {
+        "status": "scored",
+        "earned": 2,
+        "possible": 2,
+        "annotations": [],
+        "outcome": "hit"
+      }
+    },
+    {
+      "schemaVersion": "event.v2",
+      "id": "c-answer-e1",
+      "sequence": 4,
+      "occurredAt": "2026-07-16T03:06:00.000Z",
+      "caseId": "zinc-copper",
+      "stageId": "training",
+      "attemptId": "c-e1-1",
+      "kind": "answer.submitted",
+      "pipelineStage": "answer",
+      "questionId": "zinc-copper:analysis-e1",
+      "answer": {
+        "format": "text",
+        "value": "化学能直接变成电能。"
+      }
+    },
+    {
+      "schemaVersion": "event.v2",
+      "id": "c-assessment-e1",
+      "sequence": 5,
+      "occurredAt": "2026-07-16T03:06:01.000Z",
+      "caseId": "zinc-copper",
+      "stageId": "training",
+      "attemptId": "c-e1-1",
+      "kind": "assessment.completed",
+      "pipelineStage": "score",
+      "sourceAnswerEventId": "c-answer-e1",
+      "nodeId": "E1",
+      "rubric": {
+        "id": "rubric-e1",
+        "version": "rubrics.v1.1"
+      },
+      "assistance": {
+        "kind": "none",
+        "rounds": 0
+      },
+      "objectiveOutcome": "hit",
+      "extraction": {
+        "status": "assessed",
+        "evidence": [
+          {
+            "quote": "化学能直接变成电能。",
+            "start": 0,
+            "end": 10
+          }
+        ],
+        "model": "fixture-v1",
+        "provenance": {
+          "promptId": "structured-assessment",
+          "promptVersion": "fixture-prompt.v1",
+          "cacheKey": "fixture-c-e1"
+        }
+      },
+      "ruleDecision": {
+        "status": "hit",
+        "ruleId": "e1-hit",
+        "reason": "直接转化方向正确。",
+        "engine": {
+          "id": "rubric-policy",
+          "version": "rubric-policy.v2"
+        }
+      },
+      "following": {
+        "status": "not-followed",
+        "anchorNodeId": null,
+        "anchorOutcome": null,
+        "policy": "score-logical-chain"
+      },
+      "score": {
+        "status": "scored",
+        "earned": 2,
+        "possible": 2,
+        "annotations": [],
+        "outcome": "hit"
+      }
+    }
+  ]
+}

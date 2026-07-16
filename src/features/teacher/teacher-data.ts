@@ -9,14 +9,26 @@ import {
 export interface ClassSessionFile {
   name: string;
   text: string;
+  batchIndex?: number;
 }
+
+export interface ClassSessionUpload {
+  size: number;
+  text(): Promise<string>;
+}
+
+export const MAX_CLASS_SESSION_FILES = 24;
+export const MAX_CLASS_SESSION_FILE_BYTES = 512 * 1024;
 
 export type ClassSessionRejectionCode =
   | 'invalid-json'
   | 'invalid-session'
   | 'duplicate-session'
   | 'rubric-version-mismatch'
-  | 'config-version-mismatch';
+  | 'config-version-mismatch'
+  | 'too-many-files'
+  | 'file-too-large'
+  | 'file-read-failed';
 
 export interface AcceptedClassSession {
   name: string;
@@ -70,6 +82,7 @@ function selectedAssessmentForNode(
   node: Profile['nodes'][number],
 ) {
   if (!node.trace) return undefined;
+  // TODO(m4-3d-merge): use profile.nodes[].selectedAssessment after its additive field lands.
   return [...session.events].reverse().find((event): event is AssessmentCompletedEvent =>
     event.kind === 'assessment.completed'
     && event.nodeId === node.nodeId
@@ -112,6 +125,7 @@ export function buildTeacherStudentReport(sessionInput: unknown, config: LoadedC
       ruleId: node.trace?.ruleId ?? null,
       ruleDescription: matchedRule?.description ?? null,
       originalAnswer: node.trace?.originalAnswer ?? null,
+      evidence: node.trace?.evidence ?? [],
       evidenceQuotes: node.trace?.evidence.map((item) => item.quote) ?? [],
       misconceptionIds: assessment?.misconceptionIds ?? [],
       engine: node.trace?.engine ?? null,
@@ -247,6 +261,51 @@ function rejection(
   return { name, code, message };
 }
 
+function batchLabel(index: number) {
+  return `批次文件 ${index + 1}`;
+}
+
+export async function readClassSessionFileBatch(
+  uploads: readonly ClassSessionUpload[],
+) {
+  const limited = uploads.slice(0, MAX_CLASS_SESSION_FILES);
+  const settled = await Promise.allSettled(limited.map(async (upload, batchIndex) => {
+    if (upload.size > MAX_CLASS_SESSION_FILE_BYTES) {
+      throw new Error('file-too-large');
+    }
+    return {
+      name: batchLabel(batchIndex),
+      batchIndex,
+      text: await upload.text(),
+    } satisfies ClassSessionFile;
+  }));
+  const files: ClassSessionFile[] = [];
+  const rejected: RejectedClassSession[] = [];
+  settled.forEach((result, batchIndex) => {
+    if (result.status === 'fulfilled') {
+      files.push(result.value);
+      return;
+    }
+    const tooLarge = result.reason instanceof Error && result.reason.message === 'file-too-large';
+    rejected.push(rejection(
+      batchLabel(batchIndex),
+      tooLarge ? 'file-too-large' : 'file-read-failed',
+      tooLarge
+        ? `文件超过 ${Math.floor(MAX_CLASS_SESSION_FILE_BYTES / 1024)} KiB 上限，未读取。`
+        : '文件读取失败，未计入汇总。',
+    ));
+  });
+  uploads.slice(MAX_CLASS_SESSION_FILES).forEach((_upload, overflowIndex) => {
+    const batchIndex = MAX_CLASS_SESSION_FILES + overflowIndex;
+    rejected.push(rejection(
+      batchLabel(batchIndex),
+      'too-many-files',
+      `单次最多导入 ${MAX_CLASS_SESSION_FILES} 份文件，该文件未读取。`,
+    ));
+  });
+  return { files, rejected };
+}
+
 export function importClassSessionFiles(
   files: readonly ClassSessionFile[],
   config: LoadedConfig,
@@ -256,18 +315,19 @@ export function importClassSessionFiles(
   const rejected: RejectedClassSession[] = [];
   const sessionIds = new Set(existingSessions.map((session) => session.id));
 
-  for (const file of files) {
+  for (const [index, file] of files.entries()) {
+    const name = batchLabel(file.batchIndex ?? index);
     let value: unknown;
     try {
       value = JSON.parse(file.text);
     } catch {
-      rejected.push(rejection(file.name, 'invalid-json', '文件不是有效 JSON。'));
+      rejected.push(rejection(name, 'invalid-json', '文件不是有效 JSON。'));
       continue;
     }
     const parsed = sessionSchema.safeParse(value);
     if (!parsed.success) {
       rejected.push(rejection(
-        file.name,
+        name,
         'invalid-session',
         '文件不符合 session.v2 会话结构，未导入班级数据。',
       ));
@@ -276,15 +336,15 @@ export function importClassSessionFiles(
     const session = parsed.data;
     if (sessionIds.has(session.id)) {
       rejected.push(rejection(
-        file.name,
+        name,
         'duplicate-session',
-        `会话 ${session.id} 已存在，重复文件未计入。`,
+        '该匿名会话已存在，重复文件未计入。',
       ));
       continue;
     }
     if (session.configVersions.rubrics !== config.rubrics.version) {
       rejected.push(rejection(
-        file.name,
+        name,
         'rubric-version-mismatch',
         `量表版本 ${session.configVersions.rubrics} 与当前 ${config.rubrics.version} 不一致。`,
       ));
@@ -292,16 +352,16 @@ export function importClassSessionFiles(
     }
     try {
       buildLearnerProfile(session, config);
-    } catch (error) {
+    } catch {
       rejected.push(rejection(
-        file.name,
+        name,
         'config-version-mismatch',
-        `会话配置版本与当前课程不一致：${error instanceof Error ? error.message : '无法校验'}`,
+        '会话配置版本或内容与当前课程不一致。',
       ));
       continue;
     }
     sessionIds.add(session.id);
-    accepted.push({ name: file.name, session });
+    accepted.push({ name, session });
   }
 
   return { accepted, rejected };
@@ -317,14 +377,16 @@ function quantile(values: readonly number[], position: number) {
   return sorted[lower] + (sorted[upper] - sorted[lower]) * (index - lower);
 }
 
-function latestAssessmentByNode(session: StudentSession) {
-  const latest = new Map<string, AssessmentCompletedEvent>();
-  for (const event of session.events) {
-    if (event.kind !== 'assessment.completed') continue;
-    const current = latest.get(event.nodeId);
-    if (!current || event.sequence > current.sequence) latest.set(event.nodeId, event);
-  }
-  return latest;
+function latestSessionPerStudent(sessions: readonly StudentSession[]) {
+  const latest = new Map<string, StudentSession>();
+  sessions.forEach((session) => {
+    const current = latest.get(session.anonymousStudentId);
+    if (!current || Date.parse(session.updatedAt) >= Date.parse(current.updatedAt)) {
+      latest.set(session.anonymousStudentId, session);
+    }
+  });
+  return [...latest.values()].sort((left, right) =>
+    left.anonymousStudentId.localeCompare(right.anonymousStudentId));
 }
 
 function persistedMisconceptions(event: AssessmentCompletedEvent) {
@@ -338,8 +400,13 @@ export function buildClassSummary(
   config: LoadedConfig,
   topN = 5,
 ) {
-  const sessions = sessionInputs.map((input) => sessionSchema.parse(input));
-  const profiles = sessions.map((session) => buildLearnerProfile(session, config));
+  const inputSessions = sessionInputs.map((input) => sessionSchema.parse(input));
+  const sessions = latestSessionPerStudent(inputSessions);
+  const studentProfiles = sessions.map((session) => ({
+    session,
+    profile: buildLearnerProfile(session, config),
+  }));
+  const profiles = studentProfiles.map((entry) => entry.profile);
   const dimensions = config.knowledgeModel.dimensions.map((dimension) => {
     const values = profiles.flatMap((profile) => {
       const ratio = profile.dimensions.find((entry) => entry.dimensionId === dimension.id)?.ratio;
@@ -389,11 +456,12 @@ export function buildClassSummary(
       statement: item.statement,
     }] as const)));
   const counts = new Map<string, number>();
-  sessions.forEach((session) => {
+  studentProfiles.forEach(({ session, profile }) => {
     const seenForStudent = new Set<string>();
-    latestAssessmentByNode(session).forEach((event) => {
-      const outcome = assessmentOutcome(event);
-      if (outcome !== 'partial' && outcome !== 'miss') return;
+    profile.nodes.forEach((node) => {
+      if (node.outcome !== 'partial' && node.outcome !== 'miss') return;
+      const event = selectedAssessmentForNode(session, node);
+      if (!event) return;
       persistedMisconceptions(event).forEach((id) => {
         const configured = misconceptionConfig.get(id);
         if (!configured || configured.nodeId !== event.nodeId || seenForStudent.has(id)) return;
@@ -409,6 +477,7 @@ export function buildClassSummary(
 
   return {
     sessionCount: sessions.length,
+    inputSessionCount: inputSessions.length,
     anonymousStudentIds: [...new Set(sessions.map((session) => session.anonymousStudentId))].sort(),
     rubricVersion: config.rubrics.version,
     dimensions,

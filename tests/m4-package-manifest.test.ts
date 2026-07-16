@@ -5,7 +5,7 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 // @ts-expect-error The packaging helper is intentionally executable plain Node ESM.
-import { writeSha256Manifest } from '../scripts/release-manifest.mjs';
+import { assertReleaseSourceCommit, writeSha256Manifest } from '../scripts/release-manifest.mjs';
 
 describe('M4 release manifest', () => {
   it('writes a sorted SHA-256 inventory for the executable and external content tree', async () => {
@@ -29,5 +29,16 @@ describe('M4 release manifest', () => {
     const source = await readFile(manifest, 'utf8');
     expect(source).toMatch(/^[a-f0-9]{64}  release\/darwin-arm64\/LuminousQuest$/m);
     expect(source).toMatch(/^[a-f0-9]{64}  release\/darwin-arm64\/config\/rubrics\.json$/m);
+  });
+
+  it('requires RELEASE.json sourceCommit to equal the packaging HEAD', async () => {
+    const temporary = await mkdtemp(path.join(os.tmpdir(), 'lq-release-metadata-'));
+    const releaseFile = path.join(temporary, 'RELEASE.json');
+    await writeFile(releaseFile, JSON.stringify({ sourceCommit: 'commit-a' }));
+
+    await expect(assertReleaseSourceCommit({ releaseFile, expectedCommit: 'commit-a' }))
+      .resolves.toMatchObject({ sourceCommit: 'commit-a' });
+    await expect(assertReleaseSourceCommit({ releaseFile, expectedCommit: 'commit-b' }))
+      .rejects.toThrow(/does not match HEAD/u);
   });
 });
