@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import {
   BrowserRouter,
   Navigate,
@@ -12,6 +12,8 @@ import { AppErrorBoundary } from './app/AppErrorBoundary';
 import { AppShell } from './app/AppShell';
 import { PlaceholderPage } from './app/PlaceholderPage';
 import { PretestPage } from './features/pretest/PretestPage';
+
+const ModelPage = lazy(() => import('./features/model/ModelPage'));
 import { TrainingPage } from './features/training/TrainingPage';
 import { defaultRuntime, type AppRuntime } from './runtime/api';
 import { useLocalSession } from './session/useLocalSession';
@@ -92,11 +94,9 @@ function ConfiguredApp({ config, runtime }: { config: LoadedConfig; runtime: App
             <Route path="pretest" element={<PretestPage />} />
             <Route path="training" element={<TrainingPage />} />
             <Route path="model" element={(
-              <PlaceholderPage
-                module="模块三"
-                title="3D 思维模型外显"
-                terms="装置 · 原理 · 能量"
-              />
+              <Suspense fallback={<div className="stage-dark model-stage" aria-busy="true" />}>
+                <ModelPage />
+              </Suspense>
             )} />
             <Route path="teacher" element={(
               <PlaceholderPage

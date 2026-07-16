@@ -166,7 +166,7 @@ describe('M2 pretest route', () => {
     await user.click(screen.getByRole('link', { name: '训练' }));
     expect(await screen.findByRole('heading', { name: '思维模型训练' })).toBeInTheDocument();
     await user.click(screen.getByRole('link', { name: '外显' }));
-    expect(await screen.findByRole('heading', { name: '3D 思维模型外显' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '电化学统一认知模型' })).toBeInTheDocument();
     await user.click(screen.getByRole('link', { name: '教师视图' }));
     expect(await screen.findByRole('heading', { name: '教师视图' })).toBeInTheDocument();
     expect(screen.getByLabelText('电子流进度')).toBeInTheDocument();
