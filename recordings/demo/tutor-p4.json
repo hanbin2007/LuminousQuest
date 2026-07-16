@@ -1,0 +1,45 @@
+{
+  "version": "llm-recording.v2",
+  "recordedAt": "2026-07-16T01:03:00.000Z",
+  "metadata": {
+    "configVersion": "sha256:1b49a6fac91ab7cf1fc708b0d766e647030077d51613c991171b010ead4f757d",
+    "schemaVersion": "socratic-action.v2",
+    "prompt": {
+      "id": "socratic-tutoring",
+      "version": "sha256:8bf74a618ee0145f4a1f13778cad6ea194ac9f6894fbfba789bb6123a2ba3c12"
+    }
+  },
+  "request": {
+    "executionMode": "demo",
+    "capability": "structured",
+    "provider": "recorded-demo",
+    "model": "recorded-demo.v1",
+    "prompt": {
+      "id": "socratic-tutoring",
+      "version": "sha256:8bf74a618ee0145f4a1f13778cad6ea194ac9f6894fbfba789bb6123a2ba3c12",
+      "text": "recorded outside the distributable artifact"
+    },
+    "schemaVersion": "socratic-action.v2",
+    "configVersion": "sha256:1b49a6fac91ab7cf1fc708b0d766e647030077d51613c991171b010ead4f757d",
+    "input": { "step": "scripted P4 follow-up" },
+    "images": [],
+    "schema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["action", "content"],
+      "properties": {
+        "action": { "enum": ["probe", "hint", "check"] },
+        "content": { "type": "string", "minLength": 1 }
+      }
+    },
+    "stepId": "demo-tutor-p4"
+  },
+  "response": {
+    "content": "{\"action\":\"check\",\"content\":\"回到你写的路径，检查载流粒子经过的是外电路还是内电路，并说明依据。\"}",
+    "model": "recorded-demo.v1",
+    "structured": {
+      "action": "check",
+      "content": "回到你写的路径，检查载流粒子经过的是外电路还是内电路，并说明依据。"
+    }
+  }
+}

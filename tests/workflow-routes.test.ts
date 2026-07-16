@@ -258,6 +258,52 @@ describe('server-owned assessment and tutor routes', () => {
     });
   });
 
+  it('downgrades composite P6 to partial when individually valid half reactions do not cancel electrons', async () => {
+    const sessions = new TestSessionStore();
+    const app = createServerApp({
+      contentRoot: process.cwd(),
+      clientRoot: path.join(process.cwd(), 'dist'),
+      apiToken,
+      sessions,
+      workflow: { now: () => Date.parse('2026-07-15T12:00:00.000Z') },
+    });
+    const sessionId = 'equation-electron-cancellation-session';
+
+    for (const submission of [
+      {
+        equationSetId: 'hydrogen-negative',
+        equation: 'H2 -> 2H^+ + 2e^-',
+        submissionId: 'hydrogen-half-hit',
+      },
+      {
+        equationSetId: 'oxygen-positive',
+        equation: 'O2 + 4H^+ + 4e^- -> 2H2O',
+        submissionId: 'oxygen-half-hit',
+      },
+    ]) {
+      const response = await post(app, '/api/assessment/equation', {
+        sessionId,
+        caseId: 'hydrogen-oxygen',
+        ...submission,
+      });
+      expect(response.status).toBe(200);
+    }
+
+    const latestCompositeP6 = [...sessions.get(sessionId)!.events].reverse().find((event) =>
+      event.kind === 'assessment.completed'
+      && event.nodeId === 'P6'
+      && event.ruleDecision.status !== 'unanswered'
+      && 'engine' in event.ruleDecision
+      && event.ruleDecision.engine.id === 'equation-case-composite');
+    expect(latestCompositeP6).toMatchObject({
+      ruleDecision: {
+        status: 'partial',
+        reason: expect.stringContaining('multipliers 2:1'),
+      },
+      score: { status: 'scored', outcome: 'partial' },
+    });
+  });
+
   it('accepts only minimal workflow input and blocks the raw protected-prompt bypass', async () => {
     const root = await createTemporaryDirectory();
     await writeValidContentTree(root);
@@ -562,10 +608,17 @@ describe('server-owned assessment and tutor routes', () => {
       nodeId: 'P7',
       studentAnswer: '请提示。',
     });
+    const unassessedTutor = await post(app, '/api/tutor/turn', {
+      sessionId: 'pretest-tutor-rejected',
+      nodeId: 'D1',
+      studentAnswer: '请提示。',
+    });
 
     expect(pretestTutor.status).toBe(409);
     expect(await pretestTutor.json()).toEqual({ error: 'Tutor is only available for training-stage answers' });
     expect(transferTutor.status).toBe(409);
     expect(await transferTutor.json()).toEqual({ error: 'Tutor is only available for training-stage answers' });
+    expect(unassessedTutor.status).toBe(409);
+    expect(await unassessedTutor.json()).toEqual({ error: 'Tutor requires an assessed training-stage answer' });
   });
 });

@@ -60,7 +60,18 @@ export interface AppRuntime {
   assessEquation: (input: EquationAssessmentInput) => Promise<{ session: StudentSession | null }>;
   tutorTurn: (input: TutorTurnInput) => Promise<TutorTurnResult>;
   reviewDrawing: (imageData: string) => Promise<string>;
+  getRuntimeState?: () => Promise<{ executionMode: LLMExecutionMode }>;
+  activateDemo?: () => Promise<{
+    executionMode: 'demo';
+    session: StudentSession;
+    progress: { pretestComplete: boolean; trainingComplete: boolean };
+  }>;
+  setExecutionMode?: (executionMode: LLMExecutionMode) => Promise<{
+    executionMode: LLMExecutionMode;
+  }>;
 }
+
+export type LLMExecutionMode = 'live' | 'development' | 'demo';
 
 declare global {
   // Injected by the integrated Hono server for protected, same-origin API calls.
@@ -87,6 +98,33 @@ export const defaultRuntime: AppRuntime = {
     const token = response.headers.get('x-lq-api-token');
     if (token) globalThis.__LQ_API_TOKEN__ = token;
     return jsonResponse<LoadedConfig>(response);
+  },
+
+  async getRuntimeState() {
+    const response = await fetch('/api/runtime');
+    return jsonResponse<{ executionMode: LLMExecutionMode }>(response);
+  },
+
+  async activateDemo() {
+    const response = await fetch('/api/runtime/demo', {
+      method: 'POST',
+      headers: protectedHeaders(),
+      body: '{}',
+    });
+    return jsonResponse<{
+      executionMode: 'demo';
+      session: StudentSession;
+      progress: { pretestComplete: boolean; trainingComplete: boolean };
+    }>(response);
+  },
+
+  async setExecutionMode(executionMode) {
+    const response = await fetch('/api/runtime/execution-mode', {
+      method: 'POST',
+      headers: protectedHeaders(),
+      body: JSON.stringify({ executionMode }),
+    });
+    return jsonResponse<{ executionMode: LLMExecutionMode }>(response);
   },
 
   async assessChoice(input) {

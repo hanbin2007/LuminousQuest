@@ -2,7 +2,7 @@ import { createContext, useContext, type Dispatch, type SetStateAction } from 'r
 
 import type { LoadedConfig } from '../../shared/config/schemas';
 import type { StudentSession } from '../../shared/session/schema';
-import type { AppRuntime } from '../runtime/api';
+import type { AppRuntime, LLMExecutionMode } from '../runtime/api';
 
 export interface AppContextValue {
   config: LoadedConfig;
@@ -15,6 +15,10 @@ export interface AppContextValue {
   setPretestComplete: (complete: boolean) => void;
   trainingComplete: boolean;
   setTrainingComplete: (complete: boolean) => void;
+  executionMode: LLMExecutionMode;
+  demoModePending: boolean;
+  demoModeError: string | null;
+  toggleDemoMode: () => Promise<LLMExecutionMode>;
 }
 
 export const AppContext = createContext<AppContextValue | null>(null);

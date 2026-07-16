@@ -61,6 +61,7 @@ function appendEngineDecision(input: {
   assessedAt: string;
   nodeId: string;
   outcome: 'hit' | 'partial' | 'miss' | 'unanswered';
+  misconceptionIds?: readonly string[];
   engine: { id: string; version: string; ruleId: string; reason: string };
 }) {
   const rubric = input.config.rubrics.rubrics.find((entry) => entry.nodeId === input.nodeId);
@@ -76,6 +77,9 @@ function appendEngineDecision(input: {
       attemptId: input.answer.attemptId,
       sourceAnswerEventId: input.answer.id,
       nodeId: input.nodeId,
+      ...(input.misconceptionIds?.length
+        ? { misconceptionIds: [...new Set(input.misconceptionIds)] }
+        : {}),
       rubric: { id: rubric.id, version: input.config.rubrics.version },
       assistance: input.assistance,
       extraction: {
@@ -125,6 +129,9 @@ function appendEngineDecision(input: {
     attemptId: input.answer.attemptId,
     sourceAnswerEventId: input.answer.id,
     nodeId: input.nodeId,
+    ...(input.misconceptionIds?.length
+      ? { misconceptionIds: [...new Set(input.misconceptionIds)] }
+      : {}),
     rubric: { id: rubric.id, version: input.config.rubrics.version },
     extraction: {
       status: 'assessed',
@@ -219,10 +226,29 @@ function appendCaseEquationComposite(input: {
   const attempts = [negative, positive, overall]
     .map((entry) => `${entry.equationSet.electrode}=${entry.answer?.attemptId ?? 'missing'}`)
     .join(', ');
+  const errorIdsFor = (
+    entries: readonly [typeof negative, 'P3' | 'P6' | 'P7'][],
+  ) => [...new Set(entries.flatMap(([entry, nodeId]) =>
+    entry.score?.nodeDecisions.find((decision) => decision.nodeId === nodeId)?.errorIds ?? []))];
   const outcomes = [
-    { nodeId: 'P3', outcome: p3, reason: `Combined electrode product and medium evidence; ${attempts}` },
-    { nodeId: 'P6', outcome: p6, reason: `${pairReason}; ${attempts}` },
-    { nodeId: 'P7', outcome: p7, reason: `Derived only from the submitted overall equation; ${attempts}` },
+    {
+      nodeId: 'P3',
+      outcome: p3,
+      errorIds: errorIdsFor([[negative, 'P3'], [positive, 'P3']]),
+      reason: `Combined electrode product and medium evidence; ${attempts}`,
+    },
+    {
+      nodeId: 'P6',
+      outcome: p6,
+      errorIds: errorIdsFor([[negative, 'P6'], [positive, 'P6']]),
+      reason: `${pairReason}; ${attempts}`,
+    },
+    {
+      nodeId: 'P7',
+      outcome: p7,
+      errorIds: errorIdsFor([[overall, 'P7']]),
+      reason: `Derived only from the submitted overall equation; ${attempts}`,
+    },
   ] as const;
 
   let session = input.session;
@@ -236,6 +262,7 @@ function appendCaseEquationComposite(input: {
       assessedAt: input.assessedAt,
       nodeId: entry.nodeId,
       outcome: entry.outcome,
+      misconceptionIds: entry.errorIds,
       engine: {
         id: 'equation-case-composite',
         version: caseCompositeEngineVersion,
@@ -288,6 +315,7 @@ export function recordBuilderAssessment(input: BaseEngineAssessmentInput<Builder
       assessedAt: input.assessedAt,
       nodeId: nodeDecision.nodeId,
       outcome: nodeDecision.status,
+      misconceptionIds: nodeDecision.evidence.flatMap((entry) => entry.misconceptionIds ?? []),
       engine: {
         id: 'builder-topology',
         version: topologyEngineVersion,
@@ -328,6 +356,7 @@ export function recordEquationAssessment(
       assessedAt: input.assessedAt,
       nodeId: nodeDecision.nodeId,
       outcome: nodeDecision.outcome,
+      misconceptionIds: nodeDecision.errorIds,
       engine: {
         id: 'equation-scoring',
         version: equationScoringEngineVersion,

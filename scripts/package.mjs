@@ -15,12 +15,18 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { build } from 'esbuild';
+import { writeSha256Manifest } from './release-manifest.mjs';
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const seaRoot = path.join(projectRoot, 'dist', 'sea');
 const releaseRoot = path.join(projectRoot, 'release', `${process.platform}-${process.arch}`);
 const executableName = process.platform === 'win32' ? 'LuminousQuest.exe' : 'LuminousQuest';
 const executablePath = path.join(releaseRoot, executableName);
+const releaseManifestPath = path.join(
+  projectRoot,
+  'dist',
+  `release-${process.platform}-${process.arch}.sha256`,
+);
 const seaFuse = 'NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2';
 
 function run(command, args, options = {}) {
@@ -232,15 +238,57 @@ async function copyExternalContent() {
   if (process.platform !== 'win32') {
     await chmod(path.join(releaseRoot, 'start.command'), 0o755);
   }
+
+  const docsRoot = path.join(releaseRoot, 'docs');
+  await mkdir(docsRoot, { recursive: true });
+  for (const relativeFile of [
+    'docs/superpowers/specs/2026-07-16-competition-runbook.md',
+    'docs/superpowers/specs/2026-07-16-lan-security.md',
+    'recordings/demo/README.md',
+  ]) {
+    await copyFile(
+      path.join(projectRoot, relativeFile),
+      path.join(docsRoot, path.basename(relativeFile)),
+    );
+  }
+}
+
+async function writeReleaseMetadata() {
+  const packageJson = JSON.parse(await readFile(path.join(projectRoot, 'package.json'), 'utf8'));
+  let sourceCommit = 'unknown';
+  try {
+    sourceCommit = run('git', ['rev-parse', 'HEAD']).stdout.trim();
+  } catch {
+    // Source archives without .git remain packageable but identify the commit as unknown.
+  }
+  await writeFile(path.join(releaseRoot, 'RELEASE.json'), `${JSON.stringify({
+    format: 'luminous-quest-release.v1',
+    name: packageJson.name,
+    version: packageJson.version,
+    platform: process.platform,
+    architecture: process.arch,
+    runtime: `Node SEA ${process.versions.node}`,
+    sourceCommit,
+    executable: executableName,
+    externalContent: ['config', 'prompts', 'assets', 'recordings', '.env'],
+  }, null, 2)}\n`);
 }
 
 async function main() {
   assertSupportedNodeVersion();
+  if (process.argv.includes('--mac-arm64') && (process.platform !== 'darwin' || process.arch !== 'arm64')) {
+    throw new Error(`macOS arm64 packaging requires darwin-arm64, received ${process.platform}-${process.arch}`);
+  }
   const clientRoot = path.join(projectRoot, 'dist', 'client');
   const clientFiles = await listFiles(clientRoot);
   if (!clientFiles.includes('index.html')) {
     throw new Error('dist/client/index.html is missing; run pnpm build first');
   }
+  await writeSha256Manifest({
+    root: clientRoot,
+    outputFile: path.join(projectRoot, 'dist', 'client.sha256'),
+    pathPrefix: path.posix.join('dist', 'client'),
+  });
 
   await rm(seaRoot, { recursive: true, force: true });
   await rm(releaseRoot, { recursive: true, force: true });
@@ -276,10 +324,17 @@ async function main() {
     assets,
   });
   await copyExternalContent();
+  await writeReleaseMetadata();
+  const manifestEntries = await writeSha256Manifest({
+    root: releaseRoot,
+    outputFile: releaseManifestPath,
+    pathPrefix: path.posix.join('release', `${process.platform}-${process.arch}`),
+  });
 
   console.log(`[package] Runtime: Node SEA ${process.versions.node}`);
   console.log(`[package] Executable: ${executablePath}`);
   console.log(`[package] External content: ${releaseRoot}`);
+  console.log(`[package] Frozen manifest: ${releaseManifestPath} (${manifestEntries.length} files)`);
 }
 
 main().catch((error) => {

@@ -3,7 +3,7 @@ setlocal
 cd /d "%~dp0"
 
 if exist "%~dp0LuminousQuest.exe" (
-  "%~dp0LuminousQuest.exe"
+  "%~dp0LuminousQuest.exe" %*
   set "LQ_STATUS=%ERRORLEVEL%"
   goto :finished
 )
@@ -15,7 +15,7 @@ if errorlevel 1 (
   goto :finished
 )
 
-call pnpm start
+call pnpm start -- %*
 set "LQ_STATUS=%ERRORLEVEL%"
 
 :finished
@@ -24,4 +24,3 @@ if not "%LQ_STATUS%"=="0" (
   pause
 )
 exit /b %LQ_STATUS%
-

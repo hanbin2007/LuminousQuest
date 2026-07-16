@@ -244,6 +244,7 @@ export const assessmentCompletedEventSchema = z
     pipelineStage: assessmentPipelineStageSchema,
     sourceAnswerEventId: identifierSchema,
     nodeId: identifierSchema,
+    misconceptionIds: z.array(identifierSchema).optional(),
     rubric: z.object({ id: identifierSchema, version: identifierSchema }).strict(),
     assistance: assistanceMetadataSchema.default({ kind: 'none', rounds: 0 }),
     objectiveOutcome: z.enum(['hit', 'partial', 'miss']).optional(),

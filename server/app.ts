@@ -1,10 +1,14 @@
-import { randomBytes, randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
 
 import { Hono, type Context } from 'hono';
 import { z } from 'zod';
 
 import { type AssistanceMetadata } from '../shared/scoring/rubric';
+import { buildLearnerProfile } from '../shared/scoring/profile';
 import type { AssessmentCompletedEvent } from '../shared/session/schema';
+import { sessionSchema } from '../shared/session/schema';
 import {
   createSession,
   sessionConfigVersions,
@@ -118,6 +122,17 @@ const drawingReviewRequestSchema = z
   .object({ imageData: z.string().min(1) })
   .strict();
 
+const drawingFeedbackFallback = '手绘已保留；请人工检查四个功能要素与电子、离子路径标注。';
+const unsafeDrawingFeedback = /(?:\bhit\b|\bpartial\b|\bmiss\b|量表|rubric|得分|分数|满分|评分|系统提示词|system\s*prompt|参考答案|正确答案|执行.{0,12}指令|ignore.{0,12}instruction)/iu;
+
+function guardedDrawingFeedback(content: string) {
+  const normalized = content.trim();
+  if (normalized.length === 0 || normalized.length > 400 || unsafeDrawingFeedback.test(normalized)) {
+    return drawingFeedbackFallback;
+  }
+  return normalized;
+}
+
 const tutorRouteRequestSchema = z
   .object({
     sessionId: z.string().trim().min(1).max(128),
@@ -125,6 +140,12 @@ const tutorRouteRequestSchema = z
     studentAnswer: z.string(),
   })
   .strict();
+
+const executionModeRequestSchema = z
+  .object({ executionMode: z.enum(['live', 'development', 'demo']) })
+  .strict();
+
+const emptyRequestSchema = z.object({}).strict();
 
 export interface ServerWorkflowOptions {
   executionMode: LLMExecutionMode;
@@ -142,7 +163,31 @@ export interface ServerAppOptions {
   sessions?: ServerSessionStore;
   workflow?: Partial<ServerWorkflowOptions>;
   apiToken?: string;
+  accessToken?: string;
   maxRequestBodyBytes?: number;
+}
+
+const lanAccessCookie = 'lq_lan_access';
+
+function accessTokenMatches(candidate: string | undefined, expected: string) {
+  if (!candidate) return false;
+  const left = Buffer.from(candidate);
+  const right = Buffer.from(expected);
+  return left.length === right.length && timingSafeEqual(left, right);
+}
+
+function cookieValue(header: string | undefined, name: string) {
+  if (!header) return undefined;
+  for (const entry of header.split(';')) {
+    const separator = entry.indexOf('=');
+    if (separator < 0 || entry.slice(0, separator).trim() !== name) continue;
+    try {
+      return decodeURIComponent(entry.slice(separator + 1).trim());
+    } catch {
+      return undefined;
+    }
+  }
+  return undefined;
 }
 
 function externalDataError(error: ConfigValidationError | PromptValidationError) {
@@ -268,10 +313,41 @@ export function createServerApp(options: ServerAppOptions) {
   const evalCandidates = new EvalCandidateStore(options.contentRoot);
   const sessions = options.sessions ?? new InMemorySessionStore();
   const workflow = configuredWorkflow(options);
+  const startupWorkflow = { ...workflow };
   const llmService = new LLMService({
     providers: options.providers ?? createProviderRegistry(),
     recordings,
   });
+
+  if (options.accessToken) {
+    app.use('*', async (context, next) => {
+      const url = new URL(context.req.url);
+      const queryToken = url.searchParams.get('access_token') ?? undefined;
+      if (queryToken !== undefined) {
+        if (!accessTokenMatches(queryToken, options.accessToken!)) {
+          return context.text('Invalid LAN access token', 401);
+        }
+        url.searchParams.delete('access_token');
+        const location = `${url.pathname}${url.search}`;
+        context.header(
+          'set-cookie',
+          `${lanAccessCookie}=${encodeURIComponent(options.accessToken!)}; Path=/; HttpOnly; SameSite=Strict`,
+        );
+        context.header('cache-control', 'no-store');
+        return context.redirect(location || '/');
+      }
+      const admitted = accessTokenMatches(
+        cookieValue(context.req.header('cookie'), lanAccessCookie),
+        options.accessToken!,
+      );
+      if (!admitted) {
+        return url.pathname.startsWith('/api/')
+          ? context.json({ error: 'LAN access token required' }, 401)
+          : context.text('LAN access token required', 401);
+      }
+      await next();
+    });
+  }
 
   app.get('/api/config', async (context) => {
     try {
@@ -283,6 +359,52 @@ export function createServerApp(options: ServerAppOptions) {
         return context.json(externalDataError(error), 500);
       }
       throw error;
+    }
+  });
+
+  app.get('/api/runtime', (context) => {
+    context.header('cache-control', 'no-store');
+    return context.json({ executionMode: workflow.executionMode });
+  });
+
+  app.post('/api/runtime/execution-mode', async (context) => {
+    const requestBody = await readProtectedJson(context, apiToken, maxRequestBodyBytes);
+    if (!requestBody.ok) return requestBody.response;
+    const parsed = executionModeRequestSchema.safeParse(requestBody.body);
+    if (!parsed.success) return invalidRequest(context, 'execution mode', parsed.error);
+    workflow.executionMode = parsed.data.executionMode;
+    if (workflow.executionMode !== 'demo') {
+      workflow.extractionStepId = startupWorkflow.extractionStepId;
+      workflow.tutorStepId = startupWorkflow.tutorStepId;
+    }
+    return context.json({ executionMode: workflow.executionMode });
+  });
+
+  app.post('/api/runtime/demo', async (context) => {
+    const requestBody = await readProtectedJson(context, apiToken, maxRequestBodyBytes);
+    if (!requestBody.ok) return requestBody.response;
+    const parsed = emptyRequestSchema.safeParse(requestBody.body);
+    if (!parsed.success) return invalidRequest(context, 'demo activation', parsed.error);
+
+    try {
+      const [config, source] = await Promise.all([
+        loadAllConfig(options.contentRoot),
+        readFile(path.join(options.contentRoot, 'recordings', 'demo', 'session.json'), 'utf8'),
+      ]);
+      const demoSession = sessionSchema.parse(JSON.parse(source) as unknown);
+      buildLearnerProfile(demoSession, config);
+      sessions.set(demoSession);
+      workflow.executionMode = 'demo';
+      workflow.extractionStepId = 'demo-extraction';
+      workflow.tutorStepId = 'demo-tutor-p4';
+      return context.json({
+        executionMode: workflow.executionMode,
+        session: demoSession,
+        progress: { pretestComplete: true, trainingComplete: false },
+      });
+    } catch (error) {
+      console.error(`[demo] activation failed: ${error instanceof Error ? error.message : String(error)}`);
+      return context.json({ error: 'Demo session is unavailable or incompatible with current content' }, 500);
     }
   });
 
@@ -401,7 +523,7 @@ export function createServerApp(options: ServerAppOptions) {
       const content = result.response.content;
       const feedback = workflow.provider === 'mock' || content.startsWith('Mock vision extraction')
         ? '演示占位：已收到手绘表达。请检查电子路径、离子路径与方向标注是否一致。'
-        : content;
+        : guardedDrawingFeedback(content);
       return context.json({ feedback });
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
@@ -656,11 +778,12 @@ export function createServerApp(options: ServerAppOptions) {
         if (event.kind !== 'assessment.completed' || event.nodeId !== parsed.data.nodeId) continue;
         if (!latestAssessment || event.sequence > latestAssessment.sequence) latestAssessment = event;
       }
-      if (latestAssessment) {
-        const assessedCase = config.cases.find((entry) => entry.id === latestAssessment.caseId);
-        if (latestAssessment.stageId !== 'training' || assessedCase?.caseType !== 'training') {
-          return context.json({ error: 'Tutor is only available for training-stage answers' }, 409);
-        }
+      if (!latestAssessment) {
+        return context.json({ error: 'Tutor requires an assessed training-stage answer' }, 409);
+      }
+      const assessedCase = config.cases.find((entry) => entry.id === latestAssessment.caseId);
+      if (latestAssessment.stageId !== 'training' || assessedCase?.caseType !== 'training') {
+        return context.json({ error: 'Tutor is only available for training-stage answers' }, 409);
       }
       const prompt = await loadPrompt(options.contentRoot, 'socratic-tutoring');
       if (!prompt) throw new Error('Required prompt socratic-tutoring is missing');
