@@ -1,5 +1,7 @@
 import { useContext, useEffect, useMemo, useState } from 'react';
 
+import { useReducedMotion } from '../../app/useReducedMotion';
+
 import { AppContext } from '../../app/AppContext';
 import { DiagnosisRadar } from '../diagnosis/DiagnosisRadar';
 import { buildModelScene } from './lighting';
@@ -27,11 +29,7 @@ export function ModelPage() {
   const [entered, setEntered] = useState(false);
   const [replayToken, setReplayToken] = useState(1);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const reducedMotion = useMemo(
-    () => typeof window.matchMedia === 'function'
-      && window.matchMedia('(prefers-reduced-motion: reduce)').matches,
-    [],
-  );
+  const reducedMotion = useReducedMotion();
   const hasWebgl = useMemo(webglAvailable, []);
 
   // 关灯时刻:进入页面后灯光渐暗,再开始点亮序列(--dur-stage 同源:900ms)

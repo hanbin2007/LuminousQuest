@@ -219,7 +219,7 @@ function Rig({ reducedMotion, suppressClick }: {
   reducedMotion: boolean;
   suppressClick: MutableRefObject<boolean>;
 }) {
-  const { camera, gl } = useThree();
+  const { camera, gl, invalidate } = useThree();
   const state = useRef(createOrbitState({ yaw: 0.6, pitch: 0.35, radius: 11.5 }));
   const downAt = useRef({ x: 0, y: 0 });
 
@@ -234,7 +234,8 @@ function Rig({ reducedMotion, suppressClick }: {
         suppressClick.current = true;
       }
     },
-  }), [gl, suppressClick]);
+    input: invalidate,
+  }), [gl, suppressClick, invalidate]);
 
   useFrame((_, delta) => {
     const current = state.current;
@@ -287,6 +288,7 @@ export function KnowledgeScene({ scene, replayToken, reducedMotion, onSelect, se
     <Canvas
       dpr={[1, 2]}
       camera={{ fov: 52, near: 0.1, far: 100 }}
+      frameloop={reducedMotion ? 'demand' : 'always'}
       onPointerMissed={() => { if (!suppressClick.current) onSelect(null); }}
       style={{ background: STAGE.bg }}
     >

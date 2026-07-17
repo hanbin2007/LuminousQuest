@@ -122,7 +122,10 @@ export function ElectronFlowProgress({ pretestComplete, trainingComplete }: Elec
 
   return (
     <nav className="electron-progress" aria-label="电子流进度">
-      <div className="electron-progress__track" style={{ '--progress': `${progress}%` } as React.CSSProperties}>
+      <div
+        className="electron-progress__track"
+        style={{ '--progress': `${progress}%`, '--progress-scale': `${progress / 100}` } as React.CSSProperties}
+      >
         <span className="electron-progress__completed" />
         {flowing ? (
           <span className="electron-progress__dots" aria-hidden="true">

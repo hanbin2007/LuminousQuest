@@ -64,6 +64,8 @@ export interface OrbitHooks {
   down?: (event: PointerEvent) => void;
   move?: (event: PointerEvent) => void;
   up?: () => void;
+  /** 任意输入(含滚轮)后调用;demand 帧循环下宿主用它触发 invalidate,保证拖拽/缩放 1:1 出帧。 */
+  input?: () => void;
 }
 
 export function attachOrbitControls(
@@ -81,6 +83,7 @@ export function attachOrbitControls(
     state.yawVelocity = 0;
     state.pitchVelocity = 0;
     hooks?.down?.(event);
+    hooks?.input?.();
   };
   const move = (event: PointerEvent) => {
     if (!state.dragging) return;
@@ -104,11 +107,13 @@ export function attachOrbitControls(
     state.lastY = event.clientY;
     state.lastT = event.timeStamp;
     state.idleAt = performance.now();
+    hooks?.input?.();
   };
   const up = () => {
     state.dragging = false;
     state.idleAt = performance.now();
     hooks?.up?.();
+    hooks?.input?.();
   };
   const wheel = (event: WheelEvent) => {
     event.preventDefault();
@@ -117,6 +122,7 @@ export function attachOrbitControls(
       Math.max(bounds.minRadius, state.targetRadius + event.deltaY * 0.01),
     );
     state.idleAt = performance.now();
+    hooks?.input?.();
   };
   element.addEventListener('pointerdown', down);
   window.addEventListener('pointermove', move);

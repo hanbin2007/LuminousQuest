@@ -28,9 +28,21 @@ export function HandDrawingPanel({ onReview, onFinish }: HandDrawingPanelProps) 
     return value;
   };
 
-  const point = (event: React.PointerEvent<HTMLCanvasElement>) => {
-    const bounds = event.currentTarget.getBoundingClientRect();
-    return { x: event.clientX - bounds.left, y: event.clientY - bounds.top };
+  /** 一笔之内不变的绘制状态,pointerdown 缓存一次;120Hz move 路径零布局/样式读取。 */
+  const stroke = useRef<{ ctx: CanvasRenderingContext2D; left: number; top: number } | null>(null);
+
+  const beginStroke = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    const ctx = context();
+    const canvas = canvasRef.current;
+    if (!ctx || !canvas) return null;
+    const bounds = canvas.getBoundingClientRect();
+    ctx.globalCompositeOperation = tool === 'eraser' ? 'destination-out' : 'source-over';
+    ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--ink').trim();
+    ctx.lineWidth = tool === 'eraser' ? 18 : 3;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    stroke.current = { ctx, left: bounds.left, top: bounds.top };
+    return { ctx, x: event.clientX - bounds.left, y: event.clientY - bounds.top };
   };
 
   return (
@@ -75,30 +87,21 @@ export function HandDrawingPanel({ onReview, onFinish }: HandDrawingPanelProps) 
         className="drawing-canvas"
         aria-label="手绘画板"
         onPointerDown={(event) => {
-          const value = context();
-          if (!value) return;
-          const start = point(event);
+          const start = beginStroke(event);
+          if (!start) return;
           drawing.current = true;
           event.currentTarget.setPointerCapture?.(event.pointerId);
-          value.beginPath();
-          value.moveTo(start.x, start.y);
+          start.ctx.beginPath();
+          start.ctx.moveTo(start.x, start.y);
         }}
         onPointerMove={(event) => {
-          if (!drawing.current) return;
-          const value = context();
-          if (!value) return;
-          const next = point(event);
-          const styles = getComputedStyle(document.documentElement);
-          value.globalCompositeOperation = tool === 'eraser' ? 'destination-out' : 'source-over';
-          value.strokeStyle = styles.getPropertyValue('--ink').trim();
-          value.lineWidth = tool === 'eraser' ? 18 : 3;
-          value.lineCap = 'round';
-          value.lineJoin = 'round';
-          value.lineTo(next.x, next.y);
-          value.stroke();
+          if (!drawing.current || !stroke.current) return;
+          const { ctx, left, top } = stroke.current;
+          ctx.lineTo(event.clientX - left, event.clientY - top);
+          ctx.stroke();
         }}
-        onPointerUp={() => { drawing.current = false; }}
-        onPointerCancel={() => { drawing.current = false; }}
+        onPointerUp={() => { drawing.current = false; stroke.current = null; }}
+        onPointerCancel={() => { drawing.current = false; stroke.current = null; }}
       />
       {review ? <aside className="drawing-review"><ScanSearch aria-hidden="true" /><p>{review}</p></aside> : null}
       <div className="drawing-actions">

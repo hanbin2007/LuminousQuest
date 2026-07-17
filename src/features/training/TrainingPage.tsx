@@ -630,7 +630,7 @@ export function TrainingPage() {
 
   return (
     <main className="page-content training-page training-page--split">
-      <div className="training-main">
+      <div className="training-main" key={trainingCase.id}>
       <header className="page-heading training-page__heading">
         <div>
           <span>模块二 · 案例 {activeIndex + 1} / {cases.length}</span>

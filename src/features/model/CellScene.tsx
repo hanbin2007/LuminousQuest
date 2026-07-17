@@ -570,12 +570,13 @@ function DimensionRails({ common }: { common: SceneCommon }) {
 }
 
 function CellRig({ reducedMotion }: { reducedMotion: boolean }) {
-  const { camera, gl } = useThree();
+  const { camera, gl, invalidate } = useThree();
   const state = useRef(createOrbitState({ yaw: 0.42, pitch: 0.22, radius: 12.2 }));
 
   useEffect(
-    () => attachOrbitControls(gl.domElement, state.current, CELL_ORBIT_BOUNDS),
-    [gl],
+    // demand 帧循环(reduced-motion)下,输入必须显式出帧,拖拽/缩放才保持 1:1
+    () => attachOrbitControls(gl.domElement, state.current, CELL_ORBIT_BOUNDS, { input: invalidate }),
+    [gl, invalidate],
   );
 
   useFrame(({ clock }, delta) => {

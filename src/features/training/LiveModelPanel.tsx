@@ -2,6 +2,7 @@ import { Suspense, lazy, memo, useEffect, useMemo, useRef, useState } from 'reac
 
 import type { CaseConfig, LoadedConfig } from '../../../shared/config/schemas';
 import type { StudentSession } from '../../../shared/session';
+import { useReducedMotion } from '../../app/useReducedMotion';
 import { buildLiveCellState, liveNodeById } from '../model/live-cell';
 import { STAGE } from '../model/stage-tokens';
 import { mediumLabel } from './materials';
@@ -56,11 +57,7 @@ export const LiveModelPanel = memo(function LiveModelPanel({
     [session, config, trainingCase],
   );
   const hasWebgl = useMemo(webglAvailable, []);
-  const reducedMotion = useMemo(
-    () => typeof window.matchMedia === 'function'
-      && window.matchMedia('(prefers-reduced-motion: reduce)').matches,
-    [],
-  );
+  const reducedMotion = useReducedMotion();
 
   // 灯态签名变化 → 重放点亮序列(与模块三同语言)
   const [replayToken, setReplayToken] = useState(0);
@@ -98,7 +95,7 @@ export const LiveModelPanel = memo(function LiveModelPanel({
           <span className="live-model__eyebrow">实时 · 三维分析</span>
           <h3 id="live-model-title">电化学统一认知模型</h3>
         </div>
-        <p className="live-model__meta">
+        <p className="live-model__meta" key={trainingCase.id}>
           {trainingCase.title} · {mediumLabel(trainingCase.medium)} · 已点亮 {state.litCount} / {state.totalCount}
         </p>
       </header>

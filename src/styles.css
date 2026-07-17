@@ -242,10 +242,12 @@ p {
 
 .electron-progress__completed {
   position: absolute;
-  inset: 0 auto 0 0;
-  width: var(--progress);
+  inset: 0;
   border-radius: inherit;
   background: var(--eflow);
+  transform-origin: left center;
+  transform: scaleX(var(--progress-scale, 0));
+  transition: transform var(--dur-eflow-answer) var(--ease-out); /* 里程碑时刻:进度与庆祝一起动 */
 }
 
 .electron-progress__dots {
@@ -254,6 +256,7 @@ p {
   width: var(--progress);
   height: 8px;
   overflow: hidden;
+  container-type: inline-size; /* 圆点行程以本容器宽度计,免用布局属性 */
 }
 
 .electron-progress__dots i {
@@ -279,8 +282,9 @@ p {
 }
 
 @keyframes eflow-complete {
-  from { left: 0; }
-  to { left: calc(100% - 6px); }
+  0% { transform: translateX(0); opacity: 1; }
+  80% { opacity: 1; }
+  100% { transform: translateX(calc(100cqw - 6px)); opacity: 0; } /* 跑完即淡出,不留冻结残点 */
 }
 
 .electron-progress ol {
@@ -1459,6 +1463,10 @@ p {
   animation: training-spin 800ms linear infinite;
 }
 
+@keyframes training-pulse {
+  50% { opacity: 0.35; }
+}
+
 @keyframes training-spin {
   to { transform: rotate(360deg); }
 }
@@ -1475,6 +1483,7 @@ p {
 
 .training-electron-flow {
   position: relative;
+  container-type: inline-size;
   width: 180px;
   height: 6px;
   overflow: hidden;
@@ -1490,14 +1499,14 @@ p {
   height: 6px;
   border-radius: var(--radius-pill);
   background: var(--eflow);
-  animation: training-electron-pass var(--dur-eflow-answer) var(--ease-out) var(--delay-eflow-answer) both;
+  animation: training-electron-pass var(--dur-eflow-answer) linear var(--delay-eflow-answer) both;
 }
 
 .training-electron-flow i:nth-child(2) { animation-delay: calc(var(--delay-eflow-answer) + 90ms); }
 .training-electron-flow i:nth-child(3) { animation-delay: calc(var(--delay-eflow-answer) + 180ms); }
 
 @keyframes training-electron-pass {
-  to { transform: translateX(198px); }
+  to { transform: translateX(calc(100cqw + 18px)); }
 }
 
 .training-scaffold-state {
@@ -2534,6 +2543,15 @@ p {
     animation-delay: 0ms !important;
     transition-duration: 0ms !important;
   }
+
+  /* 回补理解性动效:归零不等于全无(加载指示与叙事淡入保留非位移形式) */
+  .training-spinner {
+    animation: training-pulse 1600ms ease-in-out infinite !important;
+  }
+
+  .model-stage {
+    transition-duration: 400ms !important;
+  }
 }
 
 /* ===== 模块三 · 关灯舞台(Fable 5) ===== */
@@ -2629,8 +2647,13 @@ p {
 .node-chip--needs-review { border-color: var(--glow-energy); opacity: 0.9; }
 .node-chip--selected { background: rgba(63, 224, 216, 0.15); }
 .node-chip:focus-visible { outline: none; box-shadow: var(--focus-ring); }
-.node-chip { transition: transform 120ms var(--ease-out, ease-out), border-color 120ms ease-out; }
-.node-chip:active { transform: scale(0.94); }
+.node-chip {
+  transition:
+    transform var(--dur-press) var(--ease-out),
+    border-color var(--dur-press) var(--ease-out),
+    background-color var(--dur-press) var(--ease-out);
+}
+.node-chip:active { transform: scale(0.96); }
 
 /* ==== 训练分屏 · 实时 3D 认知模型面板(手稿《电化学统一认知模型》的实时化) ==== */
 
@@ -2745,7 +2768,7 @@ p {
 
 .live-model__focus-text {
   display: block;
-  animation: focus-text-in 180ms var(--ease-out, ease-out) both;
+  animation: focus-text-in var(--dur-enter) var(--ease-out) both;
 }
 
 .live-model__chips {
@@ -2795,7 +2818,7 @@ p {
 
 .training-feedback-item {
   border-radius: var(--radius-sm, 10px);
-  transition: box-shadow 180ms var(--ease-out, ease-out);
+  transition: box-shadow var(--dur-enter) var(--ease-out);
 }
 
 .training-feedback-item[data-focused] {
@@ -2840,24 +2863,7 @@ p {
 }
 
 .live-model {
-  animation: live-model-in 420ms var(--ease-out, cubic-bezier(0.22, 1, 0.36, 1)) both;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .live-model {
-    animation: none;
-    opacity: 1;
-    transform: none;
-  }
-
-  .node-chip,
-  .training-feedback-item {
-    transition: none;
-  }
-
-  .live-model__focus-text {
-    animation: none;
-  }
+  animation: live-model-in var(--dur-panel) var(--ease-out) both;
 }
 
 /* ==== 测试阶段跳转(LQ_TEST_NAV=1;悬浮面板,零布局侵入) ==== */
@@ -2883,11 +2889,11 @@ p {
   border-radius: var(--radius-pill);
   padding: 2px 10px;
   cursor: pointer;
-  transition: transform 120ms var(--ease-out), background-color 120ms var(--ease-out);
+  transition: transform var(--dur-press) var(--ease-out), background-color var(--dur-press) var(--ease-out);
 }
 
 .test-nav__trigger:hover { background: rgba(232, 150, 12, 0.08); }
-.test-nav__trigger:active { transform: scale(0.94); }
+.test-nav__trigger:active { transform: scale(0.96); }
 .test-nav__trigger[aria-expanded='true'] { background: rgba(232, 150, 12, 0.14); }
 
 @keyframes test-nav-in {
@@ -2913,7 +2919,7 @@ p {
   border-radius: var(--radius-md);
   box-shadow: 0 18px 40px rgba(31, 38, 43, 0.18);
   z-index: 40;
-  animation: test-nav-in 220ms var(--ease-out) both;
+  animation: test-nav-in var(--dur-enter) var(--ease-out) both;
 }
 
 .test-nav__row {
@@ -2945,14 +2951,79 @@ p {
   background: var(--paper-raised, #fff);
   color: var(--ink);
   cursor: pointer;
-  transition: transform 120ms var(--ease-out), border-color 120ms var(--ease-out), background-color 120ms var(--ease-out);
+  transition: transform var(--dur-press) var(--ease-out), border-color var(--dur-press) var(--ease-out), background-color var(--dur-press) var(--ease-out);
 }
 
 .test-nav__stop:hover { border-color: var(--brand-teal, #2cb8b8); }
-.test-nav__stop:active { transform: scale(0.92); }
+.test-nav__stop:active { transform: scale(0.95); }
 .test-nav__stop:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 
-@media (prefers-reduced-motion: reduce) {
-  .test-nav__panel { animation: none; }
-  .test-nav__trigger, .test-nav__stop { transition: none; }
+
+/* ==== 动画审计修复:按压反馈补齐(纸面域=下压 1px;暗态域=scale) ==== */
+
+.segmented-control button,
+.drawing-tools button,
+.equation-toolbar button,
+.icon-button,
+.tray-item,
+.choice-option,
+.teacher-view-tabs button,
+.teacher-score-entry,
+.model-stage__replay {
+  transition:
+    transform var(--dur-press) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
 }
+
+.segmented-control button:active,
+.drawing-tools button:active,
+.equation-toolbar button:active,
+.icon-button:active,
+.tray-item:active,
+.choice-option:active,
+.teacher-view-tabs button:active,
+.teacher-score-entry:active {
+  transform: translateY(1px);
+}
+
+.model-stage__replay:hover {
+  background: rgba(63, 224, 216, 0.12);
+}
+
+.model-stage__replay:active {
+  transform: scale(0.97);
+}
+
+/* ==== 动画审计修复:内容进场与批注错峰 ==== */
+
+@keyframes content-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+
+.step-content,
+.training-main,
+.training-feedback {
+  animation: content-in var(--dur-base) var(--ease-out) both;
+}
+
+/* 面板案例元信息随案例切换轻淡入(3D 画布不重建) */
+.live-model__meta {
+  animation: focus-text-in var(--dur-enter) var(--ease-out) both;
+}
+
+/* 批注卡 50ms 错峰:"老师逐条批改";纯装饰,不阻塞交互 */
+.annotation-list > :nth-child(2) .annotation-card,
+.annotation-list > .annotation-card:nth-child(2) { animation-delay: 50ms; }
+.annotation-list > :nth-child(3) .annotation-card,
+.annotation-list > .annotation-card:nth-child(3) { animation-delay: 100ms; }
+.annotation-list > :nth-child(4) .annotation-card,
+.annotation-list > .annotation-card:nth-child(4) { animation-delay: 150ms; }
+.annotation-list > :nth-child(5) .annotation-card,
+.annotation-list > .annotation-card:nth-child(5) { animation-delay: 200ms; }
+.annotation-list > :nth-child(6) .annotation-card,
+.annotation-list > .annotation-card:nth-child(6) { animation-delay: 250ms; }

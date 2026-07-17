@@ -150,6 +150,7 @@ export function PretestPage() {
         ))}
       </ol>
 
+      <div className="step-content" key={draft.step}>
       {draft.step === 0 ? (
         <section className="builder-section" aria-labelledby="builder-title">
           <header>
@@ -229,6 +230,7 @@ export function PretestPage() {
       ) : null}
 
       {draft.step >= diagnosisStep ? <DiagnosisView config={config} session={session} /> : null}
+      </div>
       {error ? <p className="form-error" role="alert">{error}</p> : null}
     </main>
   );

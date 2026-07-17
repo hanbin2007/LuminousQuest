@@ -72,7 +72,10 @@
   /* ---- 动效 ---- */
   --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
   --dur-fast: 150ms;           /* hover/按压 */
+  --dur-press: 120ms;          /* 按压反馈(比 hover 更利落) */
+  --dur-enter: 220ms;          /* 小型浮层/文本进场 */
   --dur-base: 250ms;           /* 面板/状态切换 */
+  --dur-panel: 420ms;          /* 大面板 materialize */
   --dur-eflow-answer: 600ms;   /* 模块二训练答题反馈 */
   --delay-eflow-answer: 150ms;
   --dur-eflow-complete: 2000ms;/* 完成步骤后的电子流,只运行一次 */
@@ -99,7 +102,10 @@
 @media (prefers-reduced-motion: reduce) {
   :root {
     --dur-fast: 0ms;
+    --dur-press: 0ms;
+    --dur-enter: 0ms;
     --dur-base: 0ms;
+    --dur-panel: 0ms;
     --dur-eflow-answer: 0ms;
     --delay-eflow-answer: 0ms;
     --dur-eflow-complete: 0ms;
