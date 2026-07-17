@@ -52,10 +52,12 @@ describe('M3 training flow', () => {
     expect(screen.getByRole('heading', { name: '锌铜原电池' })).toBeInTheDocument();
     expect(screen.getByText('一级 · 完整引导')).toBeInTheDocument();
     expect(screen.getAllByText('D5 · 场所与反应物四连问')).toHaveLength(4);
-    expect(screen.getByText('P2')).toBeInTheDocument();
-    expect(screen.getByText('P3')).toBeInTheDocument();
-    expect(screen.getByText('P4')).toBeInTheDocument();
-    expect(screen.getByText('P5')).toBeInTheDocument();
+    // 一级脚手架逐题字段(限定作答区,避免命中实时认知模型面板的节点芯片)
+    const answerFields = within(view.container.querySelector('.training-answer-fields') as HTMLElement);
+    expect(answerFields.getByText('P2')).toBeInTheDocument();
+    expect(answerFields.getByText('P3')).toBeInTheDocument();
+    expect(answerFields.getByText('P4')).toBeInTheDocument();
+    expect(answerFields.getByText('P5')).toBeInTheDocument();
     expect(screen.getByRole('img', { name: '锌铜原电池 装置简图' })).toHaveAttribute(
       'src',
       '/assets/cases/zinc-copper/schematic.png',

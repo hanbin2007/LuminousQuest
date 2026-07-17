@@ -3,17 +3,14 @@ import { useEffect, useMemo, useRef, useState, type MutableRefObject } from 'rea
 import * as THREE from 'three';
 
 import type { ModelScene, SceneNode } from './lighting';
+import {
+  attachOrbitControls,
+  createOrbitState,
+  stepOrbit,
+} from './orbit-controls';
+import { STAGE } from './stage-tokens';
 
-/** 与 tokens.css 的 .stage-dark 保持同源;canvas 内无法读 CSS 变量,此处为唯一镜像点。 */
-export const STAGE = {
-  bg: '#0a1526',
-  fog: '#101f38',
-  glow: { device: '#5b8de8', principle: '#3fe0d8', energy: '#ffb84d' } as const,
-  unlit: '#2a3a52',
-  unassessed: '#5a636d',
-  needsReview: '#e8960c',
-  text: '#d7e2ef',
-};
+export { STAGE } from './stage-tokens';
 
 const IGNITION_STAGGER = 0.08; // 每节点点亮间隔(秒),与 ui-style-guide §2③ 一致
 const SCENE_SCALE = 1.45;
@@ -223,53 +220,29 @@ function Rig({ reducedMotion, suppressClick }: {
   suppressClick: MutableRefObject<boolean>;
 }) {
   const { camera, gl } = useThree();
-  const state = useRef({
-    yaw: 0.6, pitch: 0.35, radius: 11.5,
-    dragging: false, lastX: 0, lastY: 0, downX: 0, downY: 0, idleAt: 0,
-  });
+  const state = useRef(createOrbitState({ yaw: 0.6, pitch: 0.35, radius: 11.5 }));
+  const downAt = useRef({ x: 0, y: 0 });
 
-  useEffect(() => {
-    const element = gl.domElement;
-    const current = state.current;
-    const down = (event: PointerEvent) => {
-      current.dragging = true;
-      current.lastX = current.downX = event.clientX;
-      current.lastY = current.downY = event.clientY;
+  useEffect(() => attachOrbitControls(gl.domElement, state.current, MODEL_ORBIT_BOUNDS, {
+    down(event) {
+      downAt.current.x = event.clientX;
+      downAt.current.y = event.clientY;
       suppressClick.current = false;
-    };
-    const move = (event: PointerEvent) => {
-      if (!current.dragging) return;
-      current.yaw -= (event.clientX - current.lastX) * 0.005;
-      current.pitch = THREE.MathUtils.clamp(current.pitch + (event.clientY - current.lastY) * 0.004, -0.2, 1.2);
-      current.lastX = event.clientX;
-      current.lastY = event.clientY;
-      current.idleAt = performance.now();
-      if (Math.hypot(event.clientX - current.downX, event.clientY - current.downY) > DRAG_SUPPRESS_PX) {
+    },
+    move(event) {
+      if (Math.hypot(event.clientX - downAt.current.x, event.clientY - downAt.current.y) > DRAG_SUPPRESS_PX) {
         suppressClick.current = true;
       }
-    };
-    const up = () => { current.dragging = false; };
-    const wheel = (event: WheelEvent) => {
-      event.preventDefault();
-      current.radius = THREE.MathUtils.clamp(current.radius + event.deltaY * 0.01, 7, 24);
-      current.idleAt = performance.now();
-    };
-    element.addEventListener('pointerdown', down);
-    window.addEventListener('pointermove', move);
-    window.addEventListener('pointerup', up);
-    element.addEventListener('wheel', wheel, { passive: false });
-    return () => {
-      element.removeEventListener('pointerdown', down);
-      window.removeEventListener('pointermove', move);
-      window.removeEventListener('pointerup', up);
-      element.removeEventListener('wheel', wheel);
-    };
-  }, [gl, suppressClick]);
+    },
+  }), [gl, suppressClick]);
 
   useFrame((_, delta) => {
     const current = state.current;
+    stepOrbit(current, MODEL_ORBIT_BOUNDS, delta, reducedMotion);
     const idle = performance.now() - current.idleAt > 3000;
-    if (!reducedMotion && idle && !current.dragging) current.yaw += delta * 0.08;
+    if (!reducedMotion && idle && !current.dragging && current.yawVelocity === 0) {
+      current.yaw += delta * 0.08;
+    }
     camera.position.set(
       CAMERA_TARGET.x + current.radius * Math.cos(current.pitch) * Math.sin(current.yaw),
       CAMERA_TARGET.y + current.radius * Math.sin(current.pitch),
@@ -279,6 +252,13 @@ function Rig({ reducedMotion, suppressClick }: {
   });
   return null;
 }
+
+const MODEL_ORBIT_BOUNDS = {
+  minPitch: -0.2,
+  maxPitch: 1.2,
+  minRadius: 7,
+  maxRadius: 24,
+} as const;
 
 export interface KnowledgeSceneProps {
   scene: ModelScene;

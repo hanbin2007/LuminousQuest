@@ -26,6 +26,7 @@ import {
   upsertScaffoldHistory,
   type ScaffoldViewState,
 } from './scaffold-adapter';
+import { LiveModelPanel } from './LiveModelPanel';
 import { mediumLabel, visibleCaseMaterials } from './materials';
 import { TransferRadarComparison } from './TransferRadarComparison';
 import { buildTransferComparison, type TransferComparison } from './transfer-comparison';
@@ -379,6 +380,7 @@ export function TrainingPage() {
   const [comparison, setComparison] = useState<TransferComparison | null>(null);
   const [busy, setBusy] = useState(false);
   const [tutorBusyNode, setTutorBusyNode] = useState<string | null>(null);
+  const [focusNodeId, setFocusNodeId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const submissionIds = useRef(new Map<string, string>());
 
@@ -529,11 +531,13 @@ export function TrainingPage() {
     }));
     setRound(null);
     setTutorNotes({});
+    setFocusNodeId(null);
     setError(null);
   };
 
   const askTutor = async (nodeId: string) => {
     setTutorBusyNode(nodeId);
+    setFocusNodeId(nodeId);
     setError(null);
     try {
       const result = await runtime.tutorTurn({
@@ -609,7 +613,8 @@ export function TrainingPage() {
   const tutorNodeIds = new Set(trainingCase.tutoring.map((entry) => entry.nodeId));
 
   return (
-    <main className="page-content training-page">
+    <main className="page-content training-page training-page--split">
+      <div className="training-main">
       <header className="page-heading training-page__heading">
         <div>
           <span>模块二 · 案例 {activeIndex + 1} / {cases.length}</span>
@@ -683,7 +688,12 @@ export function TrainingPage() {
                 && tutorNodeIds.has(event.nodeId)
                 && !note?.terminal;
               return (
-                <div className="training-feedback-item" key={event.nodeId}>
+                <div
+                  className="training-feedback-item"
+                  key={event.nodeId}
+                  data-focused={focusNodeId === event.nodeId || undefined}
+                  onClick={() => setFocusNodeId(event.nodeId)}
+                >
                   <AnnotationCard
                     dimensionLabel={dimension?.label ?? '模型节点'}
                     nodeId={event.nodeId}
@@ -734,6 +744,17 @@ export function TrainingPage() {
           ) : null}
         </section>
       ) : null}
+      </div>
+
+      <aside className="training-stage-rail">
+        <LiveModelPanel
+          session={session}
+          config={config}
+          trainingCase={trainingCase}
+          focusNodeId={focusNodeId}
+          onFocus={setFocusNodeId}
+        />
+      </aside>
     </main>
   );
 }

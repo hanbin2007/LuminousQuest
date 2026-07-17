@@ -452,6 +452,7 @@ p {
 .page-heading h1 {
   margin: var(--space-2) 0 0;
   font-size: var(--text-display);
+  letter-spacing: -0.02em; /* 大字号负字距(optical tracking) */
 }
 
 .pretest-steps {
@@ -2628,3 +2629,233 @@ p {
 .node-chip--needs-review { border-color: var(--glow-energy); opacity: 0.9; }
 .node-chip--selected { background: rgba(63, 224, 216, 0.15); }
 .node-chip:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.node-chip { transition: transform 120ms var(--ease-out, ease-out), border-color 120ms ease-out; }
+.node-chip:active { transform: scale(0.94); }
+
+/* ==== 训练分屏 · 实时 3D 认知模型面板(手稿《电化学统一认知模型》的实时化) ==== */
+
+.training-page--split {
+  /* 分屏页突破常规 1200px 栏宽:三维分析常驻右半屏 */
+  width: calc(100% - var(--space-6));
+  max-width: none;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); /* 严格 50 / 50 */
+  gap: var(--space-6);
+  align-items: start;
+  padding-top: var(--space-4); /* 分屏页收紧顶部,给常驻面板让出满高 */
+}
+
+.training-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.training-stage-rail {
+  position: sticky;
+  /* 吸附点 = 初始位置(头部 124px + 分屏页顶距 16px):滚动时面板纹丝不动 */
+  top: 140px;
+  min-width: 0;
+  height: calc(100vh - 156px);
+}
+
+.live-model {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  border-radius: var(--radius-md, 14px);
+  overflow: hidden;
+  box-shadow: 0 18px 44px rgba(10, 21, 38, 0.28);
+}
+
+.live-model--frozen {
+  height: auto; /* 冷迁移静态说明卡不撑满高 */
+}
+
+.live-model__header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5) var(--space-3);
+}
+
+.live-model__eyebrow {
+  font-size: var(--text-xs, 12px);
+  letter-spacing: 0.12em;
+  color: var(--glow-principle);
+}
+
+.live-model__header h3 {
+  margin: 2px 0 0;
+  font-size: var(--text-lg, 18px);
+  color: var(--stage-text);
+}
+
+.live-model__meta {
+  margin: 0;
+  font-size: var(--text-xs, 12px);
+  color: var(--stage-text);
+  opacity: 0.75;
+  text-align: right;
+  max-width: 46%;
+}
+
+.live-model__canvas {
+  flex: 1 1 auto;
+  min-height: 320px;
+  border-top: 1px solid rgba(215, 226, 239, 0.08);
+  border-bottom: 1px solid rgba(215, 226, 239, 0.08);
+}
+
+.live-model__canvas canvas {
+  display: block;
+}
+
+.live-model__fallback {
+  height: 100%;
+  overflow: auto;
+  padding: var(--space-4) var(--space-5);
+  font-size: var(--text-sm, 14px);
+}
+
+.live-model__fallback ul {
+  margin: var(--space-2) 0 0;
+  padding-left: 1.2em;
+  columns: 2;
+}
+
+.live-model__focus {
+  margin: 0;
+  padding: var(--space-3) var(--space-5);
+  font-size: var(--text-sm, 14px);
+  line-height: 1.6;
+  color: var(--stage-text);
+  /* 固定高度:聚焦文本长短变化不得挤压 Canvas(WebGL 重设尺寸是卡顿根源) */
+  flex: none;
+  height: 7.6em;
+  overflow-y: auto;
+}
+
+@keyframes focus-text-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+
+.live-model__focus-text {
+  display: block;
+  animation: focus-text-in 180ms var(--ease-out, ease-out) both;
+}
+
+.live-model__chips {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: 0 var(--space-5) var(--space-3);
+}
+
+.live-model__chip-row {
+  display: grid;
+  grid-template-columns: 3em 1fr;
+  align-items: start;
+  gap: var(--space-2);
+}
+
+.live-model__chip-row > span {
+  font-size: var(--text-xs, 12px);
+  color: var(--stage-text);
+  opacity: 0.65;
+  padding-top: 4px;
+}
+
+.live-model__chip-row > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.live-model__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  margin: 0;
+  padding: 0 var(--space-5) var(--space-4);
+  list-style: none;
+  font-size: var(--text-xs, 12px);
+  color: var(--stage-text);
+  opacity: 0.8;
+}
+
+.live-model__legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.training-feedback-item {
+  border-radius: var(--radius-sm, 10px);
+  transition: box-shadow 180ms var(--ease-out, ease-out);
+}
+
+.training-feedback-item[data-focused] {
+  box-shadow: 0 0 0 2px var(--brand-teal, #2cb8b8);
+}
+
+@media (max-width: 1200px) {
+  .training-page--split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* 单列时模型面板置于案例标题之下:先见模型,再作答 */
+  .training-stage-rail {
+    position: static;
+    order: -1;
+  }
+
+  .live-model__canvas {
+    flex: none;
+    height: 320px;
+  }
+
+  .training-stage-rail {
+    height: auto;
+  }
+}
+
+.live-model--frozen .live-model__focus {
+  opacity: 0.8;
+  padding-bottom: var(--space-5);
+}
+
+.live-model__loading {
+  height: 100%;
+}
+
+/* ==== 面板 materialize 进场:位移+透明度同至,reduced-motion 降级为纯淡入 ==== */
+
+@keyframes live-model-in {
+  from { opacity: 0; transform: translateY(14px) scale(0.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.live-model {
+  animation: live-model-in 420ms var(--ease-out, cubic-bezier(0.22, 1, 0.36, 1)) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .live-model {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+
+  .node-chip,
+  .training-feedback-item {
+    transition: none;
+  }
+
+  .live-model__focus-text {
+    animation: none;
+  }
+}
