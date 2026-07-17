@@ -11,15 +11,16 @@ import {
   type BuilderTopologyAssessment,
 } from '../../../shared/scoring/topology';
 import { useReducedMotion } from '../../app/useReducedMotion';
-import { deriveAssembly } from './assembly';
+import { deriveAssembly, runningElectrodeIds } from './assembly';
 import { BenchCanvas } from './BenchCanvas';
 import { benchGeometryFor, presentationFor } from './presentation';
 
 const dragMime = 'application/x-lq-component';
-const moveMime = 'application/x-lq-instance';
-const gridSize = 24;
+const layoutMargin = 24;
 const layoutCellWidth = 170;
 const layoutCellHeight = 200;
+/** 拖动判定阈值:超过才算拖,保住点击选中。 */
+const dragThreshold = 3;
 
 const roleLabels = {
   'oxidation-site': '氧化反应位置',
@@ -108,8 +109,14 @@ function graphFor(value: BuilderAnswer, connections: BuilderGraph['connections']
   };
 }
 
-function snapped(value: number) {
-  return Math.max(0, Math.round(value / gridSize) * gridSize);
+interface DragSession {
+  instanceId: string;
+  pointerId: number;
+  originX: number;
+  originY: number;
+  startClientX: number;
+  startClientY: number;
+  moved: boolean;
 }
 
 export function TopologyBuilder({ config, initialValue, onChange, onSubmit }: TopologyBuilderProps) {
@@ -117,9 +124,13 @@ export function TopologyBuilder({ config, initialValue, onChange, onSubmit }: To
   const [annotate, setAnnotate] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
   const [snapFlash, setSnapFlash] = useState<{ x: number; y: number; key: string } | null>(null);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
   const reducedMotion = useReducedMotion();
   const [submitError, setSubmitError] = useState<string | null>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
+  const dragRef = useRef<DragSession | null>(null);
+  /** 拖动结束后吞掉紧随的 click,避免误触发选中切换。 */
+  const suppressClickRef = useRef(false);
   const definitionById = useMemo(
     () => new Map(config.components.map((component) => [component.id, component])),
     [config.components],
@@ -148,14 +159,35 @@ export function TopologyBuilder({ config, initialValue, onChange, onSubmit }: To
     () => deriveAssembly(value.components, definitionById),
     [value.components, definitionById],
   );
+  const running = useMemo(
+    () => runningElectrodeIds(assembly, value.components, definitionById),
+    [assembly, value.components, definitionById],
+  );
+
+  const valueRef = useRef(value);
+  valueRef.current = value;
+
+  const answerFor = (components: PlacedBuilderComponent[]): BuilderAnswer => ({
+    components,
+    connections: deriveAssembly(components, definitionById).connections,
+  });
 
   const update = (components: PlacedBuilderComponent[]) => {
-    const next: BuilderAnswer = {
-      components,
-      connections: deriveAssembly(components, definitionById).connections,
-    };
+    const next = answerFor(components);
     setValue(next);
     onChange?.(next);
+  };
+
+  /** 钳制到舞台内(固定舞台无滚动,器材必须整体可见)。 */
+  const clampToStage = (point: { x: number; y: number }, componentId: string) => {
+    const geometry = benchGeometryFor(componentId);
+    const bounds = canvasRef.current?.getBoundingClientRect();
+    const maxX = Math.max(0, (bounds?.width ?? 720) - geometry.width);
+    const maxY = Math.max(0, (bounds?.height ?? 480) - geometry.height);
+    return {
+      x: Math.min(maxX, Math.max(0, point.x)),
+      y: Math.min(maxY, Math.max(0, point.y)),
+    };
   };
 
   const addComponent = (componentId: string, point?: { x: number; y: number }) => {
@@ -167,11 +199,11 @@ export function TopologyBuilder({ config, initialValue, onChange, onSubmit }: To
     }
     const index = value.components.length;
     const canvasWidth = canvasRef.current?.getBoundingClientRect().width || 720;
-    const columns = Math.max(1, Math.floor(canvasWidth / (layoutCellWidth + gridSize)));
-    const nextPoint = point ?? {
-      x: gridSize + (index % columns) * (layoutCellWidth + gridSize),
-      y: gridSize + Math.floor(index / columns) * (layoutCellHeight + gridSize),
-    };
+    const columns = Math.max(1, Math.floor(canvasWidth / (layoutCellWidth + layoutMargin)));
+    const nextPoint = clampToStage(point ?? {
+      x: layoutMargin + (index % columns) * (layoutCellWidth + layoutMargin),
+      y: layoutMargin + Math.floor(index / columns) * (layoutCellHeight + layoutMargin),
+    }, componentId);
     const component: PlacedBuilderComponent = {
       instanceId: createInstanceId(componentId),
       componentId,
@@ -179,8 +211,7 @@ export function TopologyBuilder({ config, initialValue, onChange, onSubmit }: To
       ...(definition.kind === 'electrode'
         ? { materialBinding: { materialId: 'generic-conductor', specificity: 'generic' as const } }
         : {}),
-      x: snapped(nextPoint.x),
-      y: snapped(nextPoint.y),
+      ...nextPoint,
     };
     update([...value.components, component]);
     setSnapFlash({ x: component.x, y: component.y, key: component.instanceId });
@@ -191,12 +222,53 @@ export function TopologyBuilder({ config, initialValue, onChange, onSubmit }: To
     if (selected === instanceId) setSelected(null);
   };
 
-  const moveComponent = (instanceId: string, point: { x: number; y: number }) => {
-    const nextPoint = { x: snapped(point.x), y: snapped(point.y) };
-    update(value.components.map((component) => component.instanceId === instanceId
-      ? { ...component, ...nextPoint }
-      : component));
-    setSnapFlash({ ...nextPoint, key: `${instanceId}-${nextPoint.x}-${nextPoint.y}` });
+  /**
+   * 指针拖动:1:1 跟手,装配关系(咬合/浸没)边拖边算;仅在松手时通知上游持久化。
+   * 按下后监听挂在 window 上——不用指针捕获(捕获会把派生 click 重定向,杀掉
+   * "点击弹属性泡"),也不怕指针一步跳出节点丢事件。
+   */
+  const beginDrag = (component: PlacedBuilderComponent, event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0 || dragRef.current) return;
+    const session: DragSession = {
+      instanceId: component.instanceId,
+      pointerId: event.pointerId,
+      originX: component.x,
+      originY: component.y,
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+      moved: false,
+    };
+    dragRef.current = session;
+    const { componentId, instanceId } = component;
+
+    const handleMove = (moveEvent: PointerEvent) => {
+      if (moveEvent.pointerId !== session.pointerId) return;
+      const dx = moveEvent.clientX - session.startClientX;
+      const dy = moveEvent.clientY - session.startClientY;
+      if (!session.moved) {
+        if (Math.hypot(dx, dy) < dragThreshold) return;
+        session.moved = true;
+        setDraggingId(instanceId);
+      }
+      const point = clampToStage({ x: session.originX + dx, y: session.originY + dy }, componentId);
+      setValue((previous) => answerFor(previous.components.map((entry) =>
+        entry.instanceId === instanceId ? { ...entry, ...point } : entry)));
+    };
+    const finish = (endEvent: PointerEvent) => {
+      if (endEvent.pointerId !== session.pointerId) return;
+      window.removeEventListener('pointermove', handleMove);
+      window.removeEventListener('pointerup', finish);
+      window.removeEventListener('pointercancel', finish);
+      dragRef.current = null;
+      setDraggingId(null);
+      if (session.moved && endEvent.type === 'pointerup') {
+        suppressClickRef.current = true;
+        onChange?.(valueRef.current);
+      }
+    };
+    window.addEventListener('pointermove', handleMove);
+    window.addEventListener('pointerup', finish);
+    window.addEventListener('pointercancel', finish);
   };
 
   const patchComponent = (
@@ -215,12 +287,6 @@ export function TopologyBuilder({ config, initialValue, onChange, onSubmit }: To
     componentByInstance.get(instanceId)?.label
       ?? definitionById.get(componentByInstance.get(instanceId)?.componentId ?? '')?.label
       ?? instanceId;
-  const canvasContentHeight = value.components.reduce(
-    (height, component) =>
-      Math.max(height, component.y + benchGeometryFor(component.componentId).height + 48),
-    0,
-  );
-
   const submit = () => {
     try {
       const assessment = assessBuilderTopology(graphFor(value, assembly.connections), config);
@@ -265,7 +331,6 @@ export function TopologyBuilder({ config, initialValue, onChange, onSubmit }: To
           className="builder-canvas bench__canvas"
           data-snap-flash={snapFlash ? 'true' : 'false'}
           data-testid="builder-canvas"
-          style={{ '--builder-content-height': `${canvasContentHeight}px` } as React.CSSProperties}
           onClick={(event) => {
             if (event.target === canvasRef.current) setSelected(null);
           }}
@@ -273,19 +338,13 @@ export function TopologyBuilder({ config, initialValue, onChange, onSubmit }: To
           onDrop={(event) => {
             event.preventDefault();
             const componentId = event.dataTransfer.getData(dragMime);
-            const instanceId = event.dataTransfer.getData(moveMime);
             const bounds = canvasRef.current?.getBoundingClientRect();
-            if (!bounds || (!componentId && !instanceId)) return;
-            const moving = instanceId ? componentByInstance.get(instanceId) : undefined;
-            const geometry = benchGeometryFor(moving?.componentId ?? componentId);
-            const maxX = Math.max(0, Math.floor((bounds.width - geometry.width) / gridSize) * gridSize);
-            const maxY = Math.max(0, Math.floor((bounds.height - geometry.height) / gridSize) * gridSize);
-            const point = {
-              x: Math.min(maxX, event.clientX - bounds.left - geometry.width / 2),
-              y: Math.min(maxY, event.clientY - bounds.top - geometry.height / 2),
-            };
-            if (instanceId) moveComponent(instanceId, point);
-            else addComponent(componentId, point);
+            if (!bounds || !componentId) return;
+            const geometry = benchGeometryFor(componentId);
+            addComponent(componentId, {
+              x: event.clientX - bounds.left - geometry.width / 2,
+              y: event.clientY - bounds.top - geometry.height / 2,
+            });
           }}
         >
           <BenchCanvas
@@ -295,10 +354,10 @@ export function TopologyBuilder({ config, initialValue, onChange, onSubmit }: To
               assembly,
               selectedId: selected,
               annotate,
+              running,
             }}
             flash={snapFlash}
             reducedMotion={reducedMotion}
-            contentHeight={canvasContentHeight}
           />
 
 
@@ -320,18 +379,18 @@ export function TopologyBuilder({ config, initialValue, onChange, onSubmit }: To
                   : ' bench-z-vessel';
             return (
               <div
-                className={`builder-node${selected === component.instanceId ? ' is-selected' : ''}${contained ? ' is-contained' : ''}${zClass}`}
-                draggable
+                className={`builder-node${selected === component.instanceId ? ' is-selected' : ''}${contained ? ' is-contained' : ''}${draggingId === component.instanceId ? ' is-dragging' : ''}${zClass}`}
                 key={component.instanceId}
-                onDragStart={(event) => {
-                  event.dataTransfer.effectAllowed = 'move';
-                  event.dataTransfer.setData(moveMime, component.instanceId);
-                }}
+                onPointerDown={(event) => beginDrag(component, event)}
                 style={{ left: component.x, top: component.y, width: geometry.width }}
               >
                 <button
                   className="builder-node__target"
                   onClick={() => {
+                    if (suppressClickRef.current) {
+                      suppressClickRef.current = false;
+                      return;
+                    }
                     setSelected((current) => current === component.instanceId ? null : component.instanceId);
                   }}
                   type="button"

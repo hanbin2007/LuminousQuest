@@ -252,3 +252,33 @@ export function deriveAssembly(
 
   return { connections, wireAttachments, containment, arrowBindings };
 }
+
+/**
+ * 物理"运行中"判定:同一池内的两根电极被同一根导线接通,且导电通路真实成立——
+ * 外电路必须是真导体(绝缘连接件不通电),内电路必须是真导电液(蔗糖水不导电、
+ * 空容器没有电解质)。行为完全由器件的现实语义决定(标签即事实),不看学生的
+ * 角色/材料指定,绝不进判分。电极活性差异不模拟:题目本身要求"不用具体金属
+ * 名称"的抽象模型,通用导体双电极照常运行——这是刻意保留的抽象边界。
+ */
+export function runningElectrodeIds(
+  assembly: AssemblyState,
+  components: readonly AssemblyComponent[],
+  definitionById: ReadonlyMap<string, BuilderComponentDefinition>,
+): Set<string> {
+  const kindOf = (instanceId: string) => {
+    const component = components.find((entry) => entry.instanceId === instanceId);
+    return component ? definitionById.get(component.componentId)?.kind : undefined;
+  };
+  const running = new Set<string>();
+  for (const attachment of assembly.wireAttachments) {
+    if (kindOf(attachment.wireId) !== 'electron-conductor') continue;
+    for (const [beakerId, inside] of assembly.containment) {
+      if (kindOf(beakerId) !== 'ion-conductor') continue;
+      if (inside.includes(attachment.a.electrodeId) && inside.includes(attachment.b.electrodeId)) {
+        running.add(attachment.a.electrodeId);
+        running.add(attachment.b.electrodeId);
+      }
+    }
+  }
+  return running;
+}

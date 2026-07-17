@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import pretestJson from '../config/pretest.json';
 import { pretestSchema } from '../shared/config/schemas';
+import { deriveAssembly, runningElectrodeIds } from '../src/features/builder/assembly';
 import { TopologyBuilder, type BuilderAnswer } from '../src/features/builder/TopologyBuilder';
 import { assembleGalvanicCell } from './helpers/assemble-cell';
 import { EquationToolbar } from '../src/features/pretest/EquationToolbar';
@@ -33,7 +34,7 @@ function dataTransfer(componentId: string) {
 }
 
 describe('M2 topology builder', () => {
-  it('uses only neutral configured labels and snaps dropped components to the 24px grid', () => {
+  it('uses only neutral configured labels, places drops freely (no grid), and moves components live via pointer drag', () => {
     const view = render(<TopologyBuilder config={builderConfig} onSubmit={vi.fn()} />);
 
     expect(screen.getByText('蔗糖水')).toBeInTheDocument();
@@ -65,20 +66,39 @@ describe('M2 topology builder', () => {
     fireEvent(canvas, drop);
 
     const placed = screen.getByRole('button', { name: /画布组件.*导体棒 A/ });
-    expect(placed.closest('.builder-node')).toHaveStyle({ left: '120px', top: '72px' });
+    // 自由落位:落点即中心,无网格吸附(电极 36×168 → 左上角 = 落点 - 半宽/半高)
+    expect(placed.closest('.builder-node')).toHaveStyle({ left: '115px', top: '83px' });
     expect(canvas).toHaveAttribute('data-snap-flash', 'true');
     expect(view.container.innerHTML).not.toMatch(forbiddenBuilderLeakage);
 
-    const moveTransfer = dataTransfer('');
-    fireEvent.dragStart(placed.closest('.builder-node')!, { dataTransfer: moveTransfer });
-    const move = createEvent.drop(canvas);
-    Object.defineProperties(move, {
-      clientX: { value: 392 },
-      clientY: { value: 302 },
-      dataTransfer: { value: moveTransfer },
-    });
-    fireEvent(canvas, move);
-    expect(placed.closest('.builder-node')).toHaveStyle({ left: '384px', top: '216px' });
+    // 指针拖动:松手前就实时跟手
+    const node = placed.closest('.builder-node')!;
+    fireEvent.pointerDown(node, { button: 0, pointerId: 1, clientX: 150, clientY: 120 });
+    fireEvent.pointerMove(node, { pointerId: 1, clientX: 409, clientY: 255 });
+    expect(node).toHaveStyle({ left: '374px', top: '218px' });
+    fireEvent.pointerUp(node, { pointerId: 1 });
+    expect(node).toHaveStyle({ left: '374px', top: '218px' });
+  });
+
+  it('runs only when the circuit is physically viable (real conductor + real electrolyte)', () => {
+    const definitionById = new Map(builderConfig.components.map((component) => [component.id, component]));
+    const electrodeA = { instanceId: 'ea', componentId: 'site-a', x: 150, y: 150 };
+    const electrodeB = { instanceId: 'eb', componentId: 'site-b', x: 240, y: 150 };
+    const poolOf = (componentId: string) => ({ instanceId: 'pool', componentId, x: 100, y: 100 });
+    const wireOf = (componentId: string) => ({ instanceId: 'w', componentId, x: 130, y: 60 });
+    const runWith = (parts: Parameters<typeof deriveAssembly>[0]) =>
+      runningElectrodeIds(deriveAssembly(parts, definitionById), parts, definitionById);
+
+    // 真导线 + 真导电液:运行
+    expect(runWith([poolOf('ion-medium'), electrodeA, electrodeB, wireOf('electron-link')]))
+      .toEqual(new Set(['ea', 'eb']));
+
+    // 现实里不通的组合一律不运行:绝缘连接件 / 蔗糖水 / 空容器 / 缺外电路 / 缺池
+    expect(runWith([poolOf('ion-medium'), electrodeA, electrodeB, wireOf('insulated-link')]).size).toBe(0);
+    expect(runWith([poolOf('sucrose-solution'), electrodeA, electrodeB, wireOf('electron-link')]).size).toBe(0);
+    expect(runWith([poolOf('container'), electrodeA, electrodeB, wireOf('electron-link')]).size).toBe(0);
+    expect(runWith([poolOf('ion-medium'), electrodeA, electrodeB]).size).toBe(0);
+    expect(runWith([electrodeA, electrodeB, wireOf('electron-link')]).size).toBe(0);
   });
 
   it('assembles a physical cell (dip + auto-clip + annotation layer) and scores hit', async () => {

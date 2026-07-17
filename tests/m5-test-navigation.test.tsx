@@ -84,12 +84,13 @@ describe('test-stage manual navigation', () => {
 
     await user.click(screen.getByRole('button', { name: '测试' }));
     await user.click(screen.getByRole('button', { name: '案例2' }));
-    expect(await screen.findByRole('heading', { name: '思维模型训练' })).toBeInTheDocument();
+    // 训练页为懒加载路由:全量套件下首次 import 可超过 findBy 默认 1s,放宽避免偶发超时
+    expect(await screen.findByRole('heading', { name: '思维模型训练' }, { timeout: 5000 })).toBeInTheDocument();
     const secondCase = [...config.cases].sort((a, b) => a.sequence - b.sequence)[1]!;
-    expect(await screen.findByRole('heading', { name: secondCase.title })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: secondCase.title }, { timeout: 5000 })).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: '测试' }));
     await user.click(screen.getByRole('button', { name: '冷迁移' }));
-    expect(await screen.findByText(/冷迁移后测不显示即时对错/)).toBeInTheDocument();
+    expect(await screen.findByText(/冷迁移后测不显示即时对错/, undefined, { timeout: 5000 })).toBeInTheDocument();
   });
 });

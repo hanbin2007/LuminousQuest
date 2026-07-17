@@ -3176,17 +3176,15 @@ p {
 
 .bench .builder-canvas.bench__canvas {
   position: relative;
-  overflow: auto;
+  overflow: hidden; /* 固定舞台:器材钳制在台内,杜绝滚动条抖动 */
   min-height: 0;
   height: 100%;
   border: 0;
   border-radius: 0;
-  background:
-    radial-gradient(rgba(255, 255, 255, 0.11) 1px, transparent 1.4px) 0 0 / 24px 24px,
-    var(--bench-bg);
+  background: var(--bench-bg);
 }
 
-/* 节点:位图直接悬浮,无纸面卡片 */
+/* 节点:位图直接悬浮,无纸面卡片;指针拖动 1:1 跟手 */
 .bench .builder-node {
   position: absolute;
   display: flex;
@@ -3197,6 +3195,18 @@ p {
   background: transparent;
   padding: 0;
   box-shadow: none;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.bench .builder-node.is-dragging {
+  cursor: grabbing;
+}
+
+.bench .builder-node.is-dragging .builder-node__target {
+  cursor: grabbing;
 }
 
 .bench .builder-node__target {
@@ -3582,8 +3592,9 @@ p {
 .bench-popover__flip-direction:active { transform: scale(0.97); }
 
 /* 装配层级:电极入液在杯体之后(玻璃前壁遮挡) */
-.bench-z-electrode { z-index: 3; }
-.bench-z-vessel { z-index: 4; }
+/* 电极必须压在容器之上:入池后仍要能被点中弹属性泡 */
+.bench-z-vessel { z-index: 3; }
+.bench-z-electrode { z-index: 4; }
 .bench .builder-connections { z-index: 5; position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 .bench-z-grip { z-index: 6; }
 .bench-z-arrow { z-index: 7; }

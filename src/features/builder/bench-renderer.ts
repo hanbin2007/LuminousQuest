@@ -21,16 +21,19 @@ export interface BenchScene {
   assembly: AssemblyState;
   selectedId: string | null;
   annotate: boolean;
+  /** 结构闭合、正在"工作"的电极(纯视觉运行迹象,不进判分)。 */
+  running: ReadonlySet<string>;
   width: number;
   height: number;
   dpr: number;
+  /** 运行动画时钟(ms);0 = 静态帧(reduced-motion / 非运行态)。 */
+  time: number;
   /** 吸附闪光(短促 rAF 突发):progress 0→1。 */
   flash?: { x: number; y: number; progress: number } | null;
 }
 
 const COLORS = {
   bg: '#42474d',
-  dot: 'rgba(255, 255, 255, 0.11)',
   label: '#e9ecef',
   labelShadow: 'rgba(0, 0, 0, 0.65)',
   wireCore: '#6f9ae0',
@@ -156,6 +159,48 @@ function drawWire(
   return true;
 }
 
+function seedOf(id: string) {
+  let hash = 0;
+  for (let index = 0; index < id.length; index += 1) {
+    hash = (hash * 31 + id.charCodeAt(index)) >>> 0;
+  }
+  return hash;
+}
+
+/**
+ * 运行迹象:沿浸没电极两侧上浮的空心小气泡(STYLE §3 气泡惯例)。
+ * time=0 时输出确定性的静态分布(reduced-motion 同样能读出"在工作")。
+ */
+function drawRunningBubbles(
+  ctx: CanvasRenderingContext2D,
+  electrode: PlacedBuilderComponent,
+  liquidTop: number,
+  time: number,
+) {
+  const geometry = benchGeometryFor(electrode.componentId);
+  const bottom = electrode.y + geometry.height * 0.96;
+  const travel = bottom - liquidTop - 6;
+  if (travel <= 12) return;
+  const seed = seedOf(electrode.instanceId);
+  ctx.save();
+  ctx.lineWidth = 1.2;
+  for (let index = 0; index < 7; index += 1) {
+    const offset = ((seed >> (index * 3)) % 97) / 97;
+    const speed = 0.00009 + (((seed >> (index * 2)) % 13) / 13) * 0.00006;
+    const phase = (offset + time * speed) % 1;
+    const side = index % 2 === 0 ? -3 : geometry.width + 3;
+    const wobble = Math.sin(time * 0.003 + index * 2.1 + offset * 6) * 1.6;
+    const x = electrode.x + side + wobble;
+    const y = bottom - phase * travel;
+    const radius = 1.1 + phase * 1.5;
+    ctx.strokeStyle = `rgba(255, 255, 255, ${(0.55 * (1 - phase * 0.55)).toFixed(3)})`;
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
 function drawArrow(
   ctx: CanvasRenderingContext2D,
   component: PlacedBuilderComponent,
@@ -194,15 +239,9 @@ export function renderBench(ctx: CanvasRenderingContext2D, scene: BenchScene, on
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, width, height);
 
-  // 底色 + 点阵网格
+  // 底色(自由摆放,无网格)
   ctx.fillStyle = COLORS.bg;
   ctx.fillRect(0, 0, width, height);
-  ctx.fillStyle = COLORS.dot;
-  for (let gx = 12; gx < width; gx += 24) {
-    for (let gy = 12; gy < height; gy += 24) {
-      ctx.fillRect(gx, gy, 2, 2);
-    }
-  }
 
   const byKind = (predicate: (definition: PretestConfig['builder']['components'][number]) => boolean) =>
     scene.components.filter((component) => {
@@ -246,6 +285,20 @@ export function renderBench(ctx: CanvasRenderingContext2D, scene: BenchScene, on
     ctx.globalAlpha = 0.6;
     ctx.drawImage(image, beaker.x, beaker.y, geometry.width, geometry.height);
     ctx.restore();
+
+    // 3b. 运行迹象:结构闭合后,浸没电极表面冒出上浮气泡(液面矩形内裁剪)
+    const runningInside = inside.filter((id) => scene.running.has(id));
+    if (runningInside.length > 0) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top);
+      ctx.clip();
+      for (const electrodeId of runningInside) {
+        const electrode = scene.components.find((entry) => entry.instanceId === electrodeId);
+        if (electrode) drawRunningBubbles(ctx, electrode, rect.top, scene.time);
+      }
+      ctx.restore();
+    }
   }
 
   // 4. 导线(已咬合画电缆弧;未咬合画位图) + 5. 其余精灵
