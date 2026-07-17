@@ -51,6 +51,8 @@ export function PretestPage() {
     session,
     setSession,
     setPretestComplete,
+    stageJump,
+    consumeStageJump,
   } = useAppContext();
   const [draft, setDraft] = useState<PretestDraft>(() =>
     loadPretestDraft(draftStorage(), session.id, config.pretest));
@@ -86,6 +88,14 @@ export function PretestPage() {
   ], [config.pretest.questions]);
 
   const advance = () => setDraft((current) => ({ ...current, step: Math.min(maxStep, current.step + 1) }));
+
+  // 测试阶段手动跳转:直接落到目标步骤(动画路径与正常推进一致)
+  useEffect(() => {
+    if (stageJump?.module !== 'pretest') return;
+    const target = Math.min(maxStep, Math.max(0, stageJump.step));
+    setDraft((current) => ({ ...current, step: target }));
+    consumeStageJump();
+  }, [stageJump, maxStep, consumeStageJump]);
 
   const submitQuestion = async (answer: string) => {
     if (!activeQuestion) return;

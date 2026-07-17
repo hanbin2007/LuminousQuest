@@ -40,6 +40,7 @@ async function main() {
     clientRoot: resolveClientRoot(contentRoot),
     ...(accessToken ? { accessToken } : {}),
     lockDemo,
+    testNavigation: process.env.LQ_TEST_NAV === '1',
   });
   const { server, port } = await serveOnHost({
     fetch: app.fetch,

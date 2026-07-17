@@ -172,6 +172,8 @@ export interface ServerAppOptions {
   accessToken?: string;
   maxRequestBodyBytes?: number;
   lockDemo?: boolean;
+  /** 测试阶段的手动阶段跳转(LQ_TEST_NAV=1);锁演示时强制关闭。 */
+  testNavigation?: boolean;
 }
 
 const lanAccessCookie = 'lq_lan_access';
@@ -374,7 +376,10 @@ export function createServerApp(options: ServerAppOptions) {
 
   app.get('/api/runtime', (context) => {
     context.header('cache-control', 'no-store');
-    return context.json({ executionMode: workflow.executionMode });
+    return context.json({
+      executionMode: workflow.executionMode,
+      testNavigation: (options.testNavigation ?? false) && !lockDemo,
+    });
   });
 
   app.post('/api/runtime/execution-mode', async (context) => {

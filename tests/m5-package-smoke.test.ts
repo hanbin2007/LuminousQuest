@@ -92,7 +92,7 @@ describe('M5 packaged server smoke', () => {
 
     try {
       const runtime = await waitForRuntime(port, child);
-      await expect(runtime.json()).resolves.toEqual({ executionMode: 'development' });
+      await expect(runtime.json()).resolves.toEqual({ executionMode: 'development', testNavigation: false });
 
       const configResponse = await fetch(`http://127.0.0.1:${port}/api/config`);
       const apiToken = configResponse.headers.get('x-lq-api-token');

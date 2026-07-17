@@ -50,7 +50,7 @@ describe('M4.1 server execution-mode authority', () => {
       });
 
       const state = await app.request('/api/runtime');
-      expect(await state.json()).toEqual({ executionMode: 'demo' });
+      expect(await state.json()).toEqual({ executionMode: 'demo', testNavigation: false });
       const switchAttempt = await post(app, '/api/runtime/execution-mode', {
         executionMode: 'live',
       });
@@ -58,7 +58,7 @@ describe('M4.1 server execution-mode authority', () => {
       expect(await switchAttempt.json()).toEqual({
         error: 'Demo mode is locked by startup configuration',
       });
-      expect(await (await app.request('/api/runtime')).json()).toEqual({ executionMode: 'demo' });
+      expect(await (await app.request('/api/runtime')).json()).toEqual({ executionMode: 'demo', testNavigation: false });
     } finally {
       vi.unstubAllEnvs();
     }

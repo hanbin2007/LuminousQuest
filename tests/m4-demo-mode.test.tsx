@@ -105,7 +105,7 @@ describe('M4 demo execution mode', () => {
     expect(provider.structured).not.toHaveBeenCalled();
 
     const state = await app.request('/api/runtime');
-    expect(await state.json()).toEqual({ executionMode: 'demo' });
+    expect(await state.json()).toEqual({ executionMode: 'demo', testNavigation: false });
   });
 
   it('switches the UI to executionMode=demo in one action and preserves the previous session for exit', async () => {

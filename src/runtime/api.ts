@@ -61,7 +61,7 @@ export interface AppRuntime {
   assessEquation: (input: EquationAssessmentInput) => Promise<{ session: StudentSession | null }>;
   tutorTurn: (input: TutorTurnInput) => Promise<TutorTurnResult>;
   reviewDrawing: (imageData: string) => Promise<string>;
-  getRuntimeState?: () => Promise<{ executionMode: LLMExecutionMode }>;
+  getRuntimeState?: () => Promise<{ executionMode: LLMExecutionMode; testNavigation?: boolean }>;
   activateDemo?: () => Promise<{
     executionMode: 'demo';
     session: StudentSession;
@@ -109,7 +109,7 @@ export const defaultRuntime: AppRuntime = {
 
   async getRuntimeState() {
     const response = await fetch('/api/runtime');
-    return jsonResponse<{ executionMode: LLMExecutionMode }>(response);
+    return jsonResponse<{ executionMode: LLMExecutionMode; testNavigation?: boolean }>(response);
   },
 
   async activateDemo() {

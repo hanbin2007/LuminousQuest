@@ -12,6 +12,7 @@ import { AppErrorBoundary } from './app/AppErrorBoundary';
 import { AppShell } from './app/AppShell';
 import { savePretestDraft } from './features/pretest/draft';
 import { saveDemoTrainingStart } from './features/training/draft';
+import type { StageJump } from './app/AppContext';
 import { defaultRuntime, type AppRuntime, type LLMExecutionMode } from './runtime/api';
 import { useLocalSession } from './session/useLocalSession';
 
@@ -57,6 +58,8 @@ function ConfiguredApp({ config, runtime }: { config: LoadedConfig; runtime: App
   const [pretestComplete, setStoredPretestComplete] = useState(() => readProgress(pretestProgressKey));
   const [trainingComplete, setStoredTrainingComplete] = useState(() => readProgress(trainingProgressKey));
   const [executionMode, setExecutionModeState] = useState<LLMExecutionMode>('development');
+  const [testNavigation, setTestNavigation] = useState(false);
+  const [stageJump, setStageJump] = useState<StageJump | null>(null);
   const [demoModePending, setDemoModePending] = useState(false);
   const [demoModeError, setDemoModeError] = useState<string | null>(null);
   const previousMode = useRef<LLMExecutionMode>('development');
@@ -76,6 +79,7 @@ function ConfiguredApp({ config, runtime }: { config: LoadedConfig; runtime: App
     runtime.getRuntimeState?.()
       .then(async (state) => {
         if (!active) return;
+        setTestNavigation(state.testNavigation === true);
         if (state.executionMode !== 'demo' || !runtime.activateDemo) {
           setExecutionModeState(state.executionMode);
           return;
@@ -207,6 +211,10 @@ function ConfiguredApp({ config, runtime }: { config: LoadedConfig; runtime: App
       demoModePending,
       demoModeError,
       toggleDemoMode,
+      testNavigation,
+      stageJump,
+      requestStageJump: setStageJump,
+      consumeStageJump: () => setStageJump(null),
     }}>
       <AppErrorBoundary session={session} onReset={resetSession}>
         <BrowserRouter>

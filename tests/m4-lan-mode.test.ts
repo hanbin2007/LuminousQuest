@@ -76,7 +76,7 @@ describe('M4 LAN mode', () => {
 
     const state = await app.request('/api/runtime', { headers: { cookie: cookie!.split(';')[0] } });
     expect(state.status).toBe(200);
-    expect(await state.json()).toEqual({ executionMode: 'development' });
+    expect(await state.json()).toEqual({ executionMode: 'development', testNavigation: false });
   });
 
   it('prints token-bearing URLs only for private non-loopback IPv4 addresses', () => {

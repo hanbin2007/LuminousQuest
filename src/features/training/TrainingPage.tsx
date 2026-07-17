@@ -361,6 +361,8 @@ export function TrainingPage() {
     session,
     setSession,
     setTrainingComplete,
+    stageJump,
+    consumeStageJump,
   } = useAppContext();
   const cases = useMemo(
     () => [...config.cases].sort((left, right) => left.sequence - right.sequence),
@@ -534,6 +536,20 @@ export function TrainingPage() {
     setFocusNodeId(null);
     setError(null);
   };
+
+  // 测试阶段手动跳转:切到目标案例,复位本轮状态(与进入下一案例同一路径)
+  useEffect(() => {
+    if (stageJump?.module !== 'training') return;
+    if (cases.some((entry) => entry.id === stageJump.caseId)) {
+      setDraft((current) => ({ ...current, activeCaseId: stageJump.caseId }));
+      setRound(null);
+      setTutorNotes({});
+      setFocusNodeId(null);
+      setComparison(null);
+      setError(null);
+    }
+    consumeStageJump();
+  }, [stageJump, cases, consumeStageJump]);
 
   const askTutor = async (nodeId: string) => {
     setTutorBusyNode(nodeId);
