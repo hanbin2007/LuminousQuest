@@ -1,7 +1,7 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { ConfigValidationError, loadAllConfig } from '../server/config/loader';
 import { loadAllPrompts } from '../server/prompts/loader';
@@ -18,6 +18,28 @@ describe('configuration loading', () => {
     expect(loaded.pretest.questions).toHaveLength(3);
     expect(loaded.cases).toHaveLength(1);
     expect(loaded.configVersion).toMatch(/^sha256:[a-f0-9]{64}$/);
+  });
+
+  it('warns about normalized fact alias collisions without rejecting the config', async () => {
+    const root = await createTemporaryDirectory();
+    await writeValidContentTree(root);
+    const file = path.join(root, 'config', 'scaffold-policy.json');
+    const policy = JSON.parse(await readFile(file, 'utf8'));
+    policy.extraction.factValueAliases['collision-a'] = ['ＳＨＡＲＥＤ'];
+    policy.extraction.factValueAliases['collision-b'] = ['shared'];
+    await writeFile(file, JSON.stringify(policy));
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    try {
+      const loaded = await loadAllConfig(root);
+      expect(loaded.scaffoldPolicy.extraction.factValueAliases).toHaveProperty('collision-a');
+      const messages = warning.mock.calls.flat().join('\n');
+      expect(messages).toContain('shared');
+      expect(messages).toContain('collision-a');
+      expect(messages).toContain('collision-b');
+    } finally {
+      warning.mockRestore();
+    }
   });
 
   it('derives one aggregate config digest from every config file', async () => {

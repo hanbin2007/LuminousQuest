@@ -1,11 +1,14 @@
 import { z } from 'zod';
 
 import type { LoadedConfig } from '../config/schemas';
+import {
+  factValueAliases,
+  normalizeComparisonText,
+} from '../fact-value-normalization';
 import { buildLearnerProfile } from '../scoring/profile';
 import {
   evaluateExtractedFacts,
   factsMatchRequirements,
-  normalizeFactValue,
 } from '../scoring/policy';
 import {
   type AssistanceMetadata,
@@ -497,6 +500,8 @@ export function recordStructuredTextAssessment(input: RecordStructuredTextAssess
   const referenceCaseId = input.referenceCaseId ?? input.answer.caseId;
   const trainingCase = input.config.cases.find((entry) => entry.id === referenceCaseId);
   if (!trainingCase) throw new Error(`No case configured for ${referenceCaseId}`);
+  const aliases = input.config.scaffoldPolicy.extraction.factValueAliases;
+  const commonTypos = input.config.scaffoldPolicy.extraction.citation.commonTypos;
   let session = appendTextAnswer(input.session, input.answer);
 
   const anchorEvents = new Map<string, {
@@ -513,7 +518,8 @@ export function recordStructuredTextAssessment(input: RecordStructuredTextAssess
     const outcome = [...correct].every(([id, value]) => {
       const extractedValue = extracted.get(id);
       return extractedValue !== undefined
-        && normalizeFactValue(extractedValue) === normalizeFactValue(value);
+        && factValueAliases(value, aliases, commonTypos)
+          .includes(normalizeComparisonText(extractedValue, commonTypos));
     }) ? 'hit' : 'miss';
     session = appendSessionEvent(session, {
       id: `${input.assessmentEventIdPrefix}-anchor-${index + 1}`,
@@ -574,6 +580,8 @@ export function recordStructuredTextAssessment(input: RecordStructuredTextAssess
       },
       requirements,
       policy: input.config.rubrics.policy,
+      aliases,
+      commonTypos,
     });
     const eventBase = {
       id: `${input.assessmentEventIdPrefix}-${index + 1}`,
@@ -665,6 +673,8 @@ export function recordStructuredTextAssessment(input: RecordStructuredTextAssess
                 return value;
               }),
             })),
+        aliases,
+        commonTypos,
       )
     );
     const decision = resolveRubricDecision({

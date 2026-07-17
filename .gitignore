@@ -6,6 +6,10 @@ release/
 .DS_Store
 coverage/
 recordings/cache/
+recordings/eval-candidates/
+!recordings/eval-candidates/
+recordings/eval-candidates/*
+!recordings/eval-candidates/README.md
 eval/recordings/**/*.json
 eval/reports/latest-*.md
 eval/cases/imported/*.pending.json

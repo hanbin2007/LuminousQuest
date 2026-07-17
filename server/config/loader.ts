@@ -13,6 +13,7 @@ import {
   rubricsSchema,
   scaffoldPolicySchema,
 } from '../../shared/config/schemas';
+import { normalizeComparisonText } from '../../shared/fact-value-normalization';
 import {
   analyzeEquation,
   canonicalizeEquation,
@@ -506,6 +507,29 @@ async function deriveConfigVersion(contentRoot: string) {
   return `sha256:${hash.digest('hex')}`;
 }
 
+function warnFactValueAliasCollisions(scaffoldPolicy: LoadedConfig['scaffoldPolicy']) {
+  const aliases = scaffoldPolicy.extraction.factValueAliases;
+  const commonTypos = scaffoldPolicy.extraction.citation.commonTypos;
+  const canonicalValuesByToken = new Map<string, Set<string>>();
+
+  for (const [canonicalValue, configuredAliases] of Object.entries(aliases)) {
+    for (const value of [canonicalValue, ...configuredAliases]) {
+      const token = normalizeComparisonText(value, commonTypos);
+      if (token.length === 0) continue;
+      const canonicalValues = canonicalValuesByToken.get(token) ?? new Set<string>();
+      canonicalValues.add(canonicalValue);
+      canonicalValuesByToken.set(token, canonicalValues);
+    }
+  }
+
+  for (const [token, canonicalValues] of canonicalValuesByToken) {
+    if (canonicalValues.size < 2) continue;
+    console.warn(
+      `[config] factValueAliases normalized token ${JSON.stringify(token)} maps to multiple canonical values: ${[...canonicalValues].sort().join(', ')}`,
+    );
+  }
+}
+
 export async function loadAllConfig(contentRoot: string): Promise<LoadedConfig> {
   for (let attempt = 0; attempt < 2; attempt += 1) {
     const configVersion = await deriveConfigVersion(contentRoot);
@@ -545,7 +569,10 @@ export async function loadAllConfig(contentRoot: string): Promise<LoadedConfig> 
       scaffoldPolicy,
     };
     await validateReferences(config, contentRoot, orderedCases.map((entry) => entry.file));
-    if (await deriveConfigVersion(contentRoot) === configVersion) return config;
+    if (await deriveConfigVersion(contentRoot) === configVersion) {
+      warnFactValueAliasCollisions(scaffoldPolicy);
+      return config;
+    }
   }
   throw new ConfigValidationError('config', '$', 'files changed while loading; retry the request');
 }

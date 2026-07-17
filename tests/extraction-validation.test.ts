@@ -203,26 +203,56 @@ describe('closed-set extraction validation', () => {
     })).toThrow(expect.objectContaining({ category: 'closed-set' }));
   });
 
-  it('requires evidence only for substantive assessments', async () => {
+  it('requires assessment evidence when substantive fact slots are declared', async () => {
     const config = await fixture();
-    const missingEvidence = extraction('电子由负极流向正极');
+    const answer = '电子由Zn极流向Cu极。';
+    const missingEvidence = groundedExtraction({
+      answer,
+      from: { value: 'Zn', quote: 'Zn', start: 3, end: 5 },
+      to: { value: 'Cu', quote: 'Cu', start: 8, end: 10 },
+    });
+    missingEvidence.assessments[0].errorIds = [];
     missingEvidence.assessments[0].evidence = [];
     expect(() => validateAssessmentExtraction({
       extraction: missingEvidence,
-      answer: '电子由负极流向正极',
+      answer,
       caseId: 'zinc-copper',
       targetNodeIds: ['P4'],
       config,
     })).toThrow(expect.objectContaining({ category: 'citation-mismatch' }));
 
-    missingEvidence.assessments[0].facts.response = 'blank';
+    const blank = extraction('placeholder');
+    blank.assessments[0].errorIds = [];
+    blank.assessments[0].facts.response = 'blank';
+    blank.assessments[0].facts.slots = [];
+    blank.assessments[0].evidence = [];
     expect(validateAssessmentExtraction({
-      extraction: missingEvidence,
+      extraction: blank,
       answer: '',
       caseId: 'zinc-copper',
       targetNodeIds: ['P4'],
       config,
     }).assessments[0].evidence).toEqual([]);
+  });
+
+  it('requires evidence for declared error ids even when fact slots are empty', async () => {
+    const config = await fixture();
+    const answer = '电子由负极流向正极';
+    const missingEvidence = extraction(answer);
+    missingEvidence.assessments[0].facts.slots = [];
+    missingEvidence.assessments[0].errorIds = ['P4-M1'];
+    missingEvidence.assessments[0].evidence = [];
+
+    expect(() => validateAssessmentExtraction({
+      extraction: missingEvidence,
+      answer,
+      caseId: 'zinc-copper',
+      targetNodeIds: ['P4'],
+      config,
+    })).toThrow(expect.objectContaining({
+      category: 'citation-mismatch',
+      retryable: true,
+    }));
   });
 
   it('overrides the provider response label with deterministic server classification', async () => {

@@ -15,6 +15,7 @@ import {
   recordStructuredTextAssessment,
   structuredAssessmentResponseSchema,
 } from '../shared/workflows/assessment';
+import { validateAssessmentExtraction } from '../shared/workflows/extraction-validation';
 
 class MemoryStorage implements Pick<Storage, 'getItem' | 'setItem' | 'removeItem'> {
   private readonly values = new Map<string, string>();
@@ -81,7 +82,7 @@ describe('deterministic workflow and persistence contracts', () => {
 
   it('records polarity as an independent event and computes following from facts', async () => {
     const { config, session } = await fixture();
-    const answer = '铜是负极，锌是正极；电子从铜流向锌。';
+    const answer = '铜极是负极，锌极是正极；电子从铜极流向锌极。';
     const quote = (value: string) => ({
       quote: value,
       start: answer.indexOf(value),
@@ -103,10 +104,10 @@ describe('deterministic workflow and persistence contracts', () => {
         anchors: [{
           anchorId: 'case-polarity',
           facts: [
-            { id: 'negative', value: 'Cu', evidence: quote('铜') },
-            { id: 'positive', value: 'Zn', evidence: quote('锌') },
+            { id: 'negative', value: 'Cu', evidence: quote('铜极') },
+            { id: 'positive', value: 'Zn', evidence: quote('锌极') },
           ],
-          evidence: [quote('铜是负极，锌是正极')],
+          evidence: [quote('铜极是负极，锌极是正极')],
         }],
         assessments: [{
           nodeId: 'P4',
@@ -124,11 +125,11 @@ describe('deterministic workflow and persistence contracts', () => {
               typo: 'none',
             },
             slots: [
-              { id: 'electron-from', value: 'Cu', evidence: quote('铜') },
-              { id: 'electron-to', value: 'Zn', evidence: quote('锌') },
+              { id: 'electron-from', value: '铜极', evidence: quote('铜极') },
+              { id: 'electron-to', value: '锌极', evidence: quote('锌极') },
             ],
           },
-          evidence: [quote('电子从铜流向锌')],
+          evidence: [quote('电子从铜极流向锌极')],
           assistance: { kind: 'none', rounds: 0 },
         }],
       },
@@ -158,9 +159,104 @@ describe('deterministic workflow and persistence contracts', () => {
     });
   });
 
-  it('normalizes polarity anchor fact values with the shared fact normalizer', async () => {
+  it.each([
+    { label: 'blank', answer: '  。！？ ', response: 'blank' as const },
+    { label: 'non-answer', answer: '不知道！', response: 'non-answer' as const },
+  ])('drops hallucinated misconception facts from a $label response', async ({
+    label,
+    answer,
+    response,
+  }) => {
     const { config, session } = await fixture();
-    const answer = 'Ｚｎ是负极，Ｃｕ是正极。';
+    const extraction = validateAssessmentExtraction({
+      extraction: {
+        anchors: [],
+        assessments: [{
+          nodeId: 'P4',
+          errorIds: ['P4-M1'],
+          facts: {
+            response: 'substantive',
+            terminology: 'model',
+            syllabus: 'within',
+            contradiction: false,
+            typo: 'none',
+            slots: [{
+              id: 'electron-from',
+              value: 'Zn',
+              evidence: { quote: 'Zn', start: 0, end: 2 },
+            }],
+          },
+          evidence: [],
+          assistance: { kind: 'none', rounds: 0 },
+        }],
+      },
+      answer,
+      caseId: 'zinc-copper',
+      targetNodeIds: ['P4'],
+      config,
+    });
+    expect(extraction.assessments[0]).toMatchObject({
+      errorIds: [],
+      facts: { response, slots: [] },
+    });
+
+    const result = recordStructuredTextAssessment({
+      session,
+      config,
+      answer: {
+        id: `answer-${label}`,
+        occurredAt: '2026-07-15T12:01:00.000Z',
+        caseId: 'zinc-copper',
+        stageId: 'analysis',
+        attemptId: `attempt-${label}`,
+        questionId: 'process',
+        value: answer,
+      },
+      extraction,
+      provenance: {
+        promptId: 'structured-assessment',
+        promptVersion: 'prompt.v2',
+        cacheKey: `cache-${label}`,
+        model: 'mock-v2',
+      },
+      assessmentEventIdPrefix: `non-response-${label}`,
+      assessedAt: '2026-07-15T12:01:01.000Z',
+    });
+    const event = result.session.events.find((entry) => entry.kind === 'assessment.completed');
+
+    expect(event).toMatchObject({ score: { status: 'unanswered' } });
+    expect(event).not.toHaveProperty('misconceptionIds');
+  });
+
+  it.each([
+    {
+      label: 'full-width canonical values',
+      answer: 'Ｚｎ是负极，Ｃｕ是正极。',
+      negativeValue: 'ｚｎ',
+      negativeQuote: 'Ｚｎ',
+      positiveValue: 'ｃｕ',
+      positiveQuote: 'Ｃｕ',
+    },
+    {
+      label: 'configured Chinese aliases',
+      answer: '锌极是负极，铜极是正极。',
+      negativeValue: '锌极',
+      negativeQuote: '锌极',
+      positiveValue: '铜极',
+      positiveQuote: '铜极',
+    },
+  ])('normalizes polarity anchor facts from $label', async ({
+    answer,
+    negativeValue,
+    negativeQuote,
+    positiveValue,
+    positiveQuote,
+  }) => {
+    const { config, session } = await fixture();
+    const evidence = (quote: string) => {
+      const start = answer.indexOf(quote);
+      return { quote, start, end: start + quote.length };
+    };
     const result = recordStructuredTextAssessment({
       session,
       config,
@@ -177,8 +273,8 @@ describe('deterministic workflow and persistence contracts', () => {
         anchors: [{
           anchorId: 'case-polarity',
           facts: [
-            { id: 'negative', value: 'ｚｎ', evidence: { quote: 'Ｚｎ', start: 0, end: 2 } },
-            { id: 'positive', value: 'ｃｕ', evidence: { quote: 'Ｃｕ', start: 6, end: 8 } },
+            { id: 'negative', value: negativeValue, evidence: evidence(negativeQuote) },
+            { id: 'positive', value: positiveValue, evidence: evidence(positiveQuote) },
           ],
           evidence: [{ quote: answer, start: 0, end: answer.length }],
         }],
@@ -200,8 +296,8 @@ describe('deterministic workflow and persistence contracts', () => {
             slots: [
               {
                 id: 'reducing-agent',
-                value: 'ｚｎ',
-                evidence: { quote: 'Ｚｎ', start: 0, end: 2 },
+                value: negativeValue,
+                evidence: evidence(negativeQuote),
               },
               {
                 id: 'oxidizing-agent',
@@ -226,6 +322,9 @@ describe('deterministic workflow and persistence contracts', () => {
 
     expect(result.session.events.find((event) => event.kind === 'polarity.assessed')).toMatchObject({
       outcome: 'hit',
+    });
+    expect(result.session.events.find((event) => event.kind === 'assessment.completed')).toMatchObject({
+      objectiveOutcome: 'hit',
     });
   });
 

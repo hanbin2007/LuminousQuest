@@ -14,9 +14,14 @@ import {
   createClosedExtractionSchema,
   runAssessmentExtraction,
 } from '../server/workflows/assessment-extraction';
+import { evaluateExtractedFacts } from '../shared/scoring/policy';
+import { createSession, sessionConfigVersions } from '../shared/session';
+import { recordStructuredTextAssessment } from '../shared/workflows/assessment';
+import { validateAssessmentExtraction } from '../shared/workflows/extraction-validation';
 import { createTemporaryDirectory } from './helpers/content-fixture';
 
 const answer = '电子由Zn极流向Cu极。';
+const p4OnlyAnswer = '电子由Zn极经外电路流向Cu极；盐桥阴离子移向Zn侧，阳离子移向Cu侧。';
 
 function structuredResponse(quote = answer): LLMResponse {
   const extraction = {
@@ -46,6 +51,55 @@ function structuredResponse(quote = answer): LLMResponse {
       evidence: [{ quote, start: 0, end: quote.length }],
       assistance: { kind: 'none', rounds: 0 },
     }],
+  };
+  return { content: JSON.stringify(extraction), structured: extraction, model: 'fixture-v1' };
+}
+
+function p4OnlyStructuredResponse(): LLMResponse {
+  const evidence = (quote: string, fromIndex = 0) => {
+    const start = p4OnlyAnswer.indexOf(quote, fromIndex);
+    if (start < 0) throw new Error(`Missing test quote ${quote}`);
+    return { quote, start, end: start + quote.length };
+  };
+  const secondZn = p4OnlyAnswer.indexOf('Zn', p4OnlyAnswer.indexOf('Zn') + 1);
+  const secondCu = p4OnlyAnswer.indexOf('Cu', p4OnlyAnswer.indexOf('Cu') + 1);
+  const extraction = {
+    anchors: [],
+    assessments: [
+      {
+        nodeId: 'P4',
+        errorIds: [],
+        facts: {
+          response: 'substantive',
+          terminology: 'model',
+          syllabus: 'within',
+          contradiction: false,
+          typo: 'none',
+          slots: [
+            { id: 'electron-from', value: 'Zn', evidence: evidence('Zn') },
+            { id: 'electron-to', value: 'Cu', evidence: evidence('Cu') },
+            { id: 'anion-toward', value: 'Zn', evidence: evidence('Zn', secondZn) },
+            { id: 'cation-toward', value: 'Cu', evidence: evidence('Cu', secondCu) },
+          ],
+        },
+        evidence: [{ quote: p4OnlyAnswer, start: 0, end: p4OnlyAnswer.length }],
+        assistance: { kind: 'none', rounds: 0 },
+      },
+      {
+        nodeId: 'P5',
+        errorIds: [],
+        facts: {
+          response: 'substantive',
+          terminology: 'model',
+          syllabus: 'within',
+          contradiction: false,
+          typo: 'none',
+          slots: [],
+        },
+        evidence: [],
+        assistance: { kind: 'none', rounds: 0 },
+      },
+    ],
   };
   return { content: JSON.stringify(extraction), structured: extraction, model: 'fixture-v1' };
 }
@@ -123,6 +177,106 @@ describe('production assessment extraction pipeline', () => {
         assessments: [{ nodeId: 'P4', evidence: [{ quote: answer }] }],
       },
     });
+  });
+
+  it('keeps covered P4 scoring when a substantive answer does not address P5', async () => {
+    const root = await createTemporaryDirectory();
+    let attempts = 0;
+    const response = p4OnlyStructuredResponse();
+    const provider: LLMProvider = {
+      id: 'partial-node-coverage',
+      async chat() { throw new Error('not used'); },
+      async vision() { throw new Error('not used'); },
+      async structured() {
+        attempts += 1;
+        return structuredClone(response);
+      },
+    };
+    const parts = await fixture(root, new Map([[provider.id, provider]]));
+
+    const validated = validateAssessmentExtraction({
+      extraction: response.structured,
+      answer: p4OnlyAnswer,
+      caseId: 'zinc-copper',
+      targetNodeIds: ['P4', 'P5'],
+      config: parts.config,
+    });
+    expect(validated.assessments.find((assessment) => assessment.nodeId === 'P5'))
+      .toMatchObject({ facts: { response: 'substantive', slots: [] }, evidence: [] });
+
+    const p5Requirements = parts.config.cases
+      .find((entry) => entry.id === 'zinc-copper')
+      ?.evidencePaths.find((entry) => entry.nodeId === 'P5' && entry.source === 'answer')
+      ?.factRequirements;
+    if (!p5Requirements) throw new Error('Missing P5 test requirements');
+    const p5 = validated.assessments.find((assessment) => assessment.nodeId === 'P5');
+    if (!p5?.facts.verified) throw new Error('Expected server-verified P5 facts');
+    expect(evaluateExtractedFacts({
+      facts: {
+        response: p5.facts.response,
+        verified: p5.facts.verified,
+        slots: p5.facts.slots,
+      },
+      requirements: p5Requirements,
+      policy: parts.config.rubrics.policy,
+      aliases: parts.config.scaffoldPolicy.extraction.factValueAliases,
+      commonTypos: parts.config.scaffoldPolicy.extraction.citation.commonTypos,
+    }).status).toBe('miss');
+
+    const extractionResult = await runAssessmentExtraction({
+      ...runInput(parts),
+      answer: p4OnlyAnswer,
+      targetNodeIds: ['P4', 'P5'],
+      provider: provider.id,
+    });
+    expect(attempts).toBe(1);
+    expect(extractionResult).toMatchObject({ status: 'extracted', source: 'provider' });
+    if (extractionResult.status !== 'extracted') throw new Error('Expected extraction without fallback');
+
+    const session = createSession({
+      id: 'session-partial-node-coverage',
+      anonymousStudentId: 'anon-A1B2C3D4',
+      now: '2026-07-15T12:00:00.000Z',
+      configVersions: sessionConfigVersions(parts.config),
+    });
+    const recorded = recordStructuredTextAssessment({
+      session,
+      config: parts.config,
+      answer: {
+        id: 'answer-partial-node-coverage',
+        occurredAt: '2026-07-15T12:01:00.000Z',
+        caseId: 'zinc-copper',
+        stageId: 'analysis',
+        attemptId: 'attempt-partial-node-coverage',
+        questionId: 'zinc-copper:analysis',
+        value: p4OnlyAnswer,
+      },
+      extraction: extractionResult.extraction,
+      provenance: {
+        promptId: parts.prompt.id,
+        promptVersion: parts.prompt.version,
+        cacheKey: extractionResult.cacheKey,
+        model: extractionResult.model,
+      },
+      assessmentEventIdPrefix: 'partial-node-coverage',
+      assessedAt: '2026-07-15T12:01:01.000Z',
+    });
+    const assessments = recorded.session.events.filter((event) =>
+      event.kind === 'assessment.completed');
+    expect(assessments).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        nodeId: 'P4',
+        objectiveOutcome: 'hit',
+        extraction: expect.objectContaining({ status: 'assessed' }),
+        score: expect.objectContaining({ status: 'scored', outcome: 'hit' }),
+      }),
+      expect.objectContaining({
+        nodeId: 'P5',
+        objectiveOutcome: 'miss',
+        extraction: expect.objectContaining({ status: 'assessed', evidence: [] }),
+        score: expect.objectContaining({ status: 'scored', outcome: 'miss' }),
+      }),
+    ]));
   });
 
   it('exposes classification evidence but not server verification flags to providers', async () => {

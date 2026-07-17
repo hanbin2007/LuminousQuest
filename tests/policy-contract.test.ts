@@ -31,6 +31,17 @@ const completeFacts: ExtractedAssessmentFacts = {
 
 const oneRequirement = [{ id: 'electron-from', acceptedValues: ['Zn'] }];
 
+function evaluateFacts(
+  config: Awaited<ReturnType<typeof loadAllConfig>>,
+  input: Omit<Parameters<typeof evaluateExtractedFacts>[0], 'aliases' | 'commonTypos'>,
+) {
+  return evaluateExtractedFacts({
+    ...input,
+    aliases: config.scaffoldPolicy.extraction.factValueAliases,
+    commonTypos: config.scaffoldPolicy.extraction.citation.commonTypos,
+  });
+}
+
 function fullBuilderGraph(): BuilderGraph {
   return {
     components: [
@@ -149,12 +160,59 @@ describe('runtime adjudication policy contracts', () => {
   it('§1: changing outcomeScale.mode changes incomplete-fact behavior', async () => {
     const config = await loadAllConfig(process.cwd());
     const requirements = [...oneRequirement, { id: 'electron-to', acceptedValues: ['Cu'] }];
-    expect(evaluateExtractedFacts({ facts: completeFacts, requirements, policy: config.rubrics.policy }).status)
+    expect(evaluateFacts(config, { facts: completeFacts, requirements, policy: config.rubrics.policy }).status)
       .toBe('partial');
     const changed = structuredClone(config.rubrics.policy);
     changed.outcomeScale.mode = 'two-state';
-    expect(evaluateExtractedFacts({ facts: completeFacts, requirements, policy: changed }).status)
+    expect(evaluateFacts(config, { facts: completeFacts, requirements, policy: changed }).status)
       .toBe('miss');
+  });
+
+  it.each([
+    {
+      label: 'configured Chinese alias',
+      value: '锌极',
+      status: 'hit',
+      matchedRequirementIds: ['electron-from'],
+      missingRequirementIds: [],
+    },
+    {
+      label: 'unconfigured Chinese value',
+      value: '银极',
+      status: 'miss',
+      matchedRequirementIds: [],
+      missingRequirementIds: ['electron-from'],
+    },
+    {
+      label: 'configured alias with extra text',
+      value: '锌极错误',
+      status: 'miss',
+      matchedRequirementIds: [],
+      missingRequirementIds: ['electron-from'],
+    },
+    {
+      label: 'canonical value',
+      value: 'Zn',
+      status: 'hit',
+      matchedRequirementIds: ['electron-from'],
+      missingRequirementIds: [],
+    },
+  ])('matches fact requirements conservatively for a $label', async ({
+    value,
+    status,
+    matchedRequirementIds,
+    missingRequirementIds,
+  }) => {
+    const config = await loadAllConfig(process.cwd());
+
+    expect(evaluateFacts(config, {
+      facts: {
+        ...completeFacts,
+        slots: [{ id: 'electron-from', value }],
+      },
+      requirements: oneRequirement,
+      policy: config.rubrics.policy,
+    })).toMatchObject({ status, matchedRequirementIds, missingRequirementIds });
   });
 
   it('§2: changing followingError.strategy changes downstream credit', async () => {
@@ -182,15 +240,15 @@ describe('runtime adjudication policy contracts', () => {
       ...completeFacts,
       verified: { ...completeFacts.verified, colloquial: true },
     };
-    expect(evaluateExtractedFacts({ facts, requirements: oneRequirement, policy: config.rubrics.policy }).status)
+    expect(evaluateFacts(config, { facts, requirements: oneRequirement, policy: config.rubrics.policy }).status)
       .toBe('hit');
     const changed = structuredClone(config.rubrics.policy);
     changed.terminology.colloquialCorrectOutcome = 'partial';
-    expect(evaluateExtractedFacts({ facts, requirements: oneRequirement, policy: changed }).status)
+    expect(evaluateFacts(config, { facts, requirements: oneRequirement, policy: changed }).status)
       .toBe('partial');
     const strictTerms = structuredClone(config.rubrics.policy);
     strictTerms.terminology.requireModelTermsForHit = true;
-    expect(evaluateExtractedFacts({ facts, requirements: oneRequirement, policy: strictTerms }).status)
+    expect(evaluateFacts(config, { facts, requirements: oneRequirement, policy: strictTerms }).status)
       .toBe('partial');
   });
 
@@ -200,11 +258,11 @@ describe('runtime adjudication policy contracts', () => {
       ...completeFacts,
       verified: { ...completeFacts.verified, beyondSyllabus: true },
     };
-    expect(evaluateExtractedFacts({ facts, requirements: oneRequirement, policy: config.rubrics.policy }).status)
+    expect(evaluateFacts(config, { facts, requirements: oneRequirement, policy: config.rubrics.policy }).status)
       .toBe('hit');
     const changed = structuredClone(config.rubrics.policy);
     changed.beyondSyllabus.correctOutcome = 'partial';
-    expect(evaluateExtractedFacts({ facts, requirements: oneRequirement, policy: changed }).status)
+    expect(evaluateFacts(config, { facts, requirements: oneRequirement, policy: changed }).status)
       .toBe('partial');
   });
 
@@ -214,22 +272,22 @@ describe('runtime adjudication policy contracts', () => {
       ...completeFacts,
       verified: { ...completeFacts.verified, contradiction: true },
     };
-    expect(evaluateExtractedFacts({ facts, requirements: oneRequirement, policy: config.rubrics.policy }).status)
+    expect(evaluateFacts(config, { facts, requirements: oneRequirement, policy: config.rubrics.policy }).status)
       .toBe('miss');
     const changed = structuredClone(config.rubrics.policy);
     changed.contradiction.outcome = 'partial';
-    expect(evaluateExtractedFacts({ facts, requirements: oneRequirement, policy: changed }).status)
+    expect(evaluateFacts(config, { facts, requirements: oneRequirement, policy: changed }).status)
       .toBe('partial');
   });
 
   it('§6: changing nonResponse.status changes blank-answer classification', async () => {
     const config = await loadAllConfig(process.cwd());
     const facts = { ...completeFacts, response: 'blank' as const, slots: [] };
-    expect(evaluateExtractedFacts({ facts, requirements: oneRequirement, policy: config.rubrics.policy }).status)
+    expect(evaluateFacts(config, { facts, requirements: oneRequirement, policy: config.rubrics.policy }).status)
       .toBe('unanswered');
     const changed = structuredClone(config.rubrics.policy);
     changed.nonResponse.status = 'miss';
-    expect(evaluateExtractedFacts({ facts, requirements: oneRequirement, policy: changed }).status)
+    expect(evaluateFacts(config, { facts, requirements: oneRequirement, policy: changed }).status)
       .toBe('miss');
   });
 
@@ -239,15 +297,15 @@ describe('runtime adjudication policy contracts', () => {
       ...completeFacts,
       verified: { ...completeFacts.verified, typo: 'unambiguous' as const },
     };
-    expect(evaluateExtractedFacts({ facts, requirements: oneRequirement, policy: config.rubrics.policy }))
+    expect(evaluateFacts(config, { facts, requirements: oneRequirement, policy: config.rubrics.policy }))
       .toMatchObject({ status: 'hit', warnings: ['unambiguous-typo'] });
     const changed = structuredClone(config.rubrics.policy);
     changed.typos.unambiguousStrategy = 'penalize';
-    expect(evaluateExtractedFacts({ facts, requirements: oneRequirement, policy: changed }).status)
+    expect(evaluateFacts(config, { facts, requirements: oneRequirement, policy: changed }).status)
       .toBe('partial');
     const ignored = structuredClone(config.rubrics.policy);
     ignored.typos.unambiguousStrategy = 'ignore';
-    expect(evaluateExtractedFacts({ facts, requirements: oneRequirement, policy: ignored }))
+    expect(evaluateFacts(config, { facts, requirements: oneRequirement, policy: ignored }))
       .toMatchObject({ status: 'hit', warnings: [] });
   });
 

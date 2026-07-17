@@ -226,7 +226,9 @@ async function copyExternalContent() {
       recursive: true,
       filter(source) {
         const relative = path.relative(projectRoot, source);
-        return !relative.startsWith(path.join('recordings', 'cache')) && !source.endsWith('.DS_Store');
+        return !relative.startsWith(path.join('recordings', 'cache'))
+          && !relative.startsWith(path.join('recordings', 'eval-candidates'))
+          && !source.endsWith('.DS_Store');
       },
     });
   }
@@ -305,6 +307,7 @@ async function main() {
     minify: true,
     sourcemap: false,
     logLevel: 'info',
+    external: ['@anthropic-ai/claude-agent-sdk'],
   });
 
   const assets = Object.fromEntries(

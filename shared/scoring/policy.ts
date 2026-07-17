@@ -1,4 +1,8 @@
 import type { RubricsConfig } from '../config/schemas';
+import {
+  factValueAliases,
+  normalizeComparisonText,
+} from '../fact-value-normalization';
 
 export type MasteryOutcome = 'hit' | 'hit-with-help' | 'partial' | 'miss';
 export type PolicyAssessmentStatus = MasteryOutcome | 'unanswered' | 'needs-review';
@@ -49,14 +53,20 @@ export function evaluateExtractedFacts(input: {
   facts: ExtractedAssessmentFacts;
   requirements: readonly FactRequirement[];
   policy: RubricsConfig['policy'];
+  aliases: Record<string, string[]>;
+  commonTypos: Record<string, string>;
 }): PolicyEvaluation {
-  const { facts, requirements, policy } = input;
-  const slots = new Map(facts.slots.map((slot) => [slot.id, normalizeFactValue(slot.value)]));
+  const { facts, requirements, policy, aliases, commonTypos } = input;
+  const slots = new Map(facts.slots.map((slot) => [
+    slot.id,
+    normalizeComparisonText(slot.value, commonTypos),
+  ]));
   const matchedRequirementIds = requirements
     .filter((requirement) => {
       const actual = slots.get(requirement.id);
       return actual !== undefined
-        && requirement.acceptedValues.some((value) => normalizeFactValue(value) === actual);
+        && requirement.acceptedValues.some((value) =>
+          factValueAliases(value, aliases, commonTypos).includes(actual));
     })
     .map((requirement) => requirement.id);
   const matched = new Set(matchedRequirementIds);
@@ -117,11 +127,17 @@ export function evaluateExtractedFacts(input: {
 export function factsMatchRequirements(
   facts: Pick<ExtractedAssessmentFacts, 'slots'>,
   requirements: readonly FactRequirement[],
+  aliases: Record<string, string[]>,
+  commonTypos: Record<string, string>,
 ) {
-  const slots = new Map(facts.slots.map((slot) => [slot.id, normalizeFactValue(slot.value)]));
+  const slots = new Map(facts.slots.map((slot) => [
+    slot.id,
+    normalizeComparisonText(slot.value, commonTypos),
+  ]));
   return requirements.length > 0 && requirements.every((requirement) => {
     const actual = slots.get(requirement.id);
     return actual !== undefined
-      && requirement.acceptedValues.some((value) => normalizeFactValue(value) === actual);
+      && requirement.acceptedValues.some((value) =>
+        factValueAliases(value, aliases, commonTypos).includes(actual));
   });
 }
