@@ -2,7 +2,6 @@ import {
   Cable,
   CircleDot,
   MousePointer2,
-  Plus,
   Trash2,
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -19,7 +18,7 @@ import {
   type BuilderTopologyAssessment,
   type BuilderConnectionKind,
 } from '../../../shared/scoring/topology';
-import { presentationFor } from './presentation';
+import { electrodeImageFor, presentationFor } from './presentation';
 import { previewCircuitClosure } from './topology-preview';
 
 const dragMime = 'application/x-lq-component';
@@ -52,6 +51,29 @@ interface TopologyBuilderProps {
   onSubmit: (value: BuilderAnswer, assessment: BuilderTopologyAssessment) => void;
 }
 
+const shelfGroups = [
+  { id: 'electrode', label: '电极' },
+  { id: 'link', label: '连接' },
+  { id: 'medium', label: '介质' },
+  { id: 'container', label: '容器' },
+  { id: 'marker', label: '标注' },
+] as const;
+
+type ShelfGroupId = (typeof shelfGroups)[number]['id'];
+
+/** 按表面语义归组(干扰项按其可选角色落组,绝不暴露 distractor 身份)。 */
+function shelfGroupFor(component: PretestConfig['builder']['components'][number]): ShelfGroupId {
+  switch (component.kind) {
+    case 'electrode': return 'electrode';
+    case 'electron-conductor': return 'link';
+    case 'ion-conductor': return 'medium';
+    case 'container': return 'container';
+    case 'direction-marker': return 'marker';
+    default:
+      return component.allowedRoles?.includes('ion-conductor') ? 'medium' : 'link';
+  }
+}
+
 const materialOptions = [
   { id: 'generic-conductor', label: '通用导体', specificity: 'generic' as const },
   { id: 'Zn', label: '锌 Zn', specificity: 'specific' as const },
@@ -79,7 +101,7 @@ function snapped(value: number) {
 
 export function TopologyBuilder({ config, initialValue, onChange, onSubmit }: TopologyBuilderProps) {
   const [value, setValue] = useState<BuilderAnswer>(initialValue ?? { components: [], connections: [] });
-  const [connectionKind, setConnectionKind] = useState<BuilderConnectionKind>('electron-path');
+  const [tool, setTool] = useState<'selection' | BuilderConnectionKind>('electron-path');
   const [carrier, setCarrier] = useState<BuilderCarrier>('cation');
   const [showDirection, setShowDirection] = useState(true);
   const [connectionStart, setConnectionStart] = useState<string | null>(null);
@@ -158,6 +180,8 @@ export function TopologyBuilder({ config, initialValue, onChange, onSubmit }: To
       setConnectionStart(null);
       return;
     }
+    if (tool === 'selection') return;
+    const connectionKind = tool;
     const nextCarrier = showDirection
       ? connectionKind === 'electron-path' ? 'electron' : carrier
       : undefined;
@@ -207,87 +231,67 @@ export function TopologyBuilder({ config, initialValue, onChange, onSubmit }: To
   };
 
   return (
-    <div className="builder-layout">
-      <aside className="component-tray" aria-label="组件托盘">
-        <h3>组件托盘</h3>
-        <div className="component-tray__list">
-          {config.components.map((component) => {
-            const presentation = presentationFor(component.id);
-            const Icon = presentation.Icon;
-            return (
-              <button
-                className="tray-item"
-                draggable
-                key={component.id}
-                onClick={() => addComponent(component.id)}
-                onDragStart={(event) => {
-                  event.dataTransfer.effectAllowed = 'copy';
-                  event.dataTransfer.setData(dragMime, component.id);
-                }}
-                type="button"
-                aria-label={`添加 ${component.label}`}
-              >
-                <span className="tray-item__visual" aria-hidden="true">
-                  {presentation.image
-                    ? <img src={presentation.image} alt="" />
-                    : Icon ? <Icon /> : <CircleDot />}
-                </span>
-                <span>
-                  <strong>{component.label}</strong>
-                </span>
-                <Plus className="tray-item__add" aria-hidden="true" />
-              </button>
-            );
-          })}
+    <div className="bench">
+      <div className="bench__topbar">
+        <div className="segmented-control bench__tools" aria-label="路径类型">
+          <button
+            className={tool === 'selection' ? 'is-active' : ''}
+            onClick={() => { setTool('selection'); setConnectionStart(null); }}
+            type="button"
+            aria-pressed={tool === 'selection'}
+          >
+            <MousePointer2 aria-hidden="true" />选择
+          </button>
+          <button
+            className={tool === 'electron-path' ? 'is-active' : ''}
+            onClick={() => { setTool('electron-path'); setConnectionStart(null); }}
+            type="button"
+            aria-pressed={tool === 'electron-path'}
+          >
+            <Cable aria-hidden="true" />电子路径
+          </button>
+          <button
+            className={tool === 'ion-path' ? 'is-active' : ''}
+            onClick={() => { setTool('ion-path'); setConnectionStart(null); }}
+            type="button"
+            aria-pressed={tool === 'ion-path'}
+          >
+            <CircleDot aria-hidden="true" />离子路径
+          </button>
         </div>
-      </aside>
-
-      <section className="builder-workspace" aria-label="搭建画布">
-        <div className="builder-toolbar" aria-label="连线工具">
-          <div className="segmented-control" aria-label="路径类型">
-            <button
-              className={connectionKind === 'electron-path' ? 'is-active' : ''}
-              onClick={() => { setConnectionKind('electron-path'); setConnectionStart(null); }}
-              type="button"
-              aria-pressed={connectionKind === 'electron-path'}
-            >
-              <Cable aria-hidden="true" />电子路径
-            </button>
-            <button
-              className={connectionKind === 'ion-path' ? 'is-active' : ''}
-              onClick={() => { setConnectionKind('ion-path'); setConnectionStart(null); }}
-              type="button"
-              aria-pressed={connectionKind === 'ion-path'}
-            >
-              <CircleDot aria-hidden="true" />离子路径
-            </button>
-          </div>
-          <label className="toggle-control">
-            <input
-              type="checkbox"
-              checked={showDirection}
-              onChange={(event) => setShowDirection(event.target.checked)}
-            />
-            标注方向
+        <label className="toggle-control">
+          <input
+            type="checkbox"
+            checked={showDirection}
+            onChange={(event) => setShowDirection(event.target.checked)}
+          />
+          标注方向
+        </label>
+        {tool === 'ion-path' ? (
+          <label className="select-control">
+            <span>方向载流粒子</span>
+            <select value={carrier} onChange={(event) => setCarrier(event.target.value as BuilderCarrier)}>
+              <option value="cation">阳离子</option>
+              <option value="anion">阴离子</option>
+            </select>
           </label>
-          {connectionKind === 'ion-path' ? (
-            <label className="select-control">
-              <span>方向载流粒子</span>
-              <select value={carrier} onChange={(event) => setCarrier(event.target.value as BuilderCarrier)}>
-                <option value="cation">阳离子</option>
-                <option value="anion">阴离子</option>
-              </select>
-            </label>
-          ) : null}
-          <span className="builder-toolbar__selection" aria-live="polite">
-            <MousePointer2 aria-hidden="true" />
-            {connectionStart ? '选择终点' : '选择起点'}
-          </span>
+        ) : null}
+        <span className="bench__hint" aria-live="polite">
+          {tool === 'selection'
+            ? '拖动摆放器材'
+            : connectionStart ? '选择终点' : '选择起点'}
+        </span>
+        <div className="topology-preview bench__preview" aria-live="polite">
+          <span data-closed={preview.electronClosed}>{preview.electronClosed ? '电子路径已闭合' : '电子路径未闭合'}</span>
+          <span data-closed={preview.ionClosed}>{preview.ionClosed ? '离子路径已闭合' : '离子路径未闭合'}</span>
         </div>
+        <button className="primary-button builder-submit" onClick={submit} type="button">提交搭建</button>
+      </div>
 
+      <div className="bench__stage">
         <div
           ref={canvasRef}
-          className="builder-canvas"
+          className="builder-canvas bench__canvas"
           data-snap-flash={snapFlash ? 'true' : 'false'}
           data-testid="builder-canvas"
           style={{ '--builder-content-height': `${canvasContentHeight}px` } as React.CSSProperties}
@@ -313,14 +317,18 @@ export function TopologyBuilder({ config, initialValue, onChange, onSubmit }: To
               const from = componentByInstance.get(connection.from);
               const to = componentByInstance.get(connection.to);
               if (!from || !to) return null;
+              const x1 = from.x + nodeWidth / 2;
+              const y1 = from.y + nodeHeight / 2 - 24;
+              const x2 = to.x + nodeWidth / 2;
+              const y2 = to.y + nodeHeight / 2 - 24;
+              const sag = connection.kind === 'electron-path'
+                ? Math.max(y1, y2) + Math.min(72, Math.abs(x2 - x1) * 0.22 + 24)
+                : (y1 + y2) / 2;
               return (
-                <line
+                <path
                   className={`builder-connection builder-connection--${connection.kind}`}
                   key={connection.id}
-                  x1={from.x + nodeWidth / 2}
-                  y1={from.y + nodeHeight / 2}
-                  x2={to.x + nodeWidth / 2}
-                  y2={to.y + nodeHeight / 2}
+                  d={`M ${x1} ${y1} Q ${(x1 + x2) / 2} ${sag} ${x2} ${y2}`}
                   markerEnd={connection.carrier
                     ? connection.kind === 'electron-path'
                       ? 'url(#builder-arrow-electron)'
@@ -354,6 +362,9 @@ export function TopologyBuilder({ config, initialValue, onChange, onSubmit }: To
             if (!definition) return null;
             const presentation = presentationFor(component.componentId);
             const Icon = presentation.Icon;
+            const image = definition.kind === 'electrode'
+              ? electrodeImageFor(component.materialBinding?.materialId)
+              : presentation.image;
             const allowedRoles = configuredRoleWhitelist(definition);
             return (
               <div
@@ -373,60 +384,64 @@ export function TopologyBuilder({ config, initialValue, onChange, onSubmit }: To
                   aria-label={`画布组件 ${definition.label}`}
                 >
                   <span className="builder-node__visual" aria-hidden="true">
-                    {presentation.image
-                      ? <img src={presentation.image} alt="" />
+                    {image
+                      ? <img src={image} alt="" draggable={false} />
                       : Icon ? <Icon /> : <CircleDot />}
                   </span>
                   <strong>{definition.label}</strong>
                 </button>
-                {allowedRoles.length > 0 ? (
-                  <label className="builder-node__role">
-                    <span>功能</span>
-                    <select
-                      aria-label={`${definition.label} 的功能角色`}
-                      value={component.assignedRole ?? ''}
-                      onChange={(event) => {
-                        const assignedRole = event.target.value as BuilderGraphComponent['assignedRole'] | '';
-                        update({
-                          ...value,
-                          components: value.components.map((entry) => {
-                            if (entry.instanceId !== component.instanceId) return entry;
-                            const { assignedRole: _assignedRole, ...unassigned } = entry;
-                            return assignedRole ? { ...unassigned, assignedRole } : unassigned;
-                          }),
-                        });
-                      }}
-                    >
-                      <option value="">不指定</option>
-                      {allowedRoles.map((role) => (
-                        <option key={role} value={role}>{roleLabels[role]}</option>
-                      ))}
-                    </select>
-                  </label>
-                ) : null}
-                {definition.kind === 'electrode' ? (
-                  <label className="builder-node__material">
-                    <span>材料</span>
-                    <select
-                      value={component.materialBinding?.materialId ?? 'generic-conductor'}
-                      onChange={(event) => {
-                        const selected = materialOptions.find((option) => option.id === event.target.value)!;
-                        update({
-                          ...value,
-                          components: value.components.map((entry) => entry.instanceId === component.instanceId
-                            ? { ...entry, materialBinding: {
-                                materialId: selected.id,
-                                specificity: selected.specificity,
-                              } }
-                            : entry),
-                        });
-                      }}
-                    >
-                      {materialOptions.map((option) => (
-                        <option key={option.id} value={option.id}>{option.label}</option>
-                      ))}
-                    </select>
-                  </label>
+                {allowedRoles.length > 0 || definition.kind === 'electrode' ? (
+                  <div className="builder-node__tags">
+                    {allowedRoles.length > 0 ? (
+                      <label className="builder-node__role">
+                        <span>功能</span>
+                        <select
+                          aria-label={`${definition.label} 的功能角色`}
+                          value={component.assignedRole ?? ''}
+                          onChange={(event) => {
+                            const assignedRole = event.target.value as BuilderGraphComponent['assignedRole'] | '';
+                            update({
+                              ...value,
+                              components: value.components.map((entry) => {
+                                if (entry.instanceId !== component.instanceId) return entry;
+                                const { assignedRole: _assignedRole, ...unassigned } = entry;
+                                return assignedRole ? { ...unassigned, assignedRole } : unassigned;
+                              }),
+                            });
+                          }}
+                        >
+                          <option value="">不指定</option>
+                          {allowedRoles.map((role) => (
+                            <option key={role} value={role}>{roleLabels[role]}</option>
+                          ))}
+                        </select>
+                      </label>
+                    ) : null}
+                    {definition.kind === 'electrode' ? (
+                      <label className="builder-node__material">
+                        <span>材料</span>
+                        <select
+                          value={component.materialBinding?.materialId ?? 'generic-conductor'}
+                          onChange={(event) => {
+                            const selected = materialOptions.find((option) => option.id === event.target.value)!;
+                            update({
+                              ...value,
+                              components: value.components.map((entry) => entry.instanceId === component.instanceId
+                                ? { ...entry, materialBinding: {
+                                    materialId: selected.id,
+                                    specificity: selected.specificity,
+                                  } }
+                                : entry),
+                            });
+                          }}
+                        >
+                          {materialOptions.map((option) => (
+                            <option key={option.id} value={option.id}>{option.label}</option>
+                          ))}
+                        </select>
+                      </label>
+                    ) : null}
+                  </div>
                 ) : null}
                 <button
                   className="icon-button builder-node__remove"
@@ -442,11 +457,50 @@ export function TopologyBuilder({ config, initialValue, onChange, onSubmit }: To
           })}
         </div>
 
-        <div className="topology-preview" aria-live="polite">
-          <span data-closed={preview.electronClosed}>{preview.electronClosed ? '电子路径已闭合' : '电子路径未闭合'}</span>
-          <span data-closed={preview.ionClosed}>{preview.ionClosed ? '离子路径已闭合' : '离子路径未闭合'}</span>
-        </div>
+        <aside className="bench__drawer component-tray" aria-label="组件托盘">
+          <h3>器材库</h3>
+          {shelfGroups.map((group) => {
+            const members = config.components.filter(
+              (component) => shelfGroupFor(component) === group.id,
+            );
+            if (members.length === 0) return null;
+            return (
+              <section className="bench__shelf-group" key={group.id}>
+                <h4>{group.label}</h4>
+                <div className="component-tray__list">
+                  {members.map((component) => {
+                    const presentation = presentationFor(component.id);
+                    const Icon = presentation.Icon;
+                    return (
+                      <button
+                        className="tray-item"
+                        draggable
+                        key={component.id}
+                        onClick={() => addComponent(component.id)}
+                        onDragStart={(event) => {
+                          event.dataTransfer.effectAllowed = 'copy';
+                          event.dataTransfer.setData(dragMime, component.id);
+                        }}
+                        type="button"
+                        aria-label={`添加 ${component.label}`}
+                      >
+                        <span className="tray-item__visual" aria-hidden="true">
+                          {presentation.image
+                            ? <img src={presentation.image} alt="" draggable={false} />
+                            : Icon ? <Icon /> : <CircleDot />}
+                        </span>
+                        <span>{component.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
+            );
+          })}
+        </aside>
+      </div>
 
+      <div className="bench__footer">
         <div className="builder-connections-list" aria-label="已连接路径">
           {value.connections.map((connection) => (
             <div key={connection.id}>
@@ -468,8 +522,8 @@ export function TopologyBuilder({ config, initialValue, onChange, onSubmit }: To
           ))}
         </div>
         {submitError ? <p className="form-error" role="alert">{submitError}</p> : null}
-        <button className="primary-button builder-submit" onClick={submit} type="button">提交搭建</button>
-      </section>
+        <p className="bench__notice">提示:先摆放器材并指定功能,再用电子/离子路径把回路连成闭合。</p>
+      </div>
     </div>
-  );
+);
 }

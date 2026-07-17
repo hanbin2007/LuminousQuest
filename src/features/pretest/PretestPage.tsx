@@ -137,7 +137,7 @@ export function PretestPage() {
   };
 
   return (
-    <main className="page-content pretest-page">
+    <main className={`page-content pretest-page${draft.step === 0 ? ' pretest-page--bench' : ''}`}>
       <header className="page-heading">
         <span>模块一</span>
         <h1>前测诊断</h1>
