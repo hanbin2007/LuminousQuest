@@ -1,9 +1,4 @@
-import {
-  Cable,
-  CircleDot,
-  MousePointer2,
-  Trash2,
-} from 'lucide-react';
+import { CircleDot, Compass } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import type { PretestConfig } from '../../../shared/config/schemas';
@@ -11,21 +6,20 @@ import {
   assessBuilderTopology,
   configuredRoleWhitelist,
   maximumBuilderComponents,
-  maximumBuilderConnections,
-  type BuilderCarrier,
   type BuilderGraph,
   type BuilderGraphComponent,
   type BuilderTopologyAssessment,
-  type BuilderConnectionKind,
 } from '../../../shared/scoring/topology';
-import { electrodeImageFor, presentationFor } from './presentation';
-import { previewCircuitClosure } from './topology-preview';
+import { useReducedMotion } from '../../app/useReducedMotion';
+import { deriveAssembly } from './assembly';
+import { BenchCanvas } from './BenchCanvas';
+import { benchGeometryFor, presentationFor } from './presentation';
 
 const dragMime = 'application/x-lq-component';
 const moveMime = 'application/x-lq-instance';
 const gridSize = 24;
-const nodeWidth = 120;
-const nodeHeight = 176;
+const layoutCellWidth = 170;
+const layoutCellHeight = 200;
 
 const roleLabels = {
   'oxidation-site': '氧化反应位置',
@@ -37,6 +31,8 @@ const roleLabels = {
 export interface PlacedBuilderComponent extends BuilderGraphComponent {
   x: number;
   y: number;
+  /** 方向箭头的指向(客户端专属,提交时已烧入推导边,不入会话)。 */
+  flipped?: boolean;
 }
 
 export interface BuilderAnswer {
@@ -50,6 +46,13 @@ interface TopologyBuilderProps {
   onChange?: (value: BuilderAnswer) => void;
   onSubmit: (value: BuilderAnswer, assessment: BuilderTopologyAssessment) => void;
 }
+
+const materialOptions = [
+  { id: 'generic-conductor', label: '通用导体', specificity: 'generic' as const },
+  { id: 'Zn', label: '锌 Zn', specificity: 'specific' as const },
+  { id: 'Cu', label: '铜 Cu', specificity: 'specific' as const },
+  { id: 'C', label: '碳 C', specificity: 'specific' as const },
+];
 
 const shelfGroups = [
   { id: 'electrode', label: '电极' },
@@ -74,12 +77,22 @@ function shelfGroupFor(component: PretestConfig['builder']['components'][number]
   }
 }
 
-const materialOptions = [
-  { id: 'generic-conductor', label: '通用导体', specificity: 'generic' as const },
-  { id: 'Zn', label: '锌 Zn', specificity: 'specific' as const },
-  { id: 'Cu', label: '铜 Cu', specificity: 'specific' as const },
-  { id: 'C', label: '碳 C', specificity: 'specific' as const },
-];
+const arrowKindByComponent: Record<string, 'electron' | 'cation' | 'anion'> = {
+  'electron-arrow': 'electron',
+  'cation-arrow': 'cation',
+  'anion-arrow': 'anion',
+};
+
+const arrowColors = { electron: '#8fb8ff', cation: '#ffb84d', anion: '#45e0d2' } as const;
+
+function ArrowGlyph({ kind, width, height }: { kind: 'electron' | 'cation' | 'anion'; width: number; height: number }) {
+  return (
+    <svg viewBox="0 0 56 24" width={width} height={height} style={{ color: arrowColors[kind] }}>
+      <line x1="4" y1="12" x2="44" y2="12" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+      <path d="M42 4 L54 12 L42 20 Z" fill="currentColor" />
+    </svg>
+  );
+}
 
 function createInstanceId(componentId: string) {
   const suffix = typeof crypto.randomUUID === 'function'
@@ -88,10 +101,10 @@ function createInstanceId(componentId: string) {
   return `${componentId}-${suffix}`;
 }
 
-function graphFor(value: BuilderAnswer): BuilderGraph {
+function graphFor(value: BuilderAnswer, connections: BuilderGraph['connections']): BuilderGraph {
   return {
-    components: value.components.map(({ x: _x, y: _y, ...component }) => component),
-    connections: value.connections,
+    components: value.components.map(({ x: _x, y: _y, flipped: _flipped, ...component }) => component),
+    connections,
   };
 }
 
@@ -101,11 +114,10 @@ function snapped(value: number) {
 
 export function TopologyBuilder({ config, initialValue, onChange, onSubmit }: TopologyBuilderProps) {
   const [value, setValue] = useState<BuilderAnswer>(initialValue ?? { components: [], connections: [] });
-  const [tool, setTool] = useState<'selection' | BuilderConnectionKind>('electron-path');
-  const [carrier, setCarrier] = useState<BuilderCarrier>('cation');
-  const [showDirection, setShowDirection] = useState(true);
-  const [connectionStart, setConnectionStart] = useState<string | null>(null);
+  const [annotate, setAnnotate] = useState(false);
+  const [selected, setSelected] = useState<string | null>(null);
   const [snapFlash, setSnapFlash] = useState<{ x: number; y: number; key: string } | null>(null);
+  const reducedMotion = useReducedMotion();
   const [submitError, setSubmitError] = useState<string | null>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
   const definitionById = useMemo(
@@ -117,7 +129,31 @@ export function TopologyBuilder({ config, initialValue, onChange, onSubmit }: To
     if (initialValue) setValue(initialValue);
   }, [initialValue]);
 
-  const update = (next: BuilderAnswer) => {
+  useEffect(() => {
+    if (!snapFlash) return;
+    const timer = window.setTimeout(() => setSnapFlash(null), 420);
+    return () => window.clearTimeout(timer);
+  }, [snapFlash]);
+
+  useEffect(() => {
+    if (!selected) return;
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setSelected(null);
+    };
+    window.addEventListener('keydown', escape);
+    return () => window.removeEventListener('keydown', escape);
+  }, [selected]);
+
+  const assembly = useMemo(
+    () => deriveAssembly(value.components, definitionById),
+    [value.components, definitionById],
+  );
+
+  const update = (components: PlacedBuilderComponent[]) => {
+    const next: BuilderAnswer = {
+      components,
+      connections: deriveAssembly(components, definitionById).connections,
+    };
     setValue(next);
     onChange?.(next);
   };
@@ -131,10 +167,10 @@ export function TopologyBuilder({ config, initialValue, onChange, onSubmit }: To
     }
     const index = value.components.length;
     const canvasWidth = canvasRef.current?.getBoundingClientRect().width || 720;
-    const columns = Math.max(1, Math.floor(canvasWidth / (nodeWidth + gridSize)));
+    const columns = Math.max(1, Math.floor(canvasWidth / (layoutCellWidth + gridSize)));
     const nextPoint = point ?? {
-      x: gridSize + (index % columns) * (nodeWidth + gridSize),
-      y: gridSize + Math.floor(index / columns) * (nodeHeight + gridSize),
+      x: gridSize + (index % columns) * (layoutCellWidth + gridSize),
+      y: gridSize + Math.floor(index / columns) * (layoutCellHeight + gridSize),
     };
     const component: PlacedBuilderComponent = {
       instanceId: createInstanceId(componentId),
@@ -146,83 +182,48 @@ export function TopologyBuilder({ config, initialValue, onChange, onSubmit }: To
       x: snapped(nextPoint.x),
       y: snapped(nextPoint.y),
     };
-    update({ ...value, components: [...value.components, component] });
+    update([...value.components, component]);
     setSnapFlash({ x: component.x, y: component.y, key: component.instanceId });
   };
 
   const removeComponent = (instanceId: string) => {
-    update({
-      components: value.components.filter((component) => component.instanceId !== instanceId),
-      connections: value.connections.filter(
-        (connection) => connection.from !== instanceId && connection.to !== instanceId,
-      ),
-    });
-    if (connectionStart === instanceId) setConnectionStart(null);
+    update(value.components.filter((component) => component.instanceId !== instanceId));
+    if (selected === instanceId) setSelected(null);
   };
 
   const moveComponent = (instanceId: string, point: { x: number; y: number }) => {
     const nextPoint = { x: snapped(point.x), y: snapped(point.y) };
-    update({
-      ...value,
-      components: value.components.map((component) => component.instanceId === instanceId
-        ? { ...component, ...nextPoint }
-        : component),
-    });
+    update(value.components.map((component) => component.instanceId === instanceId
+      ? { ...component, ...nextPoint }
+      : component));
     setSnapFlash({ ...nextPoint, key: `${instanceId}-${nextPoint.x}-${nextPoint.y}` });
   };
 
-  const connect = (instanceId: string) => {
-    if (!connectionStart) {
-      setConnectionStart(instanceId);
-      return;
-    }
-    if (connectionStart === instanceId) {
-      setConnectionStart(null);
-      return;
-    }
-    if (tool === 'selection') return;
-    const connectionKind = tool;
-    const nextCarrier = showDirection
-      ? connectionKind === 'electron-path' ? 'electron' : carrier
-      : undefined;
-    const duplicate = value.connections.some((connection) =>
-      connection.from === connectionStart
-      && connection.to === instanceId
-      && connection.kind === connectionKind
-      && connection.carrier === nextCarrier);
-    if (!duplicate) {
-      if (value.connections.length >= maximumBuilderConnections) {
-        setSubmitError(`搭建连线数量不能超过 ${maximumBuilderConnections}`);
-        setConnectionStart(null);
-        return;
-      }
-      update({
-        ...value,
-        connections: [
-          ...value.connections,
-          {
-            id: createInstanceId('connection'),
-            from: connectionStart,
-            to: instanceId,
-            kind: connectionKind,
-            ...(nextCarrier ? { carrier: nextCarrier } : {}),
-          },
-        ],
-      });
-    }
-    setConnectionStart(null);
+  const patchComponent = (
+    instanceId: string,
+    patch: (entry: PlacedBuilderComponent) => PlacedBuilderComponent,
+  ) => {
+    update(value.components.map((entry) => entry.instanceId === instanceId ? patch(entry) : entry));
   };
 
-  const preview = previewCircuitClosure(graphFor(value), config);
+  const preview = {
+    electronClosed: assembly.wireAttachments.length > 0,
+    ionClosed: [...assembly.containment.values()].some((inside) => inside.length >= 2),
+  };
   const componentByInstance = new Map(value.components.map((component) => [component.instanceId, component]));
+  const labelOf = (instanceId: string) =>
+    componentByInstance.get(instanceId)?.label
+      ?? definitionById.get(componentByInstance.get(instanceId)?.componentId ?? '')?.label
+      ?? instanceId;
   const canvasContentHeight = value.components.reduce(
-    (height, component) => Math.max(height, component.y + nodeHeight + gridSize),
+    (height, component) =>
+      Math.max(height, component.y + benchGeometryFor(component.componentId).height + 48),
     0,
   );
 
   const submit = () => {
     try {
-      const assessment = assessBuilderTopology(graphFor(value), config);
+      const assessment = assessBuilderTopology(graphFor(value, assembly.connections), config);
       setSubmitError(null);
       onSubmit(value, assessment);
     } catch (error) {
@@ -230,56 +231,26 @@ export function TopologyBuilder({ config, initialValue, onChange, onSubmit }: To
     }
   };
 
+  const selectedComponent = selected ? componentByInstance.get(selected) : undefined;
+  const selectedDefinition = selectedComponent
+    ? definitionById.get(selectedComponent.componentId)
+    : undefined;
+
   return (
     <div className="bench">
       <div className="bench__topbar">
-        <div className="segmented-control bench__tools" aria-label="路径类型">
-          <button
-            className={tool === 'selection' ? 'is-active' : ''}
-            onClick={() => { setTool('selection'); setConnectionStart(null); }}
-            type="button"
-            aria-pressed={tool === 'selection'}
-          >
-            <MousePointer2 aria-hidden="true" />选择
-          </button>
-          <button
-            className={tool === 'electron-path' ? 'is-active' : ''}
-            onClick={() => { setTool('electron-path'); setConnectionStart(null); }}
-            type="button"
-            aria-pressed={tool === 'electron-path'}
-          >
-            <Cable aria-hidden="true" />电子路径
-          </button>
-          <button
-            className={tool === 'ion-path' ? 'is-active' : ''}
-            onClick={() => { setTool('ion-path'); setConnectionStart(null); }}
-            type="button"
-            aria-pressed={tool === 'ion-path'}
-          >
-            <CircleDot aria-hidden="true" />离子路径
-          </button>
-        </div>
-        <label className="toggle-control">
-          <input
-            type="checkbox"
-            checked={showDirection}
-            onChange={(event) => setShowDirection(event.target.checked)}
-          />
-          标注方向
-        </label>
-        {tool === 'ion-path' ? (
-          <label className="select-control">
-            <span>方向载流粒子</span>
-            <select value={carrier} onChange={(event) => setCarrier(event.target.value as BuilderCarrier)}>
-              <option value="cation">阳离子</option>
-              <option value="anion">阴离子</option>
-            </select>
-          </label>
-        ) : null}
+        <button
+          className={`bench__annotate${annotate ? ' is-active' : ''}`}
+          onClick={() => setAnnotate((current) => !current)}
+          type="button"
+          aria-pressed={annotate}
+        >
+          <Compass aria-hidden="true" />标注方向
+        </button>
         <span className="bench__hint" aria-live="polite">
-          {tool === 'selection'
-            ? '拖动摆放器材'
-            : connectionStart ? '选择终点' : '选择起点'}
+          {annotate
+            ? '把方向箭头拖到导线上或池中,点击箭头可翻转方向'
+            : '电极放入池中、导线拖近两个电极即自动连接;点击器材设置属性'}
         </span>
         <div className="topology-preview bench__preview" aria-live="polite">
           <span data-closed={preview.electronClosed}>{preview.electronClosed ? '电子路径已闭合' : '电子路径未闭合'}</span>
@@ -295,6 +266,9 @@ export function TopologyBuilder({ config, initialValue, onChange, onSubmit }: To
           data-snap-flash={snapFlash ? 'true' : 'false'}
           data-testid="builder-canvas"
           style={{ '--builder-content-height': `${canvasContentHeight}px` } as React.CSSProperties}
+          onClick={(event) => {
+            if (event.target === canvasRef.current) setSelected(null);
+          }}
           onDragOver={(event) => event.preventDefault()}
           onDrop={(event) => {
             event.preventDefault();
@@ -302,164 +276,173 @@ export function TopologyBuilder({ config, initialValue, onChange, onSubmit }: To
             const instanceId = event.dataTransfer.getData(moveMime);
             const bounds = canvasRef.current?.getBoundingClientRect();
             if (!bounds || (!componentId && !instanceId)) return;
-            const maxX = Math.max(0, Math.floor((bounds.width - nodeWidth) / gridSize) * gridSize);
-            const maxY = Math.max(0, Math.floor((bounds.height - nodeHeight) / gridSize) * gridSize);
+            const moving = instanceId ? componentByInstance.get(instanceId) : undefined;
+            const geometry = benchGeometryFor(moving?.componentId ?? componentId);
+            const maxX = Math.max(0, Math.floor((bounds.width - geometry.width) / gridSize) * gridSize);
+            const maxY = Math.max(0, Math.floor((bounds.height - geometry.height) / gridSize) * gridSize);
             const point = {
-              x: Math.min(maxX, event.clientX - bounds.left - nodeWidth / 2),
-              y: Math.min(maxY, event.clientY - bounds.top - nodeHeight / 2),
+              x: Math.min(maxX, event.clientX - bounds.left - geometry.width / 2),
+              y: Math.min(maxY, event.clientY - bounds.top - geometry.height / 2),
             };
             if (instanceId) moveComponent(instanceId, point);
             else addComponent(componentId, point);
           }}
         >
-          <svg className="builder-connections" aria-hidden="true">
-            {value.connections.map((connection) => {
-              const from = componentByInstance.get(connection.from);
-              const to = componentByInstance.get(connection.to);
-              if (!from || !to) return null;
-              const x1 = from.x + nodeWidth / 2;
-              const y1 = from.y + nodeHeight / 2 - 24;
-              const x2 = to.x + nodeWidth / 2;
-              const y2 = to.y + nodeHeight / 2 - 24;
-              const sag = connection.kind === 'electron-path'
-                ? Math.max(y1, y2) + Math.min(72, Math.abs(x2 - x1) * 0.22 + 24)
-                : (y1 + y2) / 2;
-              return (
-                <path
-                  className={`builder-connection builder-connection--${connection.kind}`}
-                  key={connection.id}
-                  d={`M ${x1} ${y1} Q ${(x1 + x2) / 2} ${sag} ${x2} ${y2}`}
-                  markerEnd={connection.carrier
-                    ? connection.kind === 'electron-path'
-                      ? 'url(#builder-arrow-electron)'
-                      : 'url(#builder-arrow-ion)'
-                    : undefined}
-                />
-              );
-            })}
-            <defs>
-              <marker id="builder-arrow-electron" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
-                <path className="builder-arrow--electron" d="M0 0 L8 4 L0 8 Z" />
-              </marker>
-              <marker id="builder-arrow-ion" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
-                <path className="builder-arrow--ion" d="M0 0 L8 4 L0 8 Z" />
-              </marker>
-            </defs>
-          </svg>
+          <BenchCanvas
+            scene={{
+              components: value.components,
+              definitionById,
+              assembly,
+              selectedId: selected,
+              annotate,
+            }}
+            flash={snapFlash}
+            reducedMotion={reducedMotion}
+            contentHeight={canvasContentHeight}
+          />
 
-          {snapFlash ? (
-            <span
-              className="builder-snap-flash"
-              key={snapFlash.key}
-              style={{ left: snapFlash.x, top: snapFlash.y + nodeHeight - 18 }}
-              onAnimationEnd={() => setSnapFlash(null)}
-              aria-hidden="true"
-            />
-          ) : null}
 
           {value.components.map((component) => {
             const definition = definitionById.get(component.componentId);
             if (!definition) return null;
-            const presentation = presentationFor(component.componentId);
-            const Icon = presentation.Icon;
-            const image = definition.kind === 'electrode'
-              ? electrodeImageFor(component.materialBinding?.materialId)
-              : presentation.image;
-            const allowedRoles = configuredRoleWhitelist(definition);
+            const geometry = benchGeometryFor(component.componentId);
+            const arrowKind = arrowKindByComponent[component.componentId];
+            if (arrowKind && !annotate) return null;
+            const attached = assembly.wireAttachments.some((entry) => entry.wireId === component.instanceId);
+            const contained = definition.kind === 'electrode'
+              && [...assembly.containment.values()].some((inside) => inside.includes(component.instanceId));
+            const zClass = definition.kind === 'electrode'
+              ? ' bench-z-electrode'
+              : arrowKind
+                ? ' bench-z-arrow'
+                : attached
+                  ? ' bench-z-grip'
+                  : ' bench-z-vessel';
             return (
               <div
-                className={`builder-node${connectionStart === component.instanceId ? ' is-connection-start' : ''}`}
+                className={`builder-node${selected === component.instanceId ? ' is-selected' : ''}${contained ? ' is-contained' : ''}${zClass}`}
                 draggable
                 key={component.instanceId}
                 onDragStart={(event) => {
                   event.dataTransfer.effectAllowed = 'move';
                   event.dataTransfer.setData(moveMime, component.instanceId);
                 }}
-                style={{ left: component.x, top: component.y }}
+                style={{ left: component.x, top: component.y, width: geometry.width }}
               >
                 <button
                   className="builder-node__target"
-                  onClick={() => connect(component.instanceId)}
+                  onClick={() => {
+                    setSelected((current) => current === component.instanceId ? null : component.instanceId);
+                  }}
                   type="button"
                   aria-label={`画布组件 ${definition.label}`}
+                  aria-expanded={selected === component.instanceId}
                 >
-                  <span className="builder-node__visual" aria-hidden="true">
-                    {image
-                      ? <img src={image} alt="" draggable={false} />
-                      : Icon ? <Icon /> : <CircleDot />}
-                  </span>
-                  <strong>{definition.label}</strong>
-                </button>
-                {allowedRoles.length > 0 || definition.kind === 'electrode' ? (
-                  <div className="builder-node__tags">
-                    {allowedRoles.length > 0 ? (
-                      <label className="builder-node__role">
-                        <span>功能</span>
-                        <select
-                          aria-label={`${definition.label} 的功能角色`}
-                          value={component.assignedRole ?? ''}
-                          onChange={(event) => {
-                            const assignedRole = event.target.value as BuilderGraphComponent['assignedRole'] | '';
-                            update({
-                              ...value,
-                              components: value.components.map((entry) => {
-                                if (entry.instanceId !== component.instanceId) return entry;
-                                const { assignedRole: _assignedRole, ...unassigned } = entry;
-                                return assignedRole ? { ...unassigned, assignedRole } : unassigned;
-                              }),
-                            });
-                          }}
-                        >
-                          <option value="">不指定</option>
-                          {allowedRoles.map((role) => (
-                            <option key={role} value={role}>{roleLabels[role]}</option>
-                          ))}
-                        </select>
-                      </label>
-                    ) : null}
-                    {definition.kind === 'electrode' ? (
-                      <label className="builder-node__material">
-                        <span>材料</span>
-                        <select
-                          value={component.materialBinding?.materialId ?? 'generic-conductor'}
-                          onChange={(event) => {
-                            const selected = materialOptions.find((option) => option.id === event.target.value)!;
-                            update({
-                              ...value,
-                              components: value.components.map((entry) => entry.instanceId === component.instanceId
-                                ? { ...entry, materialBinding: {
-                                    materialId: selected.id,
-                                    specificity: selected.specificity,
-                                  } }
-                                : entry),
-                            });
-                          }}
-                        >
-                          {materialOptions.map((option) => (
-                            <option key={option.id} value={option.id}>{option.label}</option>
-                          ))}
-                        </select>
-                      </label>
-                    ) : null}
-                  </div>
-                ) : null}
-                <button
-                  className="icon-button builder-node__remove"
-                  onClick={() => removeComponent(component.instanceId)}
-                  type="button"
-                  aria-label={`移除 ${definition.label}`}
-                  title={`移除 ${definition.label}`}
-                >
-                  <Trash2 aria-hidden="true" />
+                  <span
+                    className={`builder-node__hit${attached ? ' is-grip' : ''}`}
+                    style={attached ? undefined : { width: geometry.width, height: geometry.height }}
+                    aria-hidden="true"
+                  />
+                  <strong className="sr-only">{definition.label}</strong>
                 </button>
               </div>
             );
           })}
+
+          {(() => {
+            if (!selectedComponent || !selectedDefinition) return null;
+            const component = selectedComponent;
+            const definition = selectedDefinition;
+            const geometry = benchGeometryFor(component.componentId);
+            const allowedRoles = configuredRoleWhitelist(definition);
+            const arrowKind = arrowKindByComponent[component.componentId];
+            const canvasWidth = canvasRef.current?.clientWidth ?? 720;
+            const flip = component.x + geometry.width + 248 > canvasWidth;
+            return (
+              <div
+                className={`bench-popover${flip ? ' bench-popover--flip' : ''}`}
+                style={{
+                  left: flip ? component.x - 236 : component.x + geometry.width + 14,
+                  top: Math.max(8, component.y - 4),
+                }}
+                role="dialog"
+                aria-label={`${definition.label} 属性`}
+              >
+                <header>{definition.label}</header>
+                {allowedRoles.length > 0 ? (
+                  <label className="bench-popover__row">
+                    <span>功能</span>
+                    <select
+                      aria-label={`${definition.label} 的功能角色`}
+                      value={component.assignedRole ?? ''}
+                      onChange={(event) => {
+                        const assignedRole = event.target.value as BuilderGraphComponent['assignedRole'] | '';
+                        patchComponent(component.instanceId, (entry) => {
+                          const { assignedRole: _assignedRole, ...unassigned } = entry;
+                          return assignedRole ? { ...unassigned, assignedRole } : unassigned;
+                        });
+                      }}
+                    >
+                      <option value="">不指定</option>
+                      {allowedRoles.map((role) => (
+                        <option key={role} value={role}>{roleLabels[role]}</option>
+                      ))}
+                    </select>
+                  </label>
+                ) : null}
+                {definition.kind === 'electrode' ? (
+                  <label className="bench-popover__row">
+                    <span>材料</span>
+                    <select
+                      aria-label={`${definition.label} 的电极材料`}
+                      value={component.materialBinding?.materialId ?? 'generic-conductor'}
+                      onChange={(event) => {
+                        const selectedOption = materialOptions.find((option) => option.id === event.target.value)!;
+                        patchComponent(component.instanceId, (entry) => ({
+                          ...entry,
+                          materialBinding: {
+                            materialId: selectedOption.id,
+                            specificity: selectedOption.specificity,
+                          },
+                        }));
+                      }}
+                    >
+                      {materialOptions.map((option) => (
+                        <option key={option.id} value={option.id}>{option.label}</option>
+                      ))}
+                    </select>
+                  </label>
+                ) : null}
+                {arrowKind ? (
+                  <button
+                    className="bench-popover__flip-direction"
+                    onClick={() => patchComponent(component.instanceId, (entry) => ({
+                      ...entry,
+                      flipped: !entry.flipped,
+                    }))}
+                    type="button"
+                    aria-label={`翻转 ${definition.label}`}
+                  >
+                    翻转方向({component.flipped ? '当前向左' : '当前向右'})
+                  </button>
+                ) : null}
+                <button
+                  className="bench-popover__delete"
+                  onClick={() => removeComponent(component.instanceId)}
+                  type="button"
+                  aria-label={`移除 ${definition.label}`}
+                >
+                  删除
+                </button>
+              </div>
+            );
+          })()}
         </div>
 
         <aside className="bench__drawer component-tray" aria-label="组件托盘">
           <h3>器材库</h3>
           {shelfGroups.map((group) => {
+            if (group.id === 'marker' && !annotate) return null;
             const members = config.components.filter(
               (component) => shelfGroupFor(component) === group.id,
             );
@@ -470,7 +453,7 @@ export function TopologyBuilder({ config, initialValue, onChange, onSubmit }: To
                 <div className="component-tray__list">
                   {members.map((component) => {
                     const presentation = presentationFor(component.id);
-                    const Icon = presentation.Icon;
+                    const arrowKind = arrowKindByComponent[component.id];
                     return (
                       <button
                         className="tray-item"
@@ -485,9 +468,11 @@ export function TopologyBuilder({ config, initialValue, onChange, onSubmit }: To
                         aria-label={`添加 ${component.label}`}
                       >
                         <span className="tray-item__visual" aria-hidden="true">
-                          {presentation.image
-                            ? <img src={presentation.image} alt="" draggable={false} />
-                            : Icon ? <Icon /> : <CircleDot />}
+                          {arrowKind
+                            ? <ArrowGlyph kind={arrowKind} width={44} height={19} />
+                            : presentation.image
+                              ? <img src={presentation.image} alt="" draggable={false} />
+                              : <CircleDot />}
                         </span>
                         <span>{component.label}</span>
                       </button>
@@ -501,29 +486,24 @@ export function TopologyBuilder({ config, initialValue, onChange, onSubmit }: To
       </div>
 
       <div className="bench__footer">
-        <div className="builder-connections-list" aria-label="已连接路径">
-          {value.connections.map((connection) => (
-            <div key={connection.id}>
-              <span>{connection.kind === 'electron-path' ? '电子路径' : '离子路径'}</span>
-              <span>{connection.carrier === 'electron' ? 'e⁻' : connection.carrier === 'cation' ? '阳离子' : connection.carrier === 'anion' ? '阴离子' : '未标方向'}</span>
-              <button
-                className="icon-button"
-                onClick={() => update({
-                  ...value,
-                  connections: value.connections.filter((entry) => entry.id !== connection.id),
-                })}
-                type="button"
-                aria-label="删除连线"
-                title="删除连线"
-              >
-                <Trash2 aria-hidden="true" />
-              </button>
-            </div>
+        <div className="bench__assembly" aria-label="装配状态" aria-live="polite">
+          {[...assembly.containment.entries()].map(([beakerId, inside]) => (
+            <span className="bench__assembly-chip" key={beakerId}>
+              {labelOf(beakerId)}:{inside.map(labelOf).join('、')}
+            </span>
           ))}
+          {assembly.wireAttachments.map((attachment) => (
+            <span className="bench__assembly-chip" key={attachment.wireId}>
+              {labelOf(attachment.wireId)}:{labelOf(attachment.a.electrodeId)} ↔ {labelOf(attachment.b.electrodeId)}
+            </span>
+          ))}
+          {assembly.containment.size === 0 && assembly.wireAttachments.length === 0 ? (
+            <span className="bench__assembly-chip bench__assembly-chip--empty">尚未装配:先把电极放入池中</span>
+          ) : null}
         </div>
         {submitError ? <p className="form-error" role="alert">{submitError}</p> : null}
-        <p className="bench__notice">提示:先摆放器材并指定功能,再用电子/离子路径把回路连成闭合。</p>
+        <p className="bench__notice">电极浸入液面即接通内电路;导线夹自动咬合电极顶端。</p>
       </div>
     </div>
-);
+  );
 }

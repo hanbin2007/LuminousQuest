@@ -7,6 +7,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { loadAllConfig } from '../server/config/loader';
+import { assembleGalvanicCell } from './helpers/assemble-cell';
 import { LocalSessionStore } from '../shared/session/local-storage';
 import { createSession, exportSession, sessionConfigVersions } from '../shared/session/session';
 import { App, type AppRuntime } from '../src/App';
@@ -102,38 +103,7 @@ describe('M2 pretest route', () => {
     render(<App initialConfig={config} runtime={runtime} />);
 
     expect(await screen.findByRole('heading', { name: '前测诊断' })).toBeInTheDocument();
-    for (const label of [
-      '导体棒 A',
-      '金属连接件',
-      '可导电液体或离子通道',
-      '导体棒 B',
-      '电子方向箭头',
-      '阳离子方向箭头',
-      '阴离子方向箭头',
-    ]) {
-      await user.click(screen.getByRole('button', { name: `添加 ${label}` }));
-    }
-
-    const canvas = screen.getByTestId('builder-canvas');
-    const node = (label: string) => within(canvas).getByRole('button', {
-      name: new RegExp(`画布组件.*${label}`),
-    });
-    await user.selectOptions(screen.getByLabelText('导体棒 A 的功能角色'), 'oxidation-site');
-    await user.selectOptions(screen.getByLabelText('金属连接件 的功能角色'), 'electron-conductor');
-    await user.selectOptions(screen.getByLabelText('可导电液体或离子通道 的功能角色'), 'ion-conductor');
-    await user.selectOptions(screen.getByLabelText('导体棒 B 的功能角色'), 'reduction-site');
-    await user.click(screen.getByRole('button', { name: '电子路径' }));
-    await user.click(node('导体棒 A'));
-    await user.click(node('金属连接件'));
-    await user.click(node('金属连接件'));
-    await user.click(node('导体棒 B'));
-    await user.click(screen.getByRole('button', { name: '离子路径' }));
-    await user.selectOptions(screen.getByLabelText('方向载流粒子'), 'cation');
-    await user.click(node('可导电液体或离子通道'));
-    await user.click(node('导体棒 B'));
-    await user.selectOptions(screen.getByLabelText('方向载流粒子'), 'anion');
-    await user.click(node('可导电液体或离子通道'));
-    await user.click(node('导体棒 A'));
+    await assembleGalvanicCell(user);
     await user.click(screen.getByRole('button', { name: '提交搭建' }));
 
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();

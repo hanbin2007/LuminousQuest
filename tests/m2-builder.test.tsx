@@ -9,6 +9,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import pretestJson from '../config/pretest.json';
 import { pretestSchema } from '../shared/config/schemas';
 import { TopologyBuilder, type BuilderAnswer } from '../src/features/builder/TopologyBuilder';
+import { assembleGalvanicCell } from './helpers/assemble-cell';
 import { EquationToolbar } from '../src/features/pretest/EquationToolbar';
 
 const builderConfig = pretestSchema.parse(pretestJson).builder;
@@ -64,7 +65,7 @@ describe('M2 topology builder', () => {
     fireEvent(canvas, drop);
 
     const placed = screen.getByRole('button', { name: /画布组件.*导体棒 A/ });
-    expect(placed.closest('.builder-node')).toHaveStyle({ left: '72px', top: '72px' });
+    expect(placed.closest('.builder-node')).toHaveStyle({ left: '120px', top: '72px' });
     expect(canvas).toHaveAttribute('data-snap-flash', 'true');
     expect(view.container.innerHTML).not.toMatch(forbiddenBuilderLeakage);
 
@@ -77,52 +78,20 @@ describe('M2 topology builder', () => {
       dataTransfer: { value: moveTransfer },
     });
     fireEvent(canvas, move);
-    expect(placed.closest('.builder-node')).toHaveStyle({ left: '336px', top: '216px' });
+    expect(placed.closest('.builder-node')).toHaveStyle({ left: '384px', top: '216px' });
   });
 
-  it('connects both carrier paths and submits through the existing topology assessor', async () => {
+  it('assembles a physical cell (dip + auto-clip + annotation layer) and scores hit', async () => {
     const user = userEvent.setup();
     const onSubmit = vi.fn();
     render(<TopologyBuilder config={builderConfig} onSubmit={onSubmit} />);
 
-    for (const label of [
-      '导体棒 A',
-      '金属连接件',
-      '可导电液体或离子通道',
-      '导体棒 B',
-      '电子方向箭头',
-      '阳离子方向箭头',
-      '阴离子方向箭头',
-    ]) {
-      await user.click(screen.getByRole('button', { name: `添加 ${label}` }));
-    }
-
-    const canvas = screen.getByTestId('builder-canvas');
-    const node = (label: string) => within(canvas).getByRole('button', {
-      name: new RegExp(`画布组件.*${label}`),
-    });
-
-    await user.selectOptions(screen.getByLabelText('导体棒 A 的功能角色'), 'oxidation-site');
-    await user.selectOptions(screen.getByLabelText('金属连接件 的功能角色'), 'electron-conductor');
-    await user.selectOptions(screen.getByLabelText('可导电液体或离子通道 的功能角色'), 'ion-conductor');
-    await user.selectOptions(screen.getByLabelText('导体棒 B 的功能角色'), 'reduction-site');
-
-    await user.click(screen.getByRole('button', { name: '电子路径' }));
-    await user.click(node('导体棒 A'));
-    await user.click(node('金属连接件'));
-    await user.click(node('金属连接件'));
-    await user.click(node('导体棒 B'));
-
-    await user.click(screen.getByRole('button', { name: '离子路径' }));
-    await user.selectOptions(screen.getByLabelText('方向载流粒子'), 'cation');
-    await user.click(node('可导电液体或离子通道'));
-    await user.click(node('导体棒 B'));
-    await user.selectOptions(screen.getByLabelText('方向载流粒子'), 'anion');
-    await user.click(node('可导电液体或离子通道'));
-    await user.click(node('导体棒 A'));
+    await assembleGalvanicCell(user);
 
     expect(screen.getByText('电子路径已闭合')).toBeInTheDocument();
     expect(screen.getByText('离子路径已闭合')).toBeInTheDocument();
+    expect(screen.getByText(/可导电液体或离子通道:导体棒 A、导体棒 B/)).toBeInTheDocument();
+    expect(screen.getByText(/金属连接件:导体棒 A ↔ 导体棒 B/)).toBeInTheDocument();
     expect(screen.queryByText(/hit|partial|miss/i)).not.toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: '提交搭建' }));
@@ -139,14 +108,12 @@ describe('M2 topology builder', () => {
   it('shows raw path connectivity without validating whether a chosen material is effective', () => {
     const value = {
       components: [
-        { instanceId: 'a', componentId: 'site-a', x: 24, y: 24 },
-        { instanceId: 'sugar', componentId: 'sucrose-solution', x: 168, y: 24 },
-        { instanceId: 'b', componentId: 'site-b', x: 312, y: 24 },
+        // 蔗糖水池 (240,96):液面 265..400 × 179..351;两电极底端入液
+        { instanceId: 'sugar', componentId: 'sucrose-solution', x: 240, y: 96 },
+        { instanceId: 'a', componentId: 'site-a', x: 288, y: 48 },
+        { instanceId: 'b', componentId: 'site-b', x: 336, y: 48 },
       ],
-      connections: [
-        { id: 'ion-a', from: 'a', to: 'sugar', kind: 'ion-path' as const },
-        { id: 'ion-b', from: 'sugar', to: 'b', kind: 'ion-path' as const },
-      ],
+      connections: [],
     } satisfies BuilderAnswer;
 
     render(<TopologyBuilder config={builderConfig} initialValue={value} onSubmit={vi.fn()} />);
