@@ -28,3 +28,17 @@ Checklist:透明底✅ 色板✅ 描边一致✅ 造型语言一致✅ 无文字
 
 ## Batch 3(beaker-empty,2026-07-15)—— ✅ 通过(Fable 5)
 空烧杯组件:无液面线(与蔗糖水区分成立)、透明底、风格与 anchor 一致、机检通过。
+
+## Batch 4(工作台半写实重画,2026-07-17)—— ✅ 通过(Fable 5)
+
+范围:工作台 8 精灵(electrode-carbon/electrode-zinc/copper/wire/insulated-wire/beaker-empty/beaker-electrolyte/sucrose-beaker),按 STYLE.md §8(v1.3)整批重画,替换简笔画版本。绘制:codex(gpt-5.6-sol,xhigh)。
+
+v1.3 Checklist(§8.5):
+1. 尺寸机检 8/8 PASS(108×504 / 450×210 / 630×780),透明底、alpha 边缘干净 ✅
+2. 几何契约实测:液体像素 12.1%/32.1%/87.9%/96.9%,电极主体宽 92.6%、底缘 95.6%——全部在 ±2% 容差内 ✅
+3. 质感:金属多段渐变有体积、玻璃透(沿口双线/尖嘴/高光带/蚀刻刻度)、液体半透明渐变+弯月面 ✅
+4. wire(校深蓝光泽)与 insulated-wire(深灰哑光+绝缘护套)托盘缩略图一眼可辨 ✅
+5. 深灰画布(#42474d)与纸白托盘双底色合成均成立 ✅
+6. 浸没实测:双电极入 electrolyte 池,裁剪线与位图液面严丝合缝,液下透青色 ✅
+
+注记:sucrose-beaker 与 beaker-empty 在 64px 缩略图下仅靠糖粒堆区分,依赖托盘文字标签兜底——接受(器材库始终带标签)。447/447 测试、typecheck、build 全绿。

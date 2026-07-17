@@ -4,14 +4,14 @@ import { inflateSync } from "node:zlib";
 
 const ROOT = resolve(import.meta.dirname, "..");
 const expected = [
-  ["electrode-carbon", 48, 224],
-  ["electrode-zinc", 48, 224],
-  ["copper", 48, 224],
-  ["wire", 208, 96],
-  ["insulated-wire", 208, 96],
-  ["beaker-empty", 128, 168],
-  ["beaker-electrolyte", 128, 168],
-  ["sucrose-beaker", 128, 168],
+  ["electrode-carbon", 108, 504],
+  ["electrode-zinc", 108, 504],
+  ["copper", 108, 504],
+  ["wire", 450, 210],
+  ["insulated-wire", 450, 210],
+  ["beaker-empty", 630, 780],
+  ["beaker-electrolyte", 630, 780],
+  ["sucrose-beaker", 630, 780],
 ];
 const manifest = JSON.parse(readFileSync(resolve(ROOT, "assets", "manifest.json"), "utf8"));
 

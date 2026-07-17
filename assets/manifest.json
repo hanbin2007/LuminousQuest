@@ -4,8 +4,8 @@
       "id": "electrode-carbon",
       "file": "assets/components/electrode-carbon@2x.png",
       "dimensions": {
-        "width": 48,
-        "height": 224
+        "width": 108,
+        "height": 504
       },
       "purpose": "拖拽组件：真实比例板状惰性碳电极（顶部夹持区）"
     },
@@ -13,8 +13,8 @@
       "id": "electrode-zinc",
       "file": "assets/components/electrode-zinc@2x.png",
       "dimensions": {
-        "width": 48,
-        "height": 224
+        "width": 108,
+        "height": 504
       },
       "purpose": "拖拽组件：真实比例锌灰金属板电极"
     },
@@ -22,8 +22,8 @@
       "id": "beaker-electrolyte",
       "file": "assets/components/beaker-electrolyte@2x.png",
       "dimensions": {
-        "width": 128,
-        "height": 168
+        "width": 630,
+        "height": 780
       },
       "purpose": "拖拽组件：真实比例 250 mL 烧杯与 2/3 校青电解质"
     },
@@ -31,8 +31,8 @@
       "id": "beaker-empty",
       "file": "assets/components/beaker-empty@2x.png",
       "dimensions": {
-        "width": 128,
-        "height": 168
+        "width": 630,
+        "height": 780
       },
       "purpose": "拖拽组件：真实比例 250 mL 空烧杯（沿口与刻度痕）"
     },
@@ -58,8 +58,8 @@
       "id": "copper",
       "file": "assets/components/copper@2x.png",
       "dimensions": {
-        "width": 48,
-        "height": 224
+        "width": 108,
+        "height": 504
       },
       "purpose": "拖拽组件：真实比例铜橙金属板电极"
     },
@@ -112,8 +112,8 @@
       "id": "wire",
       "file": "assets/components/wire@2x.png",
       "dimensions": {
-        "width": 208,
-        "height": 96
+        "width": 450,
+        "height": 210
       },
       "purpose": "拖拽组件：真实比例校深蓝柔性导线（双端鳄鱼夹）"
     },
@@ -121,8 +121,8 @@
       "id": "insulated-wire",
       "file": "assets/components/insulated-wire@2x.png",
       "dimensions": {
-        "width": 208,
-        "height": 96
+        "width": 450,
+        "height": 210
       },
       "purpose": "拖拽组件：真实比例深灰绝缘导线（绝缘套双端鳄鱼夹）"
     },
@@ -130,8 +130,8 @@
       "id": "sucrose-beaker",
       "file": "assets/components/sucrose-beaker@2x.png",
       "dimensions": {
-        "width": 128,
-        "height": 168
+        "width": 630,
+        "height": 780
       },
       "purpose": "拖拽组件：真实比例 250 mL 无色蔗糖水烧杯（杯底糖粒）"
     },
