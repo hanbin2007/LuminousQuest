@@ -457,6 +457,15 @@ const questionBaseShape = {
   rubricIds: z.array(idSchema).min(1),
   targetNodeIds: z.array(idSchema).min(1),
   evidencePath: z.string().trim().min(1),
+  group: z
+    .object({
+      id: idSchema,
+      title: z.string().trim().min(1),
+      stimulus: z.string().trim().min(1),
+      figure: z.string().trim().min(1),
+    })
+    .strict()
+    .optional(),
 };
 
 const choiceQuestionSchema = z
@@ -540,7 +549,7 @@ export const pretestSchema = z
           .strict(),
       })
       .strict(),
-    questions: z.array(pretestQuestionSchema).length(3),
+    questions: z.array(pretestQuestionSchema).min(1),
   })
   .strict()
   .superRefine((value, context) => {

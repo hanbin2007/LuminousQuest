@@ -1,4 +1,10 @@
 {
+  "exemptions": [
+    {
+      "path": "assets/exam/",
+      "reason": "教师提供的高考真题原图，不纳入 STYLE.md 风格 manifest 与机检范围。"
+    }
+  ],
   "assets": [
     {
       "id": "electrode-carbon",

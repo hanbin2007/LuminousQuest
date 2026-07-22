@@ -200,7 +200,7 @@ describe('cold-transfer pre/post comparison', () => {
 
     const comparison = buildTransferComparison(session, config, transferCase.id);
 
-    expect(comparison.commonNodeIds).toEqual(['D1', 'D2', 'P4', 'E1']);
+    expect(comparison.commonNodeIds).toEqual(['D1', 'D2', 'P1', 'P4', 'E1']);
     expect(comparison.dimensions).toEqual([
       {
         dimensionId: 'device',
@@ -226,21 +226,21 @@ describe('cold-transfer pre/post comparison', () => {
       {
         dimensionId: 'principle',
         label: '原理',
-        commonNodeIds: ['P4'],
+        commonNodeIds: ['P1', 'P4'],
         pretest: {
           weightedEarned: 1,
           assessedWeight: 2,
           ratio: 0.5,
           level: 'weak',
           assessedNodeIds: ['P4'],
-          unassessedNodeIds: [],
+          unassessedNodeIds: ['P1'],
         },
         transfer: {
-          weightedEarned: 0,
-          assessedWeight: 0,
-          ratio: null,
-          level: 'unassessed',
-          assessedNodeIds: [],
+          weightedEarned: 2,
+          assessedWeight: 2,
+          ratio: 1,
+          level: 'mastered',
+          assessedNodeIds: ['P1'],
           unassessedNodeIds: ['P4'],
         },
       },

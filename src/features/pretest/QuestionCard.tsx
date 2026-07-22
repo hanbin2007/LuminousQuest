@@ -27,6 +27,16 @@ export function QuestionCard({
 
   return (
     <article className="question-card">
+      {question.group ? (
+        <section className="exam-question-context" aria-label={question.group.title}>
+          <span className="exam-question-context__badge">{question.group.title}</span>
+          <p>{question.group.stimulus}</p>
+          <img
+            src={`/${question.group.figure}`}
+            alt={`${question.group.title}装置图`}
+          />
+        </section>
+      ) : null}
       <header>
         <span>{isChoice ? '选择题' : '简答题'}</span>
         <span>{dimensionLabel}</span>

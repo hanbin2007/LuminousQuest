@@ -3,12 +3,12 @@
   "id": "demo-class-session-01",
   "anonymousStudentId": "anon-DEMO0001",
   "startedAt": "2026-07-16T01:00:00.000Z",
-  "updatedAt": "2026-07-16T01:09:00.000Z",
+  "updatedAt": "2026-07-16T01:10:02.000Z",
   "configVersions": {
-    "configDigest": "sha256:0deea71c9da4a80916841b0758e9769708da5545368a0c4977ec52a2fba912e6",
+    "configDigest": "sha256:7dbf2c8ad6e3b7bd3dd3defc0ad2a4560c8c699233e37fdd6a50ce1d70e3e8f2",
     "knowledgeModel": "knowledge-model.v1.2",
     "rubrics": "rubrics.v1.2",
-    "pretest": "pretest.v1.1",
+    "pretest": "pretest.v1.2",
     "scaffoldPolicy": "scaffold-policy.v1.5",
     "cases": {
       "zinc-copper": "case.v1.5",
@@ -348,6 +348,142 @@
       },
       "score": {
         "status": "unassessed"
+      }
+    },
+    {
+      "schemaVersion": "event.v2",
+      "id": "a-answer-exam1-membrane",
+      "sequence": 10,
+      "occurredAt": "2026-07-16T01:10:00.000Z",
+      "caseId": "pretest",
+      "stageId": "assessment",
+      "attemptId": "a-exam1-4",
+      "kind": "answer.submitted",
+      "pipelineStage": "answer",
+      "questionId": "pretest-exam1-membrane",
+      "answer": {
+        "format": "text",
+        "value": "不能。防止 K 与 O₂ 直接反应（两个半反应必须分隔在两个场所）。"
+      }
+    },
+    {
+      "schemaVersion": "event.v2",
+      "id": "a-assessment-exam1-membrane-d3",
+      "sequence": 11,
+      "occurredAt": "2026-07-16T01:10:01.000Z",
+      "caseId": "pretest",
+      "stageId": "assessment",
+      "attemptId": "a-exam1-4",
+      "kind": "assessment.completed",
+      "pipelineStage": "score",
+      "sourceAnswerEventId": "a-answer-exam1-membrane",
+      "nodeId": "D3",
+      "rubric": {
+        "id": "rubric-d3",
+        "version": "rubrics.v1.2"
+      },
+      "assistance": {
+        "kind": "none",
+        "rounds": 0
+      },
+      "objectiveOutcome": "hit",
+      "extraction": {
+        "status": "assessed",
+        "evidence": [
+          {
+            "quote": "不能。防止 K 与 O₂ 直接反应（两个半反应必须分隔在两个场所）。",
+            "start": 0,
+            "end": 34
+          }
+        ],
+        "model": "fixture-v1",
+        "provenance": {
+          "promptId": "structured-assessment",
+          "promptVersion": "fixture-prompt.v1",
+          "cacheKey": "fixture-a-exam1-membrane-d3"
+        }
+      },
+      "ruleDecision": {
+        "status": "hit",
+        "ruleId": "d3-hit",
+        "reason": "隔膜选择性与半反应分隔理由均有证据。",
+        "engine": {
+          "id": "rubric-policy",
+          "version": "rubric-policy.v2"
+        }
+      },
+      "following": {
+        "status": "not-followed",
+        "anchorNodeId": null,
+        "anchorOutcome": null,
+        "policy": "score-logical-chain"
+      },
+      "score": {
+        "status": "scored",
+        "earned": 2,
+        "possible": 2,
+        "annotations": [],
+        "outcome": "hit"
+      }
+    },
+    {
+      "schemaVersion": "event.v2",
+      "id": "a-assessment-exam1-membrane-p1",
+      "sequence": 12,
+      "occurredAt": "2026-07-16T01:10:02.000Z",
+      "caseId": "pretest",
+      "stageId": "assessment",
+      "attemptId": "a-exam1-4",
+      "kind": "assessment.completed",
+      "pipelineStage": "score",
+      "sourceAnswerEventId": "a-answer-exam1-membrane",
+      "nodeId": "P1",
+      "rubric": {
+        "id": "rubric-p1",
+        "version": "rubrics.v1.2"
+      },
+      "assistance": {
+        "kind": "none",
+        "rounds": 0
+      },
+      "objectiveOutcome": "hit",
+      "extraction": {
+        "status": "assessed",
+        "evidence": [
+          {
+            "quote": "不能。防止 K 与 O₂ 直接反应（两个半反应必须分隔在两个场所）。",
+            "start": 0,
+            "end": 34
+          }
+        ],
+        "model": "fixture-v1",
+        "provenance": {
+          "promptId": "structured-assessment",
+          "promptVersion": "fixture-prompt.v1",
+          "cacheKey": "fixture-a-exam1-membrane-p1"
+        }
+      },
+      "ruleDecision": {
+        "status": "hit",
+        "ruleId": "p1-hit",
+        "reason": "隔膜选择性与半反应分隔理由均有证据。",
+        "engine": {
+          "id": "rubric-policy",
+          "version": "rubric-policy.v2"
+        }
+      },
+      "following": {
+        "status": "not-followed",
+        "anchorNodeId": null,
+        "anchorOutcome": null,
+        "policy": "score-logical-chain"
+      },
+      "score": {
+        "status": "scored",
+        "earned": 2,
+        "possible": 2,
+        "annotations": [],
+        "outcome": "hit"
       }
     }
   ]

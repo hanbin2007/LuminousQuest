@@ -3,12 +3,12 @@
   "id": "teacher-fixture-session-c",
   "anonymousStudentId": "anon-TEACH003",
   "startedAt": "2026-07-16T03:00:00.000Z",
-  "updatedAt": "2026-07-16T03:06:01.000Z",
+  "updatedAt": "2026-07-16T03:07:02.000Z",
   "configVersions": {
-    "configDigest": "sha256:0deea71c9da4a80916841b0758e9769708da5545368a0c4977ec52a2fba912e6",
+    "configDigest": "sha256:7dbf2c8ad6e3b7bd3dd3defc0ad2a4560c8c699233e37fdd6a50ce1d70e3e8f2",
     "knowledgeModel": "knowledge-model.v1.2",
     "rubrics": "rubrics.v1.2",
-    "pretest": "pretest.v1.1",
+    "pretest": "pretest.v1.2",
     "scaffoldPolicy": "scaffold-policy.v1.5",
     "cases": { "zinc-copper": "case.v1.5", "aluminum-air": "case.v1.5", "hydrogen-oxygen": "case.v1.5", "methane-fuel": "case.v1.5" },
     "grammar": "equation-grammar.v2",
@@ -63,6 +63,32 @@
       "ruleDecision": { "status": "hit", "ruleId": "e1-hit", "reason": "直接转化方向正确。", "engine": { "id": "rubric-policy", "version": "rubric-policy.v2" } },
       "following": { "status": "not-followed", "anchorNodeId": null, "anchorOutcome": null, "policy": "score-logical-chain" },
       "score": { "status": "scored", "earned": 2, "possible": 2, "annotations": [], "outcome": "hit" }
+    },
+    {
+      "schemaVersion": "event.v2", "id": "c-answer-exam1-membrane", "sequence": 6, "occurredAt": "2026-07-16T03:07:00.000Z",
+      "caseId": "pretest", "stageId": "assessment", "attemptId": "c-exam1-4",
+      "kind": "answer.submitted", "pipelineStage": "answer", "questionId": "pretest-exam1-membrane",
+      "answer": { "format": "text", "value": "能，因为氧气需要通过隔膜到达钾极。" }
+    },
+    {
+      "schemaVersion": "event.v2", "id": "c-assessment-exam1-membrane-d3", "sequence": 7, "occurredAt": "2026-07-16T03:07:01.000Z",
+      "caseId": "pretest", "stageId": "assessment", "attemptId": "c-exam1-4",
+      "kind": "assessment.completed", "pipelineStage": "score", "sourceAnswerEventId": "c-answer-exam1-membrane", "nodeId": "D3",
+      "rubric": { "id": "rubric-d3", "version": "rubrics.v1.2" }, "assistance": { "kind": "none", "rounds": 0 }, "objectiveOutcome": "miss",
+      "extraction": { "status": "assessed", "evidence": [{ "quote": "能，因为氧气需要通过隔膜到达钾极。", "start": 0, "end": 17 }], "model": "fixture-v1", "provenance": { "promptId": "structured-assessment", "promptVersion": "fixture-prompt.v1", "cacheKey": "fixture-c-exam1-membrane-d3" } },
+      "ruleDecision": { "status": "miss", "ruleId": "d3-miss", "reason": "判断隔膜可通过 O₂。", "engine": { "id": "rubric-policy", "version": "rubric-policy.v2" } },
+      "following": { "status": "not-followed", "anchorNodeId": null, "anchorOutcome": null, "policy": "score-logical-chain" },
+      "score": { "status": "scored", "earned": 0, "possible": 2, "annotations": [], "outcome": "miss" }
+    },
+    {
+      "schemaVersion": "event.v2", "id": "c-assessment-exam1-membrane-p1", "sequence": 8, "occurredAt": "2026-07-16T03:07:02.000Z",
+      "caseId": "pretest", "stageId": "assessment", "attemptId": "c-exam1-4",
+      "kind": "assessment.completed", "pipelineStage": "score", "sourceAnswerEventId": "c-answer-exam1-membrane", "nodeId": "P1",
+      "rubric": { "id": "rubric-p1", "version": "rubrics.v1.2" }, "assistance": { "kind": "none", "rounds": 0 }, "objectiveOutcome": "miss",
+      "extraction": { "status": "assessed", "evidence": [{ "quote": "能，因为氧气需要通过隔膜到达钾极。", "start": 0, "end": 17 }], "model": "fixture-v1", "provenance": { "promptId": "structured-assessment", "promptVersion": "fixture-prompt.v1", "cacheKey": "fixture-c-exam1-membrane-p1" } },
+      "ruleDecision": { "status": "miss", "ruleId": "p1-miss", "reason": "判断隔膜可通过 O₂。", "engine": { "id": "rubric-policy", "version": "rubric-policy.v2" } },
+      "following": { "status": "not-followed", "anchorNodeId": null, "anchorOutcome": null, "policy": "score-logical-chain" },
+      "score": { "status": "scored", "earned": 0, "possible": 2, "annotations": [], "outcome": "miss" }
     }
   ]
 }

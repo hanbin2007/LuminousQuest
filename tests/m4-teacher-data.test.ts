@@ -75,10 +75,27 @@ describe('M4 teacher evidence and class aggregation', () => {
       errorCount: 3,
       rate: 1,
     });
-    expect(summary.misconceptions[0]).toMatchObject({
+    expect(summary.misconceptions.find((item) => item.id === 'P4-M1')).toMatchObject({
       id: 'P4-M1',
       count: 2,
     });
+  });
+
+  it('keeps hit, partial, and miss K-O2 membrane evidence across teacher fixtures', async () => {
+    const config = await loadAllConfig(process.cwd());
+    const imported = importClassSessionFiles(await fixtureFiles(), config);
+
+    const outcomes = imported.accepted.map(({ session }) => {
+      const event = session.events.find((candidate) =>
+        candidate.kind === 'assessment.completed'
+        && candidate.nodeId === 'D3'
+        && candidate.sourceAnswerEventId.endsWith('answer-exam1-membrane'));
+      return event?.kind === 'assessment.completed' && event.score.status === 'scored'
+        ? event.score.outcome
+        : null;
+    });
+
+    expect(outcomes).toEqual(['hit', 'partial', 'miss']);
   });
 
   it('rejects invalid, duplicate, and rubric-version-mismatched files with anonymous per-file messages', async () => {
@@ -149,14 +166,15 @@ describe('M4 teacher evidence and class aggregation', () => {
     const [source] = await fixtureFiles();
     const session = JSON.parse(source.text) as Record<string, any>;
     const answer = '电子由锌极经外电路流向铜极，盐桥阴离子移向锌盐一侧。';
+    const nextSequence = session.events.length;
     session.events.push({
-      schemaVersion: 'event.v2', id: 'latest-answer-p4', sequence: 10,
-      occurredAt: '2026-07-16T01:10:00.000Z', caseId: 'zinc-copper', stageId: 'training',
+      schemaVersion: 'event.v2', id: 'latest-answer-p4', sequence: nextSequence,
+      occurredAt: '2026-07-16T01:14:00.000Z', caseId: 'zinc-copper', stageId: 'training',
       attemptId: 'latest-p4', kind: 'answer.submitted', pipelineStage: 'answer',
       questionId: 'zinc-copper:analysis', answer: { format: 'text', value: answer },
     }, {
       ...structuredClone(session.events.find((event: any) => event.id === 'a-assessment-p4')),
-      id: 'latest-assessment-p4', sequence: 11, occurredAt: '2026-07-16T01:10:01.000Z',
+      id: 'latest-assessment-p4', sequence: nextSequence + 1, occurredAt: '2026-07-16T01:14:01.000Z',
       attemptId: 'latest-p4', sourceAnswerEventId: 'latest-answer-p4', misconceptionIds: [],
       objectiveOutcome: 'hit',
       extraction: {
@@ -170,7 +188,7 @@ describe('M4 teacher evidence and class aggregation', () => {
       },
       score: { status: 'scored', earned: 2, possible: 2, annotations: [], outcome: 'hit' },
     });
-    session.updatedAt = '2026-07-16T01:10:01.000Z';
+    session.updatedAt = '2026-07-16T01:14:01.000Z';
 
     const summary = buildClassSummary([session], config);
 

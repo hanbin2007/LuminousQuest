@@ -21,10 +21,12 @@ export async function writeValidContentTree(
   const casesRoot = path.join(configRoot, 'cases');
   const promptsRoot = path.join(root, 'prompts');
   const assetsRoot = path.join(root, 'assets');
+  const examAssetsRoot = path.join(assetsRoot, 'exam');
   const zincAssetsRoot = path.join(assetsRoot, 'cases', 'zinc-copper');
   const methaneAssetsRoot = path.join(assetsRoot, 'cases', 'methane-fuel');
   await mkdir(casesRoot, { recursive: true });
   await mkdir(promptsRoot, { recursive: true });
+  await mkdir(examAssetsRoot, { recursive: true });
   await mkdir(zincAssetsRoot, { recursive: true });
   if (options.includeTransfer) await mkdir(methaneAssetsRoot, { recursive: true });
 
@@ -39,6 +41,10 @@ export async function writeValidContentTree(
     copyRepositoryFile(
       path.join('assets', 'cases', 'zinc-copper', 'schematic.png'),
       path.join(zincAssetsRoot, 'schematic.png'),
+    ),
+    copyRepositoryFile(
+      path.join('assets', 'exam', 'q1-k-o2.png'),
+      path.join(examAssetsRoot, 'q1-k-o2.png'),
     ),
     ...(options.includeTransfer ? [
       copyRepositoryFile(

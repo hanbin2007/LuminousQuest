@@ -85,6 +85,14 @@ describe('M4 demo execution mode', () => {
         training: { feedbackRound: { caseId: 'zinc-copper', attemptIds: ['demo-p4-1'] } },
       },
     });
+    expect(activation.session.events
+      .filter((event: any) => event.kind === 'answer.submitted' && event.caseId === 'pretest')
+      .map((event: any) => event.questionId)).toEqual([
+        'pretest-exam1-polarity',
+        'pretest-exam1-electron-flow',
+        'pretest-exam1-stoichiometry',
+        'pretest-exam1-membrane',
+      ]);
 
     const tutor = await app.request('/api/tutor/turn', {
       method: 'POST',

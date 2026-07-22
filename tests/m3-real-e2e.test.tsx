@@ -195,6 +195,21 @@ describe('real M3 route chain', () => {
     fireEvent.click(screen.getByRole('button', { name: '提交作答' }));
     await user.click(await screen.findByLabelText(/^A\./, {}, routeTransitionTimeout));
     await user.click(screen.getByRole('button', { name: '提交作答' }));
+    const examChoicePrompts = [
+      /电极 a、b 分别为什么极/,
+      /外电路中电子的流向/,
+      /消耗 K 与消耗 O₂/,
+    ];
+    for (const prompt of examChoicePrompts) {
+      await screen.findByText(prompt, {}, routeTransitionTimeout);
+      await user.click(await screen.findByLabelText(/^A\./, {}, routeTransitionTimeout));
+      await user.click(screen.getByRole('button', { name: '提交作答' }));
+    }
+    await screen.findByText(/隔膜能否通过 O₂/, {}, routeTransitionTimeout);
+    fireEvent.change(await screen.findByLabelText('简答作答', {}, routeTransitionTimeout), {
+      target: { value: '不能。防止 K 与 O₂ 直接反应，两个半反应必须分隔在两个场所。' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '提交作答' }));
     await user.click(await screen.findByRole(
       'button',
       { name: '跳过手绘，查看诊断' },

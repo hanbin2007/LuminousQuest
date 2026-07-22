@@ -15,7 +15,8 @@ describe('configuration loading', () => {
     const loaded = await loadAllConfig(root);
 
     expect(loaded.knowledgeModel.version).toBe('knowledge-model.v1.2');
-    expect(loaded.pretest.questions).toHaveLength(3);
+    expect(loaded.pretest.version).toBe('pretest.v1.2');
+    expect(loaded.pretest.questions).toHaveLength(7);
     expect(loaded.cases).toHaveLength(1);
     expect(loaded.configVersion).toMatch(/^sha256:[a-f0-9]{64}$/);
   });
@@ -54,6 +55,44 @@ describe('configuration loading', () => {
     const second = await loadAllConfig(root);
 
     expect(second.configVersion).not.toBe(first.configVersion);
+  });
+
+  it('loads optional grouped-question metadata when its figure exists', async () => {
+    const root = await createTemporaryDirectory();
+    await writeValidContentTree(root);
+    const file = path.join(root, 'config', 'pretest.json');
+    const pretest = JSON.parse(await readFile(file, 'utf8'));
+    pretest.questions[0].group = {
+      id: 'exam-fixture',
+      title: '高考真题',
+      stimulus: '共享题干',
+      figure: 'assets/cases/zinc-copper/schematic.png',
+    };
+    await writeFile(file, JSON.stringify(pretest));
+
+    const loaded = await loadAllConfig(root);
+
+    expect(loaded.pretest.questions[0]?.group).toEqual(pretest.questions[0].group);
+  });
+
+  it('rejects grouped-question metadata whose figure is missing', async () => {
+    const root = await createTemporaryDirectory();
+    await writeValidContentTree(root);
+    const file = path.join(root, 'config', 'pretest.json');
+    const pretest = JSON.parse(await readFile(file, 'utf8'));
+    pretest.questions[0].group = {
+      id: 'exam-fixture',
+      title: '高考真题',
+      stimulus: '共享题干',
+      figure: 'assets/exam/missing.png',
+    };
+    await writeFile(file, JSON.stringify(pretest));
+
+    await expect(loadAllConfig(root)).rejects.toMatchObject({
+      file: 'config/pretest.json',
+      field: 'questions.0.group.figure',
+      reason: expect.stringContaining('missing'),
+    });
   });
 
   it('hot-loads prompt markdown and derives its version from content', async () => {

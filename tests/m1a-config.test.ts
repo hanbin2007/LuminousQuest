@@ -124,11 +124,15 @@ describe('M1a external teaching configuration', () => {
     }
     expect(config.cases.find((trainingCase) => trainingCase.id === 'zinc-copper')?.materials)
       .toHaveLength(1);
-    expect(config.pretest.questions).toHaveLength(3);
+    expect(config.pretest.questions).toHaveLength(7);
     expect(config.pretest.questions.map((question: any) => question.dimensionId)).toEqual([
       'principle',
       'principle',
       'energy',
+      'device',
+      'principle',
+      'principle',
+      'device',
     ]);
   });
 
@@ -160,12 +164,12 @@ describe('M1a external teaching configuration', () => {
     expect(mappedIds.every((id: string) => misconceptionIds.has(id))).toBe(true);
   });
 
-  it('transcribes the v1.1 D4/E3 rulings and removes the contradictory same-material distractor', async () => {
+  it('transcribes the D4/E3 rulings and removes the contradictory same-material distractor', async () => {
     const config = await loadAllConfig(process.cwd());
 
     expect(config.knowledgeModel.version).toBe('knowledge-model.v1.2');
     expect(config.rubrics.version).toBe('rubrics.v1.2');
-    expect(config.pretest.version).toBe('pretest.v1.1');
+    expect(config.pretest.version).toBe('pretest.v1.2');
     expect(config.scaffoldPolicy.version).toBe('scaffold-policy.v1.5');
     expect(config.scaffoldPolicy.extraction.temperature).toBe(0.1);
     expect(config.cases.every((entry) => entry.version === 'case.v1.5')).toBe(true);
@@ -189,6 +193,79 @@ describe('M1a external teaching configuration', () => {
     expect(question.options.find((entry) => entry.id === 'C')?.misconceptionIds).toContain('D3-M4');
     expect(question.options.find((entry) => entry.id === 'D')?.misconceptionIds)
       .toEqual(expect.arrayContaining(['P4-M1', 'P4-M2']));
+  });
+
+  it('transcribes the four K-O2 exam questions and their shared group exactly', async () => {
+    const config = await loadAllConfig(process.cwd());
+    const exam = config.pretest.questions.filter((question) =>
+      question.group?.id === 'exam-q1-k-o2');
+
+    expect(exam).toHaveLength(4);
+    for (const question of exam) {
+      expect(question.group).toEqual({
+        id: 'exam-q1-k-o2',
+        title: '高考真题',
+        stimulus: '【高考真题】K—O₂ 电池结构如图，a 和 b 为两个电极，其中之一为单质钾片。',
+        figure: 'assets/exam/q1-k-o2.png',
+      });
+    }
+
+    expect(exam[0]).toMatchObject({
+      id: 'pretest-exam1-polarity',
+      type: 'choice',
+      prompt: '该电池中，电极 a、b 分别为什么极？',
+      dimensionId: 'device',
+      targetNodeIds: ['D1', 'D4'],
+      rubricIds: ['rubric-d1', 'rubric-d4'],
+      options: [
+        { id: 'A', text: 'a 为负极，b 为正极——钾片失电子被氧化，O₂ 得电子被还原。', correct: true, misconceptionIds: [] },
+        { id: 'B', text: 'a 为正极，b 为负极。', correct: false, misconceptionIds: ['D1-M1', 'D4-M2'] },
+        { id: 'C', text: 'a、b 都可以是负极，取决于外电路接法。', correct: false, misconceptionIds: ['D1-M1'] },
+        { id: 'D', text: '无法判断，因为不知道电极材料是否参与反应。', correct: false, misconceptionIds: ['D5-M2'] },
+      ],
+    });
+    expect(exam[1]).toMatchObject({
+      id: 'pretest-exam1-electron-flow',
+      type: 'choice',
+      prompt: '放电时，外电路中电子的流向是？',
+      dimensionId: 'principle',
+      targetNodeIds: ['P4', 'D4'],
+      rubricIds: ['rubric-p4', 'rubric-d4'],
+      options: [
+        { id: 'A', text: '从 a 极经外电路流向 b 极。', correct: true, misconceptionIds: [] },
+        { id: 'B', text: '从 b 极经外电路流向 a 极。', correct: false, misconceptionIds: ['P4-M1'] },
+        { id: 'C', text: '从 a 极经隔膜（电解质）流向 b 极。', correct: false, misconceptionIds: ['P4-M2', 'D3-M1'] },
+        { id: 'D', text: '外电路和隔膜中都有电子流动。', correct: false, misconceptionIds: ['P4-M2'] },
+      ],
+    });
+    expect(exam[2]).toMatchObject({
+      id: 'pretest-exam1-stoichiometry',
+      type: 'choice',
+      prompt: '该电池放电时（生成 KO₂），消耗 K 与消耗 O₂ 的物质的量之比为？',
+      dimensionId: 'principle',
+      targetNodeIds: ['P6'],
+      rubricIds: ['rubric-p6'],
+      options: [
+        { id: 'A', text: '1:1——K − e⁻ = K⁺ 与 O₂ + e⁻ = O₂⁻ 各转移 1 个电子。', correct: true, misconceptionIds: [] },
+        { id: 'B', text: '2:1。', correct: false, misconceptionIds: ['P6-M2'] },
+        { id: 'C', text: '4:1。', correct: false, misconceptionIds: ['P6-M2'] },
+        { id: 'D', text: '1:2。', correct: false, misconceptionIds: ['P6-M1'] },
+      ],
+    });
+    expect(exam[3]).toMatchObject({
+      id: 'pretest-exam1-membrane',
+      type: 'text',
+      prompt: '该装置中的隔膜能否通过 O₂？请说明理由。',
+      dimensionId: 'device',
+      targetNodeIds: ['D3', 'P1'],
+      rubricIds: ['rubric-d3', 'rubric-p1'],
+      evidencePath: '简答原文 -> 隔膜选择性、半反应分隔理由',
+      answerGuidance: [
+        '不能。防止 K 与 O₂ 直接反应（两个半反应必须分隔在两个场所）。',
+        '另类正确：「不能。若 O₂ 通过隔膜到 a 极，会直接与 K 反应（或在 a 极得电子生成 O²⁻/K₂O 而非 KO₂），电池无法正常工作。」——判 hit。',
+        '只答「不能」无理由 → partial；答「能」→ miss。',
+      ],
+    });
   });
 
   it('states the complete alkaline aluminum-air OH- process and drops unsupported E3 targeting', async () => {

@@ -123,23 +123,24 @@ function assertUniqueCaseIds(cases: Awaited<ReturnType<typeof loadCases>>) {
   }
 }
 
-async function validateMaterialRef(
+async function validateAssetRef(
   contentRoot: string,
-  relativeCaseFile: string,
+  relativeConfigFile: string,
   field: string,
-  materialRef: string,
+  assetRef: string,
+  referenceName: string,
 ) {
-  if (materialRef.includes('\\')) {
-    throw new ConfigValidationError(relativeCaseFile, field, 'materialRef must use an assets/ path');
+  if (assetRef.includes('\\')) {
+    throw new ConfigValidationError(relativeConfigFile, field, `${referenceName} must use an assets/ path`);
   }
-  const normalized = path.posix.normalize(materialRef);
+  const normalized = path.posix.normalize(assetRef);
   if (!normalized.startsWith('assets/') || normalized === 'assets/') {
-    throw new ConfigValidationError(relativeCaseFile, field, 'materialRef must stay inside assets/');
+    throw new ConfigValidationError(relativeConfigFile, field, `${referenceName} must stay inside assets/`);
   }
   const assetsRoot = path.resolve(contentRoot, 'assets');
   const absoluteFile = path.resolve(contentRoot, ...normalized.split('/'));
   if (!absoluteFile.startsWith(`${assetsRoot}${path.sep}`)) {
-    throw new ConfigValidationError(relativeCaseFile, field, 'materialRef must stay inside assets/');
+    throw new ConfigValidationError(relativeConfigFile, field, `${referenceName} must stay inside assets/`);
   }
   try {
     const [resolvedAssetsRoot, resolvedFile] = await Promise.all([
@@ -147,12 +148,12 @@ async function validateMaterialRef(
       realpath(absoluteFile),
     ]);
     if (!resolvedFile.startsWith(`${resolvedAssetsRoot}${path.sep}`)) {
-      throw new Error('materialRef escapes assets/');
+      throw new Error(`${referenceName} escapes assets/`);
     }
     const info = await stat(resolvedFile);
     if (!info.isFile()) throw new Error('not a file');
   } catch {
-    throw new ConfigValidationError(relativeCaseFile, field, `materialRef is missing: ${materialRef}`);
+    throw new ConfigValidationError(relativeConfigFile, field, `${referenceName} is missing: ${assetRef}`);
   }
 }
 
@@ -457,20 +458,33 @@ export async function validateReferences(
 
   if (contentRoot) {
     await Promise.all(
-      config.cases.flatMap((trainingCase, caseIndex) =>
-        trainingCase.materials.flatMap((material, materialIndex) =>
-          material.materialRef === null
-            ? []
-            : [
-                validateMaterialRef(
-                  contentRoot,
-                  caseFiles[caseIndex] ?? `config/cases/${trainingCase.id}.json`,
-                  `materials.${materialIndex}.materialRef`,
-                  material.materialRef,
-                ),
-              ],
+      [
+        ...config.cases.flatMap((trainingCase, caseIndex) =>
+          trainingCase.materials.flatMap((material, materialIndex) =>
+            material.materialRef === null
+              ? []
+              : [
+                  validateAssetRef(
+                    contentRoot,
+                    caseFiles[caseIndex] ?? `config/cases/${trainingCase.id}.json`,
+                    `materials.${materialIndex}.materialRef`,
+                    material.materialRef,
+                    'materialRef',
+                  ),
+                ],
+          ),
         ),
-      ),
+        ...config.pretest.questions.flatMap((question, questionIndex) =>
+          question.group
+            ? [validateAssetRef(
+                contentRoot,
+                'config/pretest.json',
+                `questions.${questionIndex}.group.figure`,
+                question.group.figure,
+                'figure',
+              )]
+            : []),
+      ],
     );
   }
 }

@@ -867,6 +867,40 @@ p {
   gap: var(--space-3);
 }
 
+.exam-question-context {
+  display: grid;
+  gap: var(--space-3);
+  padding-bottom: var(--space-5);
+  margin-bottom: var(--space-5);
+  border-bottom: 1px solid var(--hairline);
+}
+
+.exam-question-context__badge {
+  width: fit-content;
+  padding: var(--space-1) var(--space-2);
+  color: var(--dim-device);
+  border: 1px solid var(--dim-device);
+  border-radius: var(--radius-sm);
+  background: var(--dim-device-soft);
+  font-size: var(--text-xs);
+  font-weight: 700;
+}
+
+.exam-question-context p {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: 700;
+  line-height: var(--leading-body);
+}
+
+.exam-question-context img {
+  display: block;
+  width: min(100%, 669px);
+  height: auto;
+  border: 1px solid var(--hairline);
+  background: var(--paper);
+}
+
 .question-card h2 {
   margin: var(--space-4) 0 var(--space-5);
   font-family: var(--font-body);
@@ -2957,6 +2991,13 @@ p {
 .test-nav__stop:hover { border-color: var(--brand-teal, #2cb8b8); }
 .test-nav__stop:active { transform: scale(0.95); }
 .test-nav__stop:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+
+/* 测试手动点亮:被点亮节点的芯片呈校青实底 */
+.test-nav__stop[aria-pressed='true'] {
+  background: var(--brand-teal, #2cb8b8);
+  border-color: var(--brand-teal, #2cb8b8);
+  color: #10241f;
+}
 
 
 /* ==== 动画审计修复:按压反馈补齐(纸面域=下压 1px;暗态域=scale) ==== */

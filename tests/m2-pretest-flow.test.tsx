@@ -13,6 +13,7 @@ import { createSession, exportSession, sessionConfigVersions } from '../shared/s
 import { App, type AppRuntime } from '../src/App';
 import { recordChoiceAssessment } from '../shared/workflows/choice-assessment';
 import { QuestionCard } from '../src/features/pretest/QuestionCard';
+import { emptyPretestDraft, savePretestDraft } from '../src/features/pretest/draft';
 
 describe('M2 pretest route', () => {
   beforeEach(() => {
@@ -82,7 +83,104 @@ describe('M2 pretest route', () => {
     expect(screen.queryByText('判断题')).not.toBeInTheDocument();
   });
 
-  it('completes builder, three configured questions, and reaches traceable diagnosis under a mock runtime', async () => {
+  it('renders grouped exam context, badge, and figure above the active subquestion', async () => {
+    const config = await loadAllConfig(process.cwd());
+    const question = config.pretest.questions.find((entry) =>
+      entry.id === 'pretest-exam1-polarity');
+    if (!question?.group) throw new Error('Expected the grouped exam question');
+
+    render(
+      <QuestionCard
+        question={question}
+        dimensionLabel="装置"
+        onAnswerChange={() => undefined}
+        onSubmit={() => undefined}
+      />,
+    );
+
+    expect(screen.getByText('高考真题')).toBeInTheDocument();
+    expect(screen.getByText(question.group.stimulus)).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: '高考真题装置图' }))
+      .toHaveAttribute('src', '/assets/exam/q1-k-o2.png');
+    expect(screen.getByRole('heading', { name: question.prompt })).toBeInTheDocument();
+  });
+
+  it.each([
+    ['pretest-exam1-polarity', 'B', ['D1-M1', 'D4-M2']],
+    ['pretest-exam1-electron-flow', 'C', ['P4-M2', 'D3-M1']],
+    ['pretest-exam1-stoichiometry', 'D', ['P6-M1']],
+  ])('scores %s distractors with the configured misconception mapping', async (
+    questionId,
+    optionId,
+    misconceptionIds,
+  ) => {
+    const config = await loadAllConfig(process.cwd());
+    const question = config.pretest.questions.find((entry) => entry.id === questionId);
+    if (!question || question.type !== 'choice') throw new Error(`Missing choice ${questionId}`);
+    const session = createSession({
+      id: `session-${questionId}`,
+      now: '2026-07-22T12:00:00.000Z',
+      configVersions: sessionConfigVersions(config),
+    });
+
+    const result = recordChoiceAssessment({ session, config, question, optionId });
+    const assessments = result.session.events.filter((event) =>
+      event.kind === 'assessment.completed');
+
+    expect(result.correct).toBe(false);
+    expect(question.options.find((option) => option.id === optionId)?.misconceptionIds)
+      .toEqual(misconceptionIds);
+    expect(assessments).toHaveLength(question.targetNodeIds.length);
+    expect(assessments.every((event) =>
+      event.kind === 'assessment.completed'
+      && event.ruleDecision.status === 'miss'
+      && event.score.status === 'scored'
+      && event.score.outcome === 'miss')).toBe(true);
+  });
+
+  it('routes the K-O2 membrane response through the configured extraction mock path', async () => {
+    const user = userEvent.setup();
+    const config = await loadAllConfig(process.cwd());
+    const session = createSession({
+      id: 'session-exam1-membrane',
+      now: '2026-07-22T12:00:00.000Z',
+      configVersions: sessionConfigVersions(config),
+    });
+    new LocalSessionStore(window.localStorage).save(session);
+    savePretestDraft(window.localStorage, session.id, {
+      ...emptyPretestDraft(),
+      step: config.pretest.questions.findIndex((question) =>
+        question.id === 'pretest-exam1-membrane') + 1,
+    });
+    const runtime: AppRuntime = {
+      loadConfig: vi.fn(async () => config),
+      assessChoice: vi.fn(async () => ({ session: null })),
+      extractAssessment: vi.fn(async () => ({ session: null })),
+      assessEquation: vi.fn(async () => ({ session: null })),
+      tutorTurn: vi.fn(async () => ({
+        status: 'none' as const,
+        reason: 'no-assessment' as const,
+        session: null as never,
+        assistance: { kind: 'none' as const, rounds: 0 },
+        source: 'preset' as const,
+        degraded: false,
+      })),
+      reviewDrawing: vi.fn(async () => '已收到手绘。'),
+    };
+    render(<App initialConfig={config} runtime={runtime} />);
+
+    const answer = '不能。防止 K 与 O₂ 直接反应，两个半反应必须分隔。';
+    await user.type(await screen.findByLabelText('简答作答'), answer);
+    await user.click(screen.getByRole('button', { name: '提交作答' }));
+
+    expect(runtime.extractAssessment).toHaveBeenCalledWith(expect.objectContaining({
+      questionId: 'pretest-exam1-membrane',
+      targetNodeIds: ['D3', 'P1'],
+      studentAnswer: answer,
+    }));
+  });
+
+  it('completes builder, seven configured questions, and reaches traceable diagnosis under a mock runtime', async () => {
     const user = userEvent.setup();
     const config = await loadAllConfig(process.cwd());
     const runtime: AppRuntime = {
@@ -120,6 +218,22 @@ describe('M2 pretest route', () => {
 
     await user.click(await screen.findByLabelText(/^A\./));
     await user.click(screen.getByRole('button', { name: '提交作答' }));
+
+    await user.click(await screen.findByLabelText(/^A\./));
+    await user.click(screen.getByRole('button', { name: '提交作答' }));
+    await user.click(await screen.findByLabelText(/^A\./));
+    await user.click(screen.getByRole('button', { name: '提交作答' }));
+    await user.click(await screen.findByLabelText(/^A\./));
+    await user.click(screen.getByRole('button', { name: '提交作答' }));
+
+    const membraneAnswer = await screen.findByLabelText('简答作答');
+    await user.type(membraneAnswer, '不能，防止钾与氧气直接反应。');
+    await user.click(screen.getByRole('button', { name: '提交作答' }));
+    expect(runtime.extractAssessment).toHaveBeenCalledTimes(2);
+    expect(runtime.extractAssessment).toHaveBeenLastCalledWith(expect.objectContaining({
+      questionId: 'pretest-exam1-membrane',
+      targetNodeIds: ['D3', 'P1'],
+    }));
     await user.click(await screen.findByRole('button', { name: '跳过手绘，查看诊断' }));
 
     expect(await screen.findByRole('heading', { name: '诊断结果' })).toBeInTheDocument();
