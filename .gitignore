@@ -14,3 +14,6 @@ eval/recordings/**/*.json
 eval/reports/latest-*.md
 eval/cases/imported/*.pending.json
 *.log
+
+# 真实学生作答原始件(含个人信息,仅本机,严禁入库)
+eval/human-raw/
