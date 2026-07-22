@@ -163,8 +163,8 @@ describe('M1a external teaching configuration', () => {
   it('transcribes the v1.1 D4/E3 rulings and removes the contradictory same-material distractor', async () => {
     const config = await loadAllConfig(process.cwd());
 
-    expect(config.knowledgeModel.version).toBe('knowledge-model.v1.1');
-    expect(['rubrics.v1.1', 'rubrics.v1.2']).toContain(config.rubrics.version);
+    expect(config.knowledgeModel.version).toBe('knowledge-model.v1.2');
+    expect(config.rubrics.version).toBe('rubrics.v1.2');
     expect(config.pretest.version).toBe('pretest.v1.1');
     expect(config.scaffoldPolicy.version).toBe('scaffold-policy.v1.5');
     expect(config.scaffoldPolicy.extraction.temperature).toBe(0.1);

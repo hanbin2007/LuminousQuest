@@ -33,7 +33,7 @@
     },
     "expectedScore": "partial",
     "annotator": "codex-synthetic-seed",
-    "rubricVersion": "rubrics.v1.1",
+    "rubricVersion": "rubrics.v1.2",
     "source": "synthetic",
     "misconceptionIds": [
       "P3-M1"
@@ -112,7 +112,7 @@
     },
     "expectedScore": "partial",
     "annotator": "codex-synthetic-seed",
-    "rubricVersion": "rubrics.v1.1",
+    "rubricVersion": "rubrics.v1.2",
     "source": "synthetic",
     "misconceptionIds": [
       "P3-M1",
@@ -191,7 +191,7 @@
     },
     "expectedScore": "miss",
     "annotator": "codex-synthetic-seed",
-    "rubricVersion": "rubrics.v1.1",
+    "rubricVersion": "rubrics.v1.2",
     "source": "synthetic",
     "misconceptionIds": [
       "P3-M3"
@@ -268,7 +268,7 @@
     },
     "expectedScore": "partial",
     "annotator": "codex-synthetic-seed",
-    "rubricVersion": "rubrics.v1.1",
+    "rubricVersion": "rubrics.v1.2",
     "source": "synthetic",
     "misconceptionIds": [
       "P6-M1"
@@ -347,7 +347,7 @@
     },
     "expectedScore": "partial",
     "annotator": "codex-synthetic-seed",
-    "rubricVersion": "rubrics.v1.1",
+    "rubricVersion": "rubrics.v1.2",
     "source": "synthetic",
     "misconceptionIds": [
       "P6-M1",
@@ -426,7 +426,7 @@
     },
     "expectedScore": "partial",
     "annotator": "codex-synthetic-seed",
-    "rubricVersion": "rubrics.v1.1",
+    "rubricVersion": "rubrics.v1.2",
     "source": "synthetic",
     "misconceptionIds": [
       "P6-M3"
@@ -503,7 +503,7 @@
     },
     "expectedScore": "miss",
     "annotator": "codex-synthetic-seed",
-    "rubricVersion": "rubrics.v1.1",
+    "rubricVersion": "rubrics.v1.2",
     "source": "synthetic",
     "misconceptionIds": [
       "P7-M1"
@@ -580,7 +580,7 @@
     },
     "expectedScore": "miss",
     "annotator": "codex-synthetic-seed",
-    "rubricVersion": "rubrics.v1.1",
+    "rubricVersion": "rubrics.v1.2",
     "source": "synthetic",
     "misconceptionIds": [
       "P7-M2"

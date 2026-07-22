@@ -14,7 +14,7 @@ describe('configuration loading', () => {
 
     const loaded = await loadAllConfig(root);
 
-    expect(loaded.knowledgeModel.version).toBe('knowledge-model.v1.1');
+    expect(loaded.knowledgeModel.version).toBe('knowledge-model.v1.2');
     expect(loaded.pretest.questions).toHaveLength(3);
     expect(loaded.cases).toHaveLength(1);
     expect(loaded.configVersion).toMatch(/^sha256:[a-f0-9]{64}$/);

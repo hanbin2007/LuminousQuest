@@ -5,9 +5,9 @@
   "startedAt": "2026-07-16T01:00:00.000Z",
   "updatedAt": "2026-07-16T01:09:00.000Z",
   "configVersions": {
-    "configDigest": "sha256:1b49a6fac91ab7cf1fc708b0d766e647030077d51613c991171b010ead4f757d",
-    "knowledgeModel": "knowledge-model.v1.1",
-    "rubrics": "rubrics.v1.1",
+    "configDigest": "sha256:0deea71c9da4a80916841b0758e9769708da5545368a0c4977ec52a2fba912e6",
+    "knowledgeModel": "knowledge-model.v1.2",
+    "rubrics": "rubrics.v1.2",
     "pretest": "pretest.v1.1",
     "scaffoldPolicy": "scaffold-policy.v1.5",
     "cases": {
@@ -57,7 +57,7 @@
       ],
       "rubric": {
         "id": "rubric-p4",
-        "version": "rubrics.v1.1"
+        "version": "rubrics.v1.2"
       },
       "assistance": {
         "kind": "none",
@@ -171,7 +171,7 @@
       "nodeId": "D3",
       "rubric": {
         "id": "rubric-d3",
-        "version": "rubrics.v1.1"
+        "version": "rubrics.v1.2"
       },
       "assistance": {
         "kind": "none",
@@ -247,7 +247,7 @@
       "nodeId": "E1",
       "rubric": {
         "id": "rubric-e1",
-        "version": "rubrics.v1.1"
+        "version": "rubrics.v1.2"
       },
       "assistance": {
         "kind": "none",
@@ -323,7 +323,7 @@
       "nodeId": "P6",
       "rubric": {
         "id": "rubric-p6",
-        "version": "rubrics.v1.1"
+        "version": "rubrics.v1.2"
       },
       "assistance": {
         "kind": "none",

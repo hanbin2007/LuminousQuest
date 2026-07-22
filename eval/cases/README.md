@@ -46,7 +46,7 @@ A labeled case uses this shape:
       "rename-person": { "status": "approved", "rationale": "Referent only." }
     }
   },
-  "rubricVersion": "rubrics.v1.1",
+  "rubricVersion": "rubrics.v1.2",
   "source": "synthetic",
   "misconceptionIds": ["P4-M1"],
   "tags": ["misconception"],

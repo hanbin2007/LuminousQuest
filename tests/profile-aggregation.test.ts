@@ -281,7 +281,7 @@ describe('traceable rubric scoring and learner profile aggregation', () => {
       trace: {
         sourceAnswerEventId: 'answer-1',
         originalAnswer: answer,
-        rubric: { id: 'rubric-p4', version: 'rubrics.v1.1' },
+        rubric: { id: 'rubric-p4', version: 'rubrics.v1.2' },
         ruleId: 'p4-hit',
         evidence: [{ quote, start: 0, end: quote.length }],
       },

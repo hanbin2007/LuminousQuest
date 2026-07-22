@@ -1,5 +1,5 @@
 {
-  "version": "rubrics.v1.1",
+  "version": "rubrics.v1.2",
   "followingAnchors": [
     {
       "id": "case-polarity",
@@ -169,12 +169,12 @@
       "nodeId": "P1",
       "maxScore": 2,
       "evidenceRequirements": [
-        { "id": "P1-E1", "description": "指出能够自发进行的氧化还原反应及两个半反应分处两个场所。", "sources": ["choice", "text", "case-analysis"] }
+        { "id": "P1-E1", "description": "指出常规原电池以自发的氧化还原反应为前提、两个半反应分处两个场所；拓展情境中能指出两极电势差是更本质的条件。", "sources": ["choice", "text", "case-analysis"] }
       ],
       "rules": [
-        { "id": "p1-hit", "outcome": "hit", "score": 2, "description": "完整说明自发氧化还原前提和半反应空间分离。" },
-        { "id": "p1-partial", "outcome": "partial", "score": 1, "description": "只说明氧化还原反应或只说明两个场所。" },
-        { "id": "p1-miss", "outcome": "miss", "score": 0, "description": "认为任意反应都能构成原电池。" }
+        { "id": "p1-hit", "outcome": "hit", "score": 2, "description": "完整说明自发氧化还原前提和半反应空间分离；拓展情境下须同时指出电势差本质与净过程自发，并区分总反应无价态净变化与两极仍有氧化还原。" },
+        { "id": "p1-partial", "outcome": "partial", "score": 1, "description": "只说明氧化还原反应或只说明两个场所；拓展情境下仅提到存在电势差或仅说无化合价变化。" },
+        { "id": "p1-miss", "outcome": "miss", "score": 0, "description": "认为任意反应都能构成原电池；或坚持原电池总反应必须有元素化合价变化、否认浓差与络合电池（P1-M3）。" }
       ]
     },
     {
@@ -275,10 +275,10 @@
       "nodeId": "E2",
       "maxScore": 1,
       "evidenceRequirements": [
-        { "id": "E2-EV1", "description": "把输出电能追溯到自发氧化还原反应释放的化学能。", "sources": ["choice", "text", "case-analysis"] }
+        { "id": "E2-EV1", "description": "把输出电能追溯到自发总反应释放的化学能（常规为氧化还原反应；拓展情境含浓差、配位能量）。", "sources": ["choice", "text", "case-analysis"] }
       ],
       "rules": [
-        { "id": "e2-hit", "outcome": "hit", "score": 1, "description": "正确指出能量来源与反应自发性。" },
+        { "id": "e2-hit", "outcome": "hit", "score": 1, "description": "正确指出能量来源与总反应自发性。" },
         { "id": "e2-partial", "outcome": "partial", "score": 0.5, "description": "只提化学能或氧化还原反应，联系不完整。" },
         { "id": "e2-miss", "outcome": "miss", "score": 0, "description": "不能说明能量来源或认为不自发反应可持续供电。" }
       ]
