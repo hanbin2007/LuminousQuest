@@ -11,6 +11,14 @@ export interface ExtractAssessmentInput {
   submissionId: string;
 }
 
+export interface ExtractAssessmentResult {
+  session: StudentSession | null;
+  status?: 'extracted' | 'needs-review' | 'deterministic' | 'already-recorded';
+  source?: 'provider' | 'development-cache' | 'demo-recording' | 'fallback';
+  model?: string;
+  degraded?: boolean;
+}
+
 export interface EquationAssessmentInput {
   sessionId: string;
   caseId: string;
@@ -57,7 +65,7 @@ export interface ChoiceAssessmentInput {
 export interface AppRuntime {
   loadConfig: () => Promise<LoadedConfig>;
   assessChoice: (input: ChoiceAssessmentInput) => Promise<{ session: StudentSession | null }>;
-  extractAssessment: (input: ExtractAssessmentInput) => Promise<{ session: StudentSession | null }>;
+  extractAssessment: (input: ExtractAssessmentInput) => Promise<ExtractAssessmentResult>;
   assessEquation: (input: EquationAssessmentInput) => Promise<{ session: StudentSession | null }>;
   tutorTurn: (input: TutorTurnInput) => Promise<TutorTurnResult>;
   reviewDrawing: (imageData: string) => Promise<string>;
@@ -159,7 +167,7 @@ export const defaultRuntime: AppRuntime = {
         body: JSON.stringify(input),
         signal: controller.signal,
       });
-      return jsonResponse<{ session: StudentSession }>(response);
+      return jsonResponse<ExtractAssessmentResult>(response);
     } catch (error) {
       if (controller.signal.aborted || (error instanceof DOMException && error.name === 'AbortError')) {
         throw new Error('判分请求超时，请重试；重试不会重复记录本次作答。');

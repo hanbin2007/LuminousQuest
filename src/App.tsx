@@ -2,6 +2,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BrowserRouter } from 'react-router-dom';
 
 import type { LoadedConfig } from '../shared/config/schemas';
+import { createAgentActivityRuntime } from './agent/agent-activity';
+import {
+  AgentActivityProvider,
+  useAgentActivityActions,
+} from './agent/AgentActivityContext';
 import { AppRoutes } from './app/AppRoutes';
 import { AppContext } from './app/AppContext';
 import { AppErrorBoundary } from './app/AppErrorBoundary';
@@ -26,7 +31,12 @@ export interface AppProps {
   initialConfig?: LoadedConfig;
 }
 
-function ConfiguredApp({ config, runtime }: { config: LoadedConfig; runtime: AppRuntime }) {
+function ConfiguredApp({ config, runtime: baseRuntime }: { config: LoadedConfig; runtime: AppRuntime }) {
+  const activity = useAgentActivityActions();
+  const runtime = useMemo(
+    () => createAgentActivityRuntime(baseRuntime, activity),
+    [activity, baseRuntime],
+  );
   const {
     session,
     setSession,
@@ -218,5 +228,9 @@ export function App({ runtime = defaultRuntime, initialConfig }: AppProps) {
 
   if (error) return <main className="fatal-state"><h1>无法载入课程配置</h1><p>{error}</p></main>;
   if (!config) return <main className="loading-state" aria-label="课程配置载入中" />;
-  return <ConfiguredApp config={config} runtime={runtime} />;
+  return (
+    <AgentActivityProvider>
+      <ConfiguredApp config={config} runtime={runtime} />
+    </AgentActivityProvider>
+  );
 }

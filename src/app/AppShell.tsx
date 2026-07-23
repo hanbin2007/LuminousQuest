@@ -2,6 +2,7 @@ import { CircleDot } from 'lucide-react';
 import { Suspense, useEffect } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 
+import { AgentActivityPanel } from '../agent/AgentActivityPanel';
 import { AmbientChemistryBackdrop } from './AmbientChemistryBackdrop';
 import { useAppContext } from './AppContext';
 import { AppUtilityMenu } from './AppUtilityMenu';
@@ -43,6 +44,7 @@ export function AppShell() {
       <Suspense fallback={<main className="route-loading" aria-label="页面载入中" />}>
         <Outlet />
       </Suspense>
+      <AgentActivityPanel />
     </div>
   );
 }
