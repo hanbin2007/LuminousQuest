@@ -1,122 +1,146 @@
-# 训练阶段 Agent Loop + 真实 AI 接入 + 自适应提问 + 3D 联动（M6）
+# 训练阶段 Agent Loop（双轨制）+ 真实 AI 接入 + 3D 联动（M6 v2）
 
-日期：2026-07-23（用户需求原文见本节末）
-状态：双路评审已回（opus-4.8 / gpt-5.6-sol max，报告见 scratchpad），收敛为 **M6-lite**（见文末决议）；完整 agent loop 列为赛后 T2。待用户确认。
+日期：2026-07-23 ｜ 状态：v2。用户裁决（2026-07-23）：**要完整 agent 自主性**——给
+agent 足够信息让它自主评判，不做规则木偶；**原生 function calling**；**影子记录保留**
+（用户明确同意）。v1 的"frontier 规则层掌权/socratic 扩展"路线作废；v1 评审中机制性
+风险与门禁仍然有效（见 §6）。Modelverse 暂不充值：开发与实验通道 = claude-agent。
 
-用户需求（2026-07-23）：
-1. 尽快把真实 AI 调用接入整个项目（替换 development 阶段的 mock）。
-2. 训练阶段按前测结果针对性提问：已掌握的快速过，掌握不好的给更详细引导。
-3. 学生-agent 聊天改为完整 agent loop：agent 自主决定下一个问题；提供学生画像，画像随训练更新。
-4. 给 agent 足够工具：实时驱动 3D 视图、跟踪量表维度进度、适时点亮对应部分。
+## 0. 双轨制（本规格的核心）
 
-## 0. 不可动摇的架构前提
+- **驾驶轨（agent，自主）**：agent 拿到全部信息——只读 `DiagnosticProfile`（前测
+  基线：逐节点 outcome + 误区 id + 证据引文）、量表全文、知识模型、题库、逐轮学生
+  作答、**以及影子判分结果（作为参考信息注入，可采纳可不采纳）**。它自主决定：问
+  什么、怎么问、如何评价学生（评语即它自己的判断）、何时深入/跳过/结束。前测结果
+  的"已掌握快速过、薄弱处细引导"通过系统词指引表达，不做硬性规则约束。
+- **记录轨（确定性，权威账本）**：学生每次作答，后台静默运行既有判分管线
+  （choice/builder/equation 确定性引擎；text 走抽取+规则），写既有 assessment 事件。
+  3D 灯态、量表维度进度**只由记录轨派生**（现状机制不动）。agent 的结论写
+  `agent-judgment` 事件（新类型，非量表事件）；两轨分歧写 `divergence` 事件，教师端
+  可见，不打断对话。
+- agent 输出永不产生/修改 assessment、灯态、进度事件——不是限制它的自主性，而是
+  记账权分离：它的判断有自己的事件通道。
 
-- **判分零 AI 裁量不变**：agent 只决定"问什么、怎么问、何时追问"，学生作答仍走
-  确定性引擎（choice/builder/equation）或抽取层（闭集槽位→规则映射）。agent 永远
-  不产生分数、不产生误区标签。这是答辩可解释性的根基。
-- **断网兜底不变**：demo 模式 + recordings 回放必须在每一步改造后保持可用（9 月初
-  断网彩排×3）。live 失败降级 needs-review 的既有语义不变。
-- **provider 无关**：赛场无 Claude 订阅。一切新能力以 `LLMProvider.structured()`
-  （JSON 闭集输出）为最大公约数实现，不依赖任何厂商原生 function calling。
-  claude-agent 仅作本地开发通道；生产通道 = modelverse(glm-5.2) 或后续国内 key。
+## 1. 工具层：原生 function calling
 
-## 1. Track A：真实 AI 通道打通（先行，独立）
+- 工具定义统一声明一份（name/description/JSON Schema），provider 适配层转译：
+  OpenAI 兼容系（glm/deepseek/tongyi）走 `tools` 参数原生 function calling；
+  claude-agent（开发通道）走 SDK 原生工具协议。zod 校验工具参数（原生 ≠ 免校验），
+  非法参数带原因回传一次重试，再失败按工具语义兜底。
+- 工具集 v1：
+  - `ask_student { text }`：向学生发问（题库题、自组织追问、过渡语均可；出题类
+    文本过既有泄漏守卫——守卫拦下不是禁止提问，而是拦"直接泄答案"）；
+  - `present_material { materialId }`：展示题库图/素材；
+  - `focus_node { nodeId }`：3D 非权威聚焦（镜头+呼吸提示，不改灯态）；
+  - `get_profile {}`：拉取画像最新快照（含影子判分累计）；
+  - `conclude_node { nodeId, verdict, rationale }`：记录 agent 对某节点的结论
+    （→ agent-judgment 事件；与影子分歧自动派生 divergence）；
+  - `end_session { summary }`：收尾并生成给学生/教师的小结。
+- 学生作答不经工具——作答提交即触发记录轨判分，结果自动注入 agent 下一回合上下文。
 
-- 盘点 app 运行时所有 LLM 触点（server/workflows/**、server/app.ts 路由），确认每个
-  触点在 `LQ_LLM_PROVIDER` 指向真 provider 时走 live 全链路（含录音写入、降级、
-  candidates 记录），mock 仅在显式 `mock`/demo 模式下使用。
-- 新增 `GET /api/llm/health`：返回 provider id/model、一次轻量探活结果（缓存 60s，
-  不得每次请求都打真调用）、余额类错误的可读提示（如 Modelverse 403 overdue）。
-- 前端 AppShell 显示 provider 状态徽标（live 绿 / demo 灰 / 故障红），故障时提示语
-  面向教师（"AI 通道不可用，作答将转人工复核"）。
-- `.env.example` 补全变量文档（LQ_LLM_PROVIDER/LQ_LLM_MODEL/各 key/LLM_TIMEOUT_MS）。
-- 验收：`LQ_LLM_PROVIDER=claude-agent pnpm dev` 下，前测 text 题真实抽取判分全链路
-  跑通；provider 杀掉后降级 needs-review 且 UI 有提示；demo 模式回归全绿。
+## 2. Loop 运行时
 
-## 2. Track B：前测驱动的自适应提问边界（规则层）
+- 服务器端回合制：学生消息/作答落事件流 → 组装上下文（系统词 + DiagnosticProfile +
+  对话事件重建的 last-K 轮 + 影子判分摘要）→ provider 调用（温度 0.1）→ 工具执行 →
+  事件落流 → 前端渲染（agent activity stream + 逐轮聊天 UI）。
+- **上下文一律从事件流重建**（不持有进程内会话状态）：服务重启/换机可恢复；这也是
+  断网 demo 的回放基础。K 轮截断，不做摘要 LLM 调用。
+- 降级：provider 不可用 → 聊天区提示 + 训练退回既有确定性脚手架流程（现状行为）。
 
-- 新增 `config/training-frontier.json`（或并入 scaffold-policy）：定义
-  mastery→pacing 映射：
-  - `hit` → `verify`：该节点 1 道快速验证题（从题库标 `verify` 用途题选取），
-    答对即过、答错降级为 `standard`；
-  - `partial` → `standard`：既有脚手架路径；
-  - `miss`/`unanswered` → `guided`：细粒度引导（步子更小的子问题序列 + 已检出
-    误区的针对性反例/追问模板 id 列表）。
-- 服务器计算 `TrainingFrontier`：输入前测判分事件，输出按节点的 pacing、候选题目/
-  模板 id 集、每节点预算（如 verify≤1 题、guided≤N 轮）。纯函数、有单测、可回放。
-- 前测未覆盖节点默认 `standard`。教师端可覆写单节点 pacing（沿用教师决定日志机制）。
+## 3. 直接评判实验（准入证据，先行）
 
-## 3. Track C：Agent Loop 与学生画像
+- 52 个人工标注用例跑 direct-judge 模式：量表+题目+学生原文 → 模型直接给
+  hit/partial/miss + 误区。与人工标注对表，与抽取管线（94.23%）同台比：宏命中、
+  **全错判掌握率**、三跑一致率。provider = claude-agent（不充值）。
+- **已裁决（2026-07-23，实验完成）**：直接评判 57.69% vs 管线 94.23%，且触发
+  全错判掌握违规（1/13）与 6 例答错多给分——**记录轨为权威**，agent 评语照常显示，
+  UI 披露"量表记录以判分引擎为准"。详见 evidence/2026-07-23-direct-judge-experiment.md。
 
-- **回合制 orchestrator（服务器端）**：每回合组装上下文 → `structured()` 请求 →
-  zod 校验的闭集 action envelope → 执行 → 事件入会话流。上下文 =
-  角色与约束系统词 + 学生画像 + TrainingFrontier 当前状态 + 最近 K 轮对话摘要 +
-  可用 action 清单（含 3D 操作）。
-- **Action 闭集**（v1）：
-  - `ask_question { questionId | templateId, phrasing }`：从 frontier 候选集内选题，
-    phrasing 允许 agent 自组织语言但题干语义由题库/模板锚定；
-  - `evaluate_answer`：显式触发既有判分管线（结果由系统回填，agent 只读）；
-  - `light_node { nodeId, state }` / `set_view { presetId }` / `show_progress
-    { dimensionId }`：3D 与进度 UI 指令，落到 agent activity stream 事件；
-  - `note_profile { text }`：向画像追加观察（自由文本区，与结构化区隔离）;
-  - `advance { nodeId }` / `end_stage { reason }`：在预算内推进/收尾。
-  - 越界 action（题目不在候选集、节点不在 frontier）→ 拒绝并带原因重试一次，
-    再失败则由规则层兜底选下一题（系统可继续，不卡死）。
-- **学生画像（StudentProfile）**：结构化区 = 逐节点 {mastery, 误区 id + 证据引用,
-  最近表现}；风格区 = 作答长度/术语习惯等观察；自由 note 区（agent 写入，上限截断）。
-  判分事件后由规则更新结构化区；画像全量存入会话事件流（可回放、可导出给教师）。
-- **降级**：live 不可用时 orchestrator 退回规则层顺序提问（现状行为），聊天区提示。
+## 4. Track 划分
 
-## 4. Track D：3D 视图联动与量表进度（Fable 亲自做）
+- **C'（主体，codex gpt-5.6-sol max）**：LLM 层原生 function calling（openai-compatible
+  `tools` + claude-agent 适配 + 统一声明/校验/重试）→ loop 运行时 → session.v2 事件
+  扩展（agent-turn / agent-judgment / divergence，新增最小化，导入导出/教师端/公开
+  视图门控同步）→ 逐轮聊天 UI → 影子判分挂接 → 降级路径。开工 1–2 天内先冻结
+  事件 schema 契约交付 Track D。
+- **B'（小，并入 C' 首日）**：`buildLearnerProfile` 打包为 agent 上下文
+  `DiagnosticProfile`（只读、版本化、训练不回写前测基线）+ 系统词 pacing 指引。
+- **D（Fable 亲自）**：focus_node 联动、维度进度（判分派生）、聊天/活动流视觉。
+- **E（Fable，先行）**：直接评判实验脚本与报告。
 
-- 前端消费 `light_node`/`set_view`/`show_progress` 事件：3D 模型对应节点发光/呼吸、
-  镜头平滑切换到预设机位、量表维度进度条实时推进并在达标时点亮。
-- 进度追踪：按 rubric 维度聚合判分事件 → 维度进度（已验证节点数/总数、误区消除数），
-  与 agent 无关、纯前端派生，保证与判分记录一致。
-- 视觉语言沿用 glass design system 与既有动效审计标准。
+## 5. 顺序
 
-## 5. 顺序、分工与约束
+E（今天）→ C' 规格双评审（评审 how，不评审 whether——自主性与双轨已由用户裁决）→
+C'+B' 实现 → D 并行 → 联调 → 里程碑终审（gpt-5.6-sol max + fable-5）。
 
-- 顺序：A（codex，立即）→ 规格评审收敛 → B+C（codex，同一任务承接，B 是 C 的输入）
-  → D（Fable，B/C 联调期并行）→ 全链路联调 → 里程碑终审（gpt-5.6-sol max + fable-5）。
-- 实现一律 gpt-5.6-sol `max`；评审一律 opus-4.8 + gpt-5.6-sol 双路。
-- 冻结窗口约束：本轮**不动 `eval/**`**（校准运行中）；config 改动集中一批做
-  （与 s12-p1 别名修复合并），一次性完成 configDigest 全链路重同步。
-- 测试：每 Track 附单测 + 相关 m 级测试；全量 `pnpm test` 在校准运行结束后统一跑
-  （避免资源争抢与 m3-ac2-hotload 假红）。
+## 6. 继承自 v1 评审、仍然有效的门禁
 
-## 6. 双路评审收敛决议（2026-07-23，M6-lite）
+- 断网 demo：脚本化会话回放（温度 0 + requestHash 命中，操作者照稿）；录制版本不
+  一致**拒绝启动**（现仅告警，需改）。
+- config 改动（若涉及）与 s12-p1 别名修复合并一批，configDigest 全链路重同步 +
+  立即全量重录 demo。
+- provider 断开训练可走确定性流程；全量测试 + 打包 + 一次断网彩排为冻结门禁。
+- session.v2 闭集事件扩展波及面（导入导出/教师端/fixture/demo）在 C' 验收清单内
+  逐项核对。
 
-两份评审共识：方向成立（闭集 envelope / frontier 规则层掌权 / 判分零裁量不动），
-但完整 agent loop 8/8 前达不到交付级（gpt 估 17–29 工程日 vs 16 个自然日；且原
-冻结设计明确"不上完整 Agent Loop"，变更需决策记录）。收敛如下：
+## 7. 双评审收敛终稿（2026-07-23，实现契约）
 
-**M6-lite 范围（冻结前交付）**
-- A（真实 AI 通道）：保留原样。修正验收命令（`pnpm dev` 只启 Vite，须以
-  server+vite 双进程或既有一体化脚本验收）。追加"正式 provider 过既有 live/eval
-  门槛"为 M6 准入条件。
-- B（自适应）：收缩为纯函数 `deriveInitialScaffold(pretestEvents)` + pacing——
-  miss/unanswered/needs-review→Level 1 细引导、partial/unassessed→Level 2、
-  全 hit→Level 3 快检（复用既有题，不新建 verify 题库，零新内容）。教师可覆写。
-- C（agent 化）：**不建通用 orchestrator**。把既有 socratic cycle 扩为
-  frontier-pacing 驱动：轮数预算/引导深度/误区针对模板由 pacing 决定；
-  evaluate/advance/end 一律规则层决定；题干只用教师审核文本，模型自由度限于
-  过渡语/鼓励语等非题干文本且过既有泄漏守卫；`note_profile` 自由笔记本期删除。
-- 画像：版本化纯投影。只读 `DiagnosticProfile`（前测基线，训练不回写）与训练期
-  `TrainingState` 分离；证据只引 event ID；显式处理 needs-review/unassessed/
-  重复作答/有帮助命中。不做画像快照入事件流。
-- D（3D/进度）：灯态与维度进度**只从判分事件派生**（现状机制，权威）；agent 侧
-  仅保留非权威 `focus_node` 聚焦提示（镜头/呼吸引导，不改灯态）；`effects[]` 由
-  服务器按题目映射生成，不由模型直接指定视图指令。
-- 门禁追加：断网 demo 全程零网络且录制版本不一致**拒绝启动**（现仅告警）；
-  provider 断开训练可走确定性流程；agent 输出永不产生/修改 assessment、灯态、
-  进度、结课事件；config 改动（frontier + s12-p1 别名）一批完成并立即全量重录。
+两报告全文见 scratchpad（spec-v2-review-gpt.md / opus 报告在会话记录）。共识与裁决：
 
-**延期 T2（8/15 后/赛后）**：通用 agent orchestrator、模型决定跨节点跳转与
-evaluate/advance/end、自由题干改写、画像自由笔记回灌、摄像机 preset 全集、
-误区消除进度语义、完整自适应题库、provider 原生 function calling 优化。
+**P0 契约（Phase 1，先冻结再开工，交付 Track D）**
+1. **响应契约**：ask_student 类等待作答的工具必须绑定服务端生成的
+   `responseContractId`（固化 questionId/caseId/targetNodeIds/判分入口）；学生端只提
+   交 `turnId + answer`；题库结构化题走 `present_question { questionId }`；无法绑定
+   契约的交流显式记 `unassessed`，不假装已判分。
+2. **事件三元组**（session.v2 扩展，按 kind 分支校验，修掉"非 answer 即评测事件"
+   的隐含假设；pipelineStage 单调性排除分支；schema 版本标记加
+   `agentContractRevision + toolsetDigest + contextBuilderVersion`）：
+   - `agent.turn.completed { turnId, triggerEventId, contextThroughSequence,
+     requestHash, source, model, orderedActions, terminalAction, provenance }`
+   - `agent.judgment.recorded { turnId, nodeId, verdict: hit|partial|miss|
+     inconclusive, rationale, basisThroughSequence, basisEventIds,
+     supersedesEventId?, provenance }`
+   - `agent.divergence.changed { judgmentEventId, shadowAssessmentEventId,
+     agentVerdict, shadowVerdict, status: detected|resolved,
+     comparisonPolicyVersion }`（与 judgment 同事务；resolved 追加不删除历史；
+     比较基准 = basisThroughSequence 时记录轨选中的 assessment，hit-with-help→hit，
+     needs-review/unanswered/unassessed 不可比）
+   - `answer.submitted` 增 `responseToAgentTurnId? + responseContractId?`
+3. **工具二分与回合事务**：terminal（ask_student/end_session，结束本轮等外部输入）
+   vs continuation（get_profile/present_material/focus_node/conclude_node，即时回
+   灌）；写类工具进 TurnTransaction，唯一 terminal 出现后原子提交，失败整体丢弃；
+   上限：6 次 continuation、8 次工具调用、每节点每 turn 至多 1 次 judgment；handler
+   串行 + terminal latch。
+4. **会话权威与恢复**：新增 `/api/session/sync`（启动/导入/服务端 404 后全量上传，
+   服务端校验 schema+configDigest+事件前缀）；所有命令带
+   `expectedSequence + idempotencyKey`，per-session mutex 串行。
+5. **投影安全边界**：agent.turn 不存系统词/题库答案/thinking/get_profile 原始结果，
+   只存规范化动作；学生 projection 与教师 audit projection 分离，导出同规则；
+   既有"评测响应返回完整 session"的泄漏面纳入本次验收。
+6. **回放确定性**：loop provider 每轮以 cacheKey(requestHash) 回放（demo 模式接通
+   cacheKey 查找，不再用静态 stepId）；重建上下文禁含 occurredAt/耗时等非确定量；
+   K 按逻辑轮次（agentTurnId↔responseToAgentTurnId 分组）截断；claude 路不响应
+   temperature——确定性只依赖事件+录制+hash，不写成跨 provider 保证。
 
-**风险台账（合并两报告 top）**：① config 重录税（最重，批量一次做）；② 服务端
-session 内存态无恢复权威（M6-lite 靠"事件流可回放"绕开，orchestrator 持久化列 T2
-前提）；③ session.v2 闭集事件 schema 扩展波及导入导出/教师端/fixture/demo（B/C 事件
-类型新增最小化）；④ D 依赖 C 事件契约——C 开工 1–2 天内先冻结事件 schema 交付。
+**适配层裁决**（两报告分歧点）：不硬扩 LLMProvider；新增 provider-neutral
+`AgentTurnAdapter`（返回规范化 tool-call trace + usage）。claude-agent 路采
+**gpt 方案**：SDK `tool + createSdkMcpServer`，`tools:[]`（真正移除内置工具——现
+实现 allowedTools:[] 并未移除，属既有 bug）+ `allowedTools:["mcp__lq__*"]` +
+`strictMcpConfig:true` + `persistSession:false` + 足量 maxTurns（opus 的直连
+Messages API 方案因订阅 OAuth 凭据面向 Claude Code 表面，弃）。openai-compatible
+路：保存 assistant tool_calls、同 id 回填 role:"tool"、`parallel_tool_calls:false`、
+zod 终审，仅认证一个冻结用 provider。健康检查加真实 tool-call canary。
+
+**泄漏守卫三路**：题库题按内容 hash 原样展示；自由追问按 responseContractId 查未公
+开目标事实；学生可见总结查全案例未公开事实+最近 2–3 条 agent 输出拼接。失败返回
+错误类别允许一次修复，二次用教师审核兜底文本；end_session 学生总结必过守卫；
+proxyReference/completeEquation 两启发式对提问文本停用（防误杀反问）。
+
+**DiagnosticProfile**：仅前测阶段事件的纯投影（buildLearnerProfile 现聚合全场会
+回写基线，需新投影函数），并补出 misconceptionIds。
+
+**排期（gpt 版，采纳）**：7/23–24 契约冻结（Phase 1）；7/25–28 sync/锁/context
+builder/TurnTransaction/两适配器；7/29–31 影子判分+守卫+judgment/divergence；
+8/1–3 最小聊天 UI+教师分歧表+离线 replay；8/4–5 全量测试打包；8/6 真断网彩排；
+8/7 只修阻断。砍序：token streaming→多 provider 实机认证→教师端复杂可视化→
+自由生成结构化题（结构化只走题库契约，自由生成保 text）→双份 AI 总结→自动跨设备
+同步。不可砍：响应契约、原子/幂等执行器、泄漏守卫、judgment/divergence 引用链。
