@@ -1,6 +1,16 @@
 import Ajv from 'ajv';
+import { z } from 'zod';
 
 import { createDevelopmentCacheKey } from './cache-key';
+import {
+  agentTurnAdapterResultSchema,
+  parseAgentTurnAdapterResult,
+  type AgentTurnAdapter,
+  type AgentTurnAdapterRequest,
+  type AgentTurnAdapterResult,
+} from '../agent/adapters/adapter';
+import type { NormalizedAgentAction } from '../../shared/agent/contracts';
+import { AGENT_RECORDING_PROMPT } from '../agent/context-builder';
 import {
   ProviderTimeoutError,
   ProviderHttpError,
@@ -40,6 +50,13 @@ export interface LLMExecutionOptions {
   ) => unknown | Promise<unknown>;
 }
 
+export interface AgentTurnExecutionOptions {
+  executionMode: 'live' | 'development' | 'demo';
+  provider: string;
+  configVersion: string;
+  adapter: AgentTurnAdapter;
+}
+
 const publicFailureMessage = 'AI service is temporarily unavailable';
 
 export class LLMService {
@@ -58,21 +75,22 @@ export class LLMService {
 
     if (request.executionMode === 'demo') {
       let failure: Error | undefined;
-      if (request.stepId) {
-        const demoResponse = await this.options.recordings.getDemo(request.stepId);
-        if (demoResponse) {
-          try {
-            await this.validateStructuredResponse(
-              request,
-              demoResponse,
-              executionOptions.validateStructured,
-              { source: 'demo-recording', attempt: 0 },
-            );
-            return this.result('demo-recording', demoResponse, cacheKey);
-          } catch (error) {
-            failure = error instanceof Error ? error : new Error(String(error));
-            this.logFailure(request, 1, error);
-          }
+      const demoResponse = await this.options.recordings.getDemoByCacheKey(cacheKey)
+        ?? (request.stepId
+          ? await this.options.recordings.getDemo(request.stepId)
+          : null);
+      if (demoResponse) {
+        try {
+          await this.validateStructuredResponse(
+            request,
+            demoResponse,
+            executionOptions.validateStructured,
+            { source: 'demo-recording', attempt: 0 },
+          );
+          return this.result('demo-recording', demoResponse, cacheKey);
+        } catch (error) {
+          failure = error instanceof Error ? error : new Error(String(error));
+          this.logFailure(request, 1, error);
         }
       }
       return this.fallback(
@@ -151,7 +169,8 @@ export class LLMService {
       && request.stepId
       && !validationBlocksReplay
     ) {
-      const demoResponse = await this.options.recordings.getDemo(request.stepId);
+      const demoResponse = await this.options.recordings.getDemoByCacheKey(cacheKey)
+        ?? await this.options.recordings.getDemo(request.stepId);
       if (demoResponse) {
         try {
           await this.validateStructuredResponse(
@@ -173,6 +192,122 @@ export class LLMService {
     }
 
     return this.fallback(request, cacheKey, finalError);
+  }
+
+  async executeAgentTurn(
+    request: AgentTurnAdapterRequest,
+    execution: AgentTurnExecutionOptions,
+  ): Promise<AgentTurnAdapterResult> {
+    const cacheKey = request.requestHash;
+    const recordingRequest = this.agentRecordingRequest(request, execution);
+
+    if (execution.executionMode === 'demo') {
+      const recording = await this.options.recordings.getDemoByCacheKey(cacheKey);
+      if (!recording) {
+        throw new Error(`No demo agent turn recording for ${cacheKey}`);
+      }
+      return this.replayAgentTurn(recording, request, 'demo-recording');
+    }
+
+    if (execution.executionMode === 'development') {
+      const recording = await this.options.recordings.getDevelopment(cacheKey);
+      if (recording) {
+        return this.replayAgentTurn(recording, request, 'development-cache');
+      }
+    }
+
+    const result = parseAgentTurnAdapterResult(
+      await execution.adapter.execute(request),
+    );
+    const response = {
+      content: JSON.stringify(result),
+      structured: result,
+      model: result.model,
+      usage: {
+        inputTokens: result.usage.inputTokens,
+        outputTokens: result.usage.outputTokens,
+      },
+    };
+    try {
+      await this.options.recordings.saveDevelopment(
+        cacheKey,
+        recordingRequest,
+        response,
+      );
+    } catch (error) {
+      this.logger.warn(
+        `[llm] agent cache write failed for ${execution.provider}/${request.model}: ${
+          (error as Error).message
+        }`,
+      );
+    }
+    return result;
+  }
+
+  private agentRecordingRequest(
+    request: AgentTurnAdapterRequest,
+    execution: AgentTurnExecutionOptions,
+  ): LLMRequest {
+    return {
+      executionMode: execution.executionMode,
+      capability: 'structured',
+      provider: execution.provider,
+      model: request.model,
+      prompt: {
+        ...AGENT_RECORDING_PROMPT,
+        text: request.systemPrompt,
+      },
+      schemaVersion: 'agent-turn-trace.v1',
+      configVersion: execution.configVersion,
+      input: {
+        requestHash: request.requestHash,
+        messages: request.messages,
+        tools: request.tools,
+        maxTurns: request.maxTurns,
+      },
+      images: [],
+      schema: z.toJSONSchema(agentTurnAdapterResultSchema, { target: 'draft-7' }),
+      temperature: 0.1,
+    };
+  }
+
+  private async replayAgentTurn(
+    response: LLMResponse,
+    request: AgentTurnAdapterRequest,
+    source: 'development-cache' | 'demo-recording',
+  ) {
+    let value = response.structured;
+    if (value === undefined) {
+      try {
+        value = JSON.parse(response.content);
+      } catch {
+        throw new Error('Recorded agent turn is not valid JSON');
+      }
+    }
+    const recorded = parseAgentTurnAdapterResult(value);
+    const actions: NormalizedAgentAction[] = [];
+    for (const action of recorded.orderedActions) {
+      const execution = request.executeTool
+        ? await request.executeTool(action)
+        : { accepted: true, action, content: '{"ok":true}' };
+      if (!execution.accepted) {
+        throw new Error(
+          `Recorded agent action is no longer executable: ${
+            execution.errorCategory ?? 'tool-rejected'
+          }`,
+        );
+      }
+      actions.push(execution.action);
+    }
+    return parseAgentTurnAdapterResult({
+      ...recorded,
+      source,
+      orderedActions: actions,
+      terminalAction: {
+        callId: actions.at(-1)!.callId,
+        name: recorded.terminalAction.name,
+      },
+    });
   }
 
   private fallback(

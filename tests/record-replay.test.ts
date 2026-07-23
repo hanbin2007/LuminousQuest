@@ -235,6 +235,53 @@ describe('LLM recording and replay', () => {
     });
   });
 
+  it('replays demo responses by cache key without a static stepId', async () => {
+    const root = await createTemporaryDirectory();
+    const demoRoot = path.join(root, 'recordings', 'demo');
+    await mkdir(demoRoot, { recursive: true });
+    const request = developmentRequest({ executionMode: 'demo', stepId: undefined });
+    const cacheKey = createDevelopmentCacheKey(request);
+    await writeFile(
+      path.join(root, 'recordings', 'demo-script.json'),
+      JSON.stringify({
+        version: 'demo-script.v2',
+        steps: [{
+          id: 'request-hash-replay',
+          recording: 'demo/request-hash-replay.json',
+          resourceRefs: [],
+          configVersion: 'config.v1',
+          schemaVersion: 'schema.v1',
+          prompt: { id: 'diagnose', version: 'prompt.v1' },
+        }],
+      }),
+    );
+    await writeFile(
+      path.join(demoRoot, 'request-hash-replay.json'),
+      JSON.stringify({
+        version: 'llm-recording.v2',
+        recordedAt: '2026-07-23T00:00:00.000Z',
+        cacheKey,
+        metadata: {
+          configVersion: 'config.v1',
+          schemaVersion: 'schema.v1',
+          prompt: { id: 'diagnose', version: 'prompt.v1' },
+        },
+        request,
+        response: { content: 'cache-key demo answer', model: 'recorded' },
+      }),
+    );
+    const service = new LLMService({
+      providers: new Map(),
+      recordings: new RecordingStore(root),
+    });
+
+    await expect(service.execute(request)).resolves.toMatchObject({
+      source: 'demo-recording',
+      cacheKey,
+      response: { content: 'cache-key demo answer' },
+    });
+  });
+
   it('degrades a failed live structured call to needs-review instead of replaying demo data', async () => {
     const root = await createTemporaryDirectory();
     const demoRoot = path.join(root, 'recordings', 'demo');
@@ -346,7 +393,7 @@ describe('LLM recording and replay', () => {
     });
   });
 
-  it('warns without blocking when demo versions are stale', async () => {
+  it('rejects startup when demo versions are stale', async () => {
     const root = await createTemporaryDirectory();
     const demoRoot = path.join(root, 'recordings', 'demo');
     await mkdir(demoRoot, { recursive: true });
@@ -380,22 +427,18 @@ describe('LLM recording and replay', () => {
         response: { content: 'demo answer', model: 'recorded' },
       }),
     );
-    const warn = vi.fn();
-
     await expect(
       new RecordingStore(root).validateDemoAssets({
         configVersion: 'current-config',
         prompts: {
           diagnose: { id: 'diagnose', version: 'prompt.v2', text: 'current prompt' },
         },
-        warn,
       }),
-    ).resolves.toBeUndefined();
-
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining('WARNING'));
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining('stale-step'));
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining('config'));
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining('schema'));
+    ).rejects.toMatchObject({
+      file: 'recordings/demo-script.json',
+      field: 'steps.0.config',
+      reason: expect.stringContaining('version mismatch'),
+    });
   });
 
   it('validates every structured demo response against the manifest schema at startup', async () => {

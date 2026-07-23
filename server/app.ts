@@ -4,6 +4,8 @@ import path from 'node:path';
 
 import { Hono, type Context } from 'hono';
 import { z } from 'zod';
+import type { AgentTurnAdapter } from './agent/adapters/adapter';
+import { createAgentAdapterRegistry } from './agent/adapters/factory';
 
 import { type AssistanceMetadata } from '../shared/scoring/rubric';
 import { buildLearnerProfile } from '../shared/scoring/profile';
@@ -177,6 +179,7 @@ export interface ServerAppOptions {
   contentRoot: string;
   clientRoot: string;
   providers?: Map<string, LLMProvider>;
+  agentAdapters?: Map<string, AgentTurnAdapter>;
   sessions?: ServerSessionStore;
   workflow?: Partial<ServerWorkflowOptions>;
   apiToken?: string;
@@ -339,12 +342,15 @@ export function createServerApp(options: ServerAppOptions) {
   const workflow = configuredWorkflow(options, lockDemo);
   const startupWorkflow = { ...workflow };
   const providers = options.providers ?? createProviderRegistry();
+  const agentAdapters = options.agentAdapters
+    ?? (options.providers ? new Map<string, AgentTurnAdapter>() : createAgentAdapterRegistry());
   const llmService = new LLMService({
     providers,
     recordings,
   });
   const llmHealth = new LLMHealthMonitor({
     providers,
+    agentAdapters,
     configuration: () => workflow,
   });
 

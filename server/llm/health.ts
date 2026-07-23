@@ -4,6 +4,12 @@ import {
   UnsupportedCapabilityError,
 } from './errors';
 import type { LLMExecutionMode, LLMProvider, LLMRequest } from './types';
+import {
+  AgentTurnAdapterError,
+  type AgentTurnAdapter,
+} from '../agent/adapters/adapter';
+import { deterministicHash } from '../agent/deterministic-json';
+import { createAgentToolDefinitions } from '../agent/tools';
 
 export type LLMHealthStatus = 'ok' | 'degraded' | 'down';
 
@@ -22,6 +28,7 @@ interface LLMHealthConfiguration {
 
 interface LLMHealthMonitorOptions {
   providers: Map<string, LLMProvider>;
+  agentAdapters?: Map<string, AgentTurnAdapter>;
   configuration: () => LLMHealthConfiguration;
   now?: () => number;
   ttlMs?: number;
@@ -57,6 +64,16 @@ export function classifyLLMHealthError(
     || (error instanceof Error && ['AbortError', 'TimeoutError'].includes(error.name))
   ) {
     return { status: 'degraded', detail: `${provider} 探活超时，请稍后重试` };
+  }
+  if (
+    error instanceof AgentTurnAdapterError
+    && error.category === 'http-error'
+    && error.httpStatus !== undefined
+  ) {
+    return classifyLLMHealthError(
+      provider,
+      new ProviderHttpError(provider, error.httpStatus, error.detail ?? ''),
+    );
   }
   if (error instanceof ProviderHttpError) {
     const balanceFailure = error.status === 402 || (
@@ -173,6 +190,55 @@ export class LLMHealthMonitor {
       timeoutMs: healthTimeoutMilliseconds(),
     };
     try {
+      const agentAdapter = this.options.agentAdapters?.get(configuration.provider);
+      if (agentAdapter) {
+        const tools = createAgentToolDefinitions().filter(
+          (definition) => definition.name === 'end_session',
+        );
+        const requestHash = deterministicHash({
+          probe: 'agent-tool-call-canary.v1',
+          provider: configuration.provider,
+          model: configuration.model,
+          tools,
+        });
+        let observedCanaryToolCall = false;
+        const result = await agentAdapter.execute({
+          requestHash,
+          model: configuration.model,
+          systemPrompt:
+            'Health canary: call end_session exactly once with summary "health-canary".',
+          messages: [{
+            role: 'user',
+            content: 'Run the required tool-call canary now.',
+          }],
+          tools,
+          maxTurns: 4,
+          signal: AbortSignal.timeout(healthTimeoutMilliseconds()),
+          executeTool: async (action) => {
+            const accepted = action.name === 'end_session'
+              && action.arguments.summary === 'health-canary';
+            if (accepted) observedCanaryToolCall = true;
+            return {
+              accepted,
+              action,
+              content: JSON.stringify({ ok: accepted }),
+              ...(accepted ? {} : { errorCategory: 'wrong-canary-tool' }),
+            };
+          },
+        });
+        if (
+          !observedCanaryToolCall
+          || result.terminalAction.name !== 'end_session'
+          || !result.orderedActions.some((action) => action.name === 'end_session')
+        ) {
+          throw new Error('Provider did not complete the tool-call canary');
+        }
+        return {
+          ...base,
+          status: 'ok',
+          detail: '实时 AI 工具调用通道可用',
+        };
+      }
       const response = await provider.structured(request);
       const value = response.structured ?? JSON.parse(response.content);
       if (!value || typeof value !== 'object' || !('ok' in value) || value.ok !== true) {

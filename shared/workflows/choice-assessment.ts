@@ -13,6 +13,8 @@ export function recordChoiceAssessment(input: {
   occurredAt?: string;
   attemptId?: string;
   idFactory?: (prefix: string) => string;
+  responseToAgentTurnId?: string;
+  responseContractId?: string;
 }) {
   const option = input.question.options.find((candidate) => candidate.id === input.optionId);
   if (!option) throw new Error(`Unknown choice option ${input.optionId}`);
@@ -32,6 +34,12 @@ export function recordChoiceAssessment(input: {
     attemptId,
     questionId: input.question.id,
     answer: { format: 'text', value: option.text },
+    ...(input.responseToAgentTurnId && input.responseContractId
+      ? {
+          responseToAgentTurnId: input.responseToAgentTurnId,
+          responseContractId: input.responseContractId,
+        }
+      : {}),
   });
 
   input.question.targetNodeIds.forEach((nodeId) => {

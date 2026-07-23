@@ -48,8 +48,10 @@ export class ClaudeAgentProvider implements LLMProvider {
           model: request.model,
           systemPrompt,
           maxTurns: 1,
-          allowedTools: [],
+          tools: [],
           settingSources: [],
+          strictMcpConfig: true,
+          persistSession: false,
           abortController: abort,
         },
       });

@@ -353,6 +353,8 @@ export interface RecordStructuredTextAssessmentInput {
     attemptId: string;
     questionId: string;
     value: string;
+    responseToAgentTurnId?: string;
+    responseContractId?: string;
   };
   extraction: unknown;
   provenance: {
@@ -402,6 +404,12 @@ function appendTextAnswer(session: StudentSession, answer: RecordStructuredTextA
     attemptId: answer.attemptId,
     questionId: answer.questionId,
     answer: { format: 'text', value: answer.value },
+    ...(answer.responseToAgentTurnId && answer.responseContractId
+      ? {
+          responseToAgentTurnId: answer.responseToAgentTurnId,
+          responseContractId: answer.responseContractId,
+        }
+      : {}),
   });
 }
 

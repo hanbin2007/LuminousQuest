@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 
 import type { LoadedConfig } from '../../shared/config/schemas';
 import {
@@ -26,6 +26,7 @@ export interface IssueQuestionResponseContractInput {
   questionId: string;
   caseId: string;
   createdThroughSequence: number;
+  responseContractId?: string;
 }
 
 export interface IssueUnassessedResponseContractInput {
@@ -34,6 +35,15 @@ export interface IssueUnassessedResponseContractInput {
   caseId: string | null;
   createdThroughSequence: number;
   reason: ResponseContractUnassessedReason;
+  responseContractId?: string;
+}
+
+export interface ResponseContractCandidate {
+  candidateId: string;
+  kind: 'question' | 'unassessed';
+  caseId: string;
+  questionId: string | null;
+  reason?: ResponseContractUnassessedReason;
 }
 
 export type ResponseContractResolution =
@@ -46,6 +56,68 @@ export type ResponseContractResolution =
 
 function unique(values: readonly string[]) {
   return [...new Set(values)];
+}
+
+function shortHash(value: string) {
+  return createHash('sha256').update(value).digest('hex').slice(0, 32);
+}
+
+export function responseContractIdFor(
+  agentTurnId: string,
+  callId: string,
+  candidateId: string,
+) {
+  return `rc-${shortHash(`${agentTurnId}\u0000${callId}\u0000${candidateId}`)}`;
+}
+
+export function buildResponseContractCandidates(input: {
+  config: LoadedConfig;
+  caseId: string;
+  agentTurnId: string;
+}): ResponseContractCandidate[] {
+  const candidates: Array<Omit<ResponseContractCandidate, 'candidateId'>> = [];
+  if (input.caseId === 'pretest') {
+    candidates.push({
+      kind: 'question',
+      caseId: 'pretest',
+      questionId: 'pretest-builder',
+    });
+    input.config.pretest.questions.forEach((question) => {
+      candidates.push({
+        kind: 'question',
+        caseId: 'pretest',
+        questionId: question.id,
+      });
+    });
+  } else {
+    const trainingCase = input.config.cases.find((entry) => entry.id === input.caseId);
+    if (trainingCase) {
+      candidates.push({
+        kind: 'question',
+        caseId: trainingCase.id,
+        questionId: `${trainingCase.id}:analysis`,
+      });
+      trainingCase.equationSets.forEach((equationSet) => {
+        candidates.push({
+          kind: 'question',
+          caseId: trainingCase.id,
+          questionId: `${trainingCase.id}:${equationSet.id}`,
+        });
+      });
+    }
+  }
+  candidates.push({
+    kind: 'unassessed',
+    caseId: input.caseId,
+    questionId: null,
+    reason: 'conversation-only',
+  });
+  return candidates.map((candidate) => ({
+    ...candidate,
+    candidateId: `rcc-${shortHash(
+      `${input.agentTurnId}\u0000${candidate.caseId}\u0000${candidate.questionId ?? 'free'}`,
+    )}`,
+  }));
 }
 
 function questionBinding(
@@ -125,7 +197,7 @@ export class ResponseContractRegistry {
     const binding = questionBinding(input, config);
     return this.store(responseContractSchema.parse({
       revision: RESPONSE_CONTRACT_REVISION,
-      responseContractId: this.idFactory(),
+      responseContractId: input.responseContractId ?? this.idFactory(),
       sessionId: input.sessionId,
       agentTurnId: input.agentTurnId,
       questionId: input.questionId,
@@ -139,7 +211,7 @@ export class ResponseContractRegistry {
   issueUnassessed(input: IssueUnassessedResponseContractInput): ResponseContract {
     return this.store(responseContractSchema.parse({
       revision: RESPONSE_CONTRACT_REVISION,
-      responseContractId: this.idFactory(),
+      responseContractId: input.responseContractId ?? this.idFactory(),
       sessionId: input.sessionId,
       agentTurnId: input.agentTurnId,
       questionId: null,
@@ -160,6 +232,7 @@ export class ResponseContractRegistry {
   resolveSubmission(input: {
     session: StudentSession;
     agentTurnId: string;
+    config?: LoadedConfig;
   }): ResponseContractResolution {
     const session = sessionSchema.parse(input.session);
     const turn = session.events.find((event) =>
@@ -175,7 +248,15 @@ export class ResponseContractRegistry {
     ) {
       throw new ResponseContractBindingError('Agent turn does not accept a student response');
     }
-    const contract = this.get(session.id, terminal.arguments.responseContractId);
+    let contract = this.get(session.id, terminal.arguments.responseContractId);
+    if (!contract && input.config) {
+      contract = this.recoverContract({
+        session,
+        turn,
+        terminal,
+        config: input.config,
+      });
+    }
     if (!contract) {
       throw new ResponseContractBindingError('Response contract was not issued for this session');
     }
@@ -194,6 +275,63 @@ export class ResponseContractRegistry {
       };
     }
     return { status: 'assessed', contract };
+  }
+
+  discardTurn(sessionId: string, agentTurnId: string) {
+    const sessionContracts = this.contracts.get(sessionId);
+    if (!sessionContracts) return;
+    for (const [contractId, contract] of sessionContracts) {
+      if (contract.agentTurnId === agentTurnId) sessionContracts.delete(contractId);
+    }
+    if (sessionContracts.size === 0) this.contracts.delete(sessionId);
+  }
+
+  private recoverContract(input: {
+    session: StudentSession;
+    turn: Extract<StudentSession['events'][number], { kind: 'agent.turn.completed' }>;
+    terminal: Extract<
+      Extract<StudentSession['events'][number], { kind: 'agent.turn.completed' }>['orderedActions'][number],
+      { name: 'ask_student' | 'present_question' }
+    >;
+    config: LoadedConfig;
+  }) {
+    const responseContractId = input.terminal.arguments.responseContractId;
+    const candidates = buildResponseContractCandidates({
+      config: input.config,
+      caseId: input.turn.caseId,
+      agentTurnId: input.turn.turnId,
+    });
+    let candidate = candidates.find((entry) =>
+      responseContractIdFor(
+        input.turn.turnId,
+        input.terminal.callId,
+        entry.candidateId,
+      ) === responseContractId);
+    if (!candidate && input.terminal.name === 'present_question') {
+      const questionId = input.terminal.arguments.questionId;
+      candidate = candidates.find((entry) =>
+        entry.kind === 'question'
+        && entry.questionId === questionId);
+    }
+    if (!candidate) return undefined;
+    if (candidate.kind === 'question' && candidate.questionId) {
+      return this.issueQuestion({
+        sessionId: input.session.id,
+        agentTurnId: input.turn.turnId,
+        questionId: candidate.questionId,
+        caseId: candidate.caseId,
+        createdThroughSequence: input.turn.contextThroughSequence,
+        responseContractId,
+      }, input.config);
+    }
+    return this.issueUnassessed({
+      sessionId: input.session.id,
+      agentTurnId: input.turn.turnId,
+      caseId: candidate.caseId,
+      createdThroughSequence: input.turn.contextThroughSequence,
+      reason: candidate.reason ?? 'conversation-only',
+      responseContractId,
+    });
   }
 
   private store(contract: ResponseContract) {

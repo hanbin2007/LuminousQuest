@@ -4,10 +4,125 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { createServerApp } from '../server/app';
 import { ProviderHttpError, ProviderTimeoutError } from '../server/llm/errors';
-import { LLMHealthMonitor } from '../server/llm/health';
+import {
+  classifyLLMHealthError,
+  LLMHealthMonitor,
+} from '../server/llm/health';
 import type { LLMProvider } from '../server/llm/types';
+import {
+  AgentTurnAdapterError,
+  type AgentTurnAdapter,
+} from '../server/agent/adapters/adapter';
 
 describe('LLM health route', () => {
+  it('requires a real native tool call when an agent adapter is configured', async () => {
+    const structured = vi.fn(async () => {
+      throw new Error('legacy completion probe must not run');
+    });
+    const provider: LLMProvider = {
+      id: 'agent-provider',
+      async chat() { throw new Error('not used'); },
+      async vision() { throw new Error('not used'); },
+      structured,
+    };
+    const execute = vi.fn<AgentTurnAdapter['execute']>(async (request) => {
+      expect(request.tools.map((tool) => tool.name)).toEqual(['end_session']);
+      const action = {
+        callId: 'health-call',
+        name: 'end_session' as const,
+        arguments: { summary: 'health-canary' },
+      };
+      await request.executeTool?.(action);
+      return {
+        source: 'provider',
+        model: request.model,
+        orderedActions: [action],
+        terminalAction: { callId: action.callId, name: action.name },
+        usage: {},
+      };
+    });
+    const adapter: AgentTurnAdapter = {
+      id: 'openai-compatible',
+      execute,
+    };
+    const monitor = new LLMHealthMonitor({
+      providers: new Map([[provider.id, provider]]),
+      agentAdapters: new Map([[provider.id, adapter]]),
+      configuration: () => ({
+        executionMode: 'live',
+        provider: provider.id,
+        model: 'agent-model',
+      }),
+    });
+
+    await expect(monitor.get()).resolves.toEqual({
+      provider: provider.id,
+      model: 'agent-model',
+      status: 'ok',
+      detail: '实时 AI 工具调用通道可用',
+    });
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(structured).not.toHaveBeenCalled();
+  });
+
+  it('rejects an agent health trace that did not execute the canary tool', async () => {
+    const provider: LLMProvider = {
+      id: 'agent-provider',
+      async chat() { throw new Error('not used'); },
+      async vision() { throw new Error('not used'); },
+      async structured() { throw new Error('not used'); },
+    };
+    const adapter: AgentTurnAdapter = {
+      id: 'openai-compatible',
+      async execute(request) {
+        const action = {
+          callId: 'fabricated-health-call',
+          name: 'end_session' as const,
+          arguments: { summary: 'health-canary' },
+        };
+        return {
+          source: 'provider',
+          model: request.model,
+          orderedActions: [action],
+          terminalAction: { callId: action.callId, name: action.name },
+          usage: {},
+        };
+      },
+    };
+    const monitor = new LLMHealthMonitor({
+      providers: new Map([[provider.id, provider]]),
+      agentAdapters: new Map([[provider.id, adapter]]),
+      configuration: () => ({
+        executionMode: 'live',
+        provider: provider.id,
+        model: 'agent-model',
+      }),
+    });
+
+    await expect(monitor.get()).resolves.toMatchObject({
+      status: 'down',
+      detail: expect.stringContaining('通道不可用'),
+    });
+  });
+
+  it('classifies an overdue response from the native tool canary without exposing it', () => {
+    const result = classifyLLMHealthError(
+      'modelverse',
+      new AgentTurnAdapterError(
+        'upstream request failed',
+        'http-error',
+        403,
+        'Access forbidden: account overdue, please recharge',
+      ),
+    );
+
+    expect(result).toEqual({
+      status: 'down',
+      detail: 'Modelverse 账户余额不足或已欠费，请充值后重试',
+    });
+    expect(result.detail).not.toContain('Access forbidden');
+  });
+
   it('probes the minimal structured capability used by application workflows', async () => {
     const structured = vi.fn(async () => ({
       content: '{"ok":true}',

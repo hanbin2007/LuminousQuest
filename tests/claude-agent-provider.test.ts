@@ -31,7 +31,9 @@ describe('Claude Agent provider', () => {
   it('aborts the SDK query at the exact request timeout', async () => {
     vi.useFakeTimers();
     let signal: AbortSignal | undefined;
+    let options: Record<string, unknown> | undefined;
     queryMock.mockImplementation((input: { options: { abortController: AbortController } }) => {
+      options = input.options;
       signal = input.options.abortController.signal;
       return (async function* waitForAbort() {
         await new Promise<never>((_resolve, reject) => {
@@ -50,5 +52,13 @@ describe('Claude Agent provider', () => {
 
     await rejection;
     expect(abortedAtDeadline).toBe(true);
+    expect(options).toMatchObject({
+      maxTurns: 1,
+      tools: [],
+      settingSources: [],
+      strictMcpConfig: true,
+      persistSession: false,
+    });
+    expect(options).not.toHaveProperty('allowedTools');
   });
 });

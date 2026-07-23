@@ -39,6 +39,10 @@ export class AgentTurnTransaction {
     return this.transactionState;
   }
 
+  get recordedActions() {
+    return [...this.actions];
+  }
+
   recordAction(input: unknown) {
     this.requireOpen('tool call');
     const action = normalizedAgentActionSchema.parse(input);

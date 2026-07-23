@@ -6,7 +6,7 @@ import Ajv from 'ajv';
 import { z } from 'zod';
 
 import type { LoadedPrompt } from '../prompts/loader';
-import { hashValue } from './cache-key';
+import { createDevelopmentCacheKey, hashValue } from './cache-key';
 import type { LLMRequest, LLMResponse } from './types';
 import {
   defaultRecordingRedactor,
@@ -158,6 +158,28 @@ function recordedRequest(recording: Recording) {
     : null;
 }
 
+function recordedCacheKey(recording: Recording) {
+  if (recording.cacheKey) return recording.cacheKey;
+  const request = recordedRequest(recording);
+  if (
+    !request
+    || typeof request.provider !== 'string'
+    || typeof request.model !== 'string'
+    || typeof request.capability !== 'string'
+    || !request.prompt
+    || typeof request.prompt !== 'object'
+    || typeof request.configVersion !== 'string'
+    || !Array.isArray(request.images)
+  ) {
+    return undefined;
+  }
+  try {
+    return createDevelopmentCacheKey(request as LLMRequest);
+  } catch {
+    return undefined;
+  }
+}
+
 export class RecordingStore {
   private readonly recordingsRoot: string;
   private readonly cacheRoot: string;
@@ -214,11 +236,22 @@ export class RecordingStore {
     return (await this.readDemoRecording(step.recording))?.response ?? null;
   }
 
+  async getDemoByCacheKey(cacheKey: string): Promise<LLMResponse | null> {
+    const manifest = this.validatedManifest ?? await this.loadDemoScript(false);
+    if (!manifest) return null;
+    for (const step of manifest.steps) {
+      const recording = await this.readDemoRecording(step.recording);
+      if (recording && recordedCacheKey(recording) === cacheKey) {
+        return recording.response;
+      }
+    }
+    return null;
+  }
+
   async validateDemoAssets(options: DemoValidationOptions = {}) {
     const manifest = await this.loadDemoScript(true);
     if (!manifest) throw new RecordingValidationError('recordings/demo-script.json', '$', 'file is missing');
     const seen = new Set<string>();
-    const warn = options.warn ?? console.warn;
 
     for (const [index, step] of manifest.steps.entries()) {
       if (seen.has(step.id)) {
@@ -239,7 +272,7 @@ export class RecordingStore {
         );
       }
 
-      this.warnAboutVersionMismatch(step, index, recording, options, warn);
+      this.assertVersionMatch(step, index, recording, options);
       this.validateStructuredReplay(step, recording);
 
       for (const [resourceIndex, resource] of step.resourceRefs.entries()) {
@@ -270,45 +303,45 @@ export class RecordingStore {
     this.validatedManifest = manifest;
   }
 
-  private warnAboutVersionMismatch(
+  private assertVersionMatch(
     step: DemoScript['steps'][number],
     stepIndex: number,
     recording: Recording,
     options: DemoValidationOptions,
-    warn: (message: string) => void,
   ) {
-    const warning = (subject: string, recorded: string, current: string) => {
+    const match = (subject: string, recorded: string, current: string) => {
       if (recorded !== current) {
-        warn(
-          `[startup] WARNING: DEMO REPLAY VERSION MISMATCH for step ${step.id}: ${subject} ` +
-            `recorded=${recorded}, current=${current}`,
+        throw new RecordingValidationError(
+          'recordings/demo-script.json',
+          `steps.${stepIndex}.${subject.replaceAll(' ', '-')}`,
+          `demo replay version mismatch for ${step.id}: recorded=${recorded}, current=${current}`,
         );
       }
     };
 
     if (options.configVersion) {
-      warning('config', step.configVersion, options.configVersion);
-      warning('recording config', recording.metadata.configVersion, options.configVersion);
+      match('config', step.configVersion, options.configVersion);
+      match('recording config', recording.metadata.configVersion, options.configVersion);
     }
-    warning('schema', recording.metadata.schemaVersion, step.schemaVersion);
-    warning('prompt', recording.metadata.prompt.version, step.prompt.version);
+    match('schema', recording.metadata.schemaVersion, step.schemaVersion);
+    match('prompt', recording.metadata.prompt.version, step.prompt.version);
 
     const request = recordedRequest(recording);
     if (typeof request?.configVersion === 'string') {
-      warning('request config', request.configVersion, step.configVersion);
+      match('request config', request.configVersion, step.configVersion);
     }
     if (typeof request?.schemaVersion === 'string') {
-      warning('request schema', request.schemaVersion, step.schemaVersion);
+      match('request schema', request.schemaVersion, step.schemaVersion);
     }
     if (request?.prompt && typeof request.prompt === 'object') {
       if (typeof request.prompt.id === 'string') {
-        warning('request prompt id', request.prompt.id, step.prompt.id);
+        match('request prompt id', request.prompt.id, step.prompt.id);
       }
       if (typeof request.prompt.version === 'string') {
-        warning('request prompt', request.prompt.version, step.prompt.version);
+        match('request prompt', request.prompt.version, step.prompt.version);
       }
     }
-    warning('recording prompt id', recording.metadata.prompt.id, step.prompt.id);
+    match('recording prompt id', recording.metadata.prompt.id, step.prompt.id);
 
     const currentPrompt = options.prompts?.[step.prompt.id];
     if (options.prompts && !currentPrompt) {
@@ -318,7 +351,7 @@ export class RecordingStore {
         `unknown prompt ${step.prompt.id}`,
       );
     }
-    if (currentPrompt) warning('current prompt', step.prompt.version, currentPrompt.version);
+    if (currentPrompt) match('current prompt', step.prompt.version, currentPrompt.version);
 
     if (options.prompts) {
       const recordedPromptIds = [

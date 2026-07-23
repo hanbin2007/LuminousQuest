@@ -31,6 +31,8 @@ interface WorkflowAnswer<T> {
   attemptId: string;
   questionId: string;
   value: T;
+  responseToAgentTurnId?: string;
+  responseContractId?: string;
 }
 
 interface BuilderAnswerValue {
@@ -293,6 +295,12 @@ export function recordBuilderAssessment(input: BaseEngineAssessmentInput<Builder
     attemptId: answer.attemptId,
     questionId: answer.questionId,
     answer: { format: 'builder', value: normalizedValue },
+    ...(answer.responseToAgentTurnId && answer.responseContractId
+      ? {
+          responseToAgentTurnId: answer.responseToAgentTurnId,
+          responseContractId: answer.responseContractId,
+        }
+      : {}),
   });
   const storedAnswer = session.events.at(-1);
   if (!storedAnswer || storedAnswer.kind !== 'answer.submitted' || storedAnswer.answer.format !== 'builder') {
@@ -344,6 +352,12 @@ export function recordEquationAssessment(
     attemptId: input.answer.attemptId,
     questionId: input.answer.questionId,
     answer: { format: 'text', value: input.answer.value },
+    ...(input.answer.responseToAgentTurnId && input.answer.responseContractId
+      ? {
+          responseToAgentTurnId: input.answer.responseToAgentTurnId,
+          responseContractId: input.answer.responseContractId,
+        }
+      : {}),
   });
   const assessment = scoreEquation(input.answer.value, equationSet, input.config.rubrics.policy);
   assessment.nodeDecisions.forEach((nodeDecision, index) => {

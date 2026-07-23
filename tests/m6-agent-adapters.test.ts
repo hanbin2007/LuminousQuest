@@ -1,9 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
-import {
-  AgentTurnAdapterNotImplementedError,
-  type AgentTurnAdapterRequest,
-  type AgentTurnAdapterResult,
+import type {
+  AgentTurnAdapterRequest,
+  AgentTurnAdapterResult,
 } from '../server/agent/adapters/adapter';
 import { ClaudeAgentTurnAdapter } from '../server/agent/adapters/claude-agent';
 import { OpenAICompatibleAgentTurnAdapter } from '../server/agent/adapters/openai-compatible';
@@ -13,19 +12,30 @@ const request = {
   model: 'frozen-model',
   systemPrompt: 'Server-only system prompt',
   messages: [{ role: 'user', content: 'Student answer' }],
-  tools: [{
-    name: 'ask_student',
-    description: 'Ask the student one question.',
-    inputSchema: {
-      type: 'object',
-      additionalProperties: false,
-      required: ['text', 'responseContractId'],
-      properties: {
-        text: { type: 'string' },
-        responseContractId: { type: 'string' },
+  tools: [
+    {
+      name: 'get_profile',
+      description: 'Read the profile.',
+      inputSchema: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {},
       },
     },
-  }],
+    {
+      name: 'ask_student',
+      description: 'Ask the student one question.',
+      inputSchema: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['text', 'responseContractId'],
+        properties: {
+          text: { type: 'string' },
+          responseContractId: { type: 'string' },
+        },
+      },
+    },
+  ],
   maxTurns: 9,
 } satisfies AgentTurnAdapterRequest;
 
@@ -48,35 +58,192 @@ const normalizedResult = {
   },
 } satisfies AgentTurnAdapterResult;
 
-describe('provider-neutral AgentTurnAdapter foundations', () => {
+function completion(message: unknown, usage = {
+  prompt_tokens: 10,
+  completion_tokens: 2,
+  total_tokens: 12,
+}) {
+  return new Response(JSON.stringify({
+    choices: [{ message }],
+    usage,
+  }), {
+    status: 200,
+    headers: { 'content-type': 'application/json' },
+  });
+}
+
+describe('provider-neutral AgentTurnAdapter runtime', () => {
   it('freezes a normalized tool-call trace and usage result independent of provider payloads', () => {
-    expect(normalizedResult).toEqual({
+    expect(normalizedResult).toMatchObject({
       source: 'provider',
-      model: 'frozen-model',
-      orderedActions: [{
-        callId: 'call-1',
-        name: 'ask_student',
-        arguments: {
-          text: 'Why?',
-          responseContractId: 'response-contract-1',
-        },
-      }],
       terminalAction: { callId: 'call-1', name: 'ask_student' },
-      usage: {
-        inputTokens: 12,
-        outputTokens: 5,
-        totalTokens: 17,
-      },
+      usage: { totalTokens: 17 },
     });
   });
 
-  it.each([
-    ['openai-compatible', new OpenAICompatibleAgentTurnAdapter()],
-    ['claude-agent', new ClaudeAgentTurnAdapter()],
-  ] as const)('provides a non-calling %s skeleton', async (id, adapter) => {
-    expect(adapter.id).toBe(id);
-    await expect(adapter.execute(request)).rejects.toBeInstanceOf(
-      AgentTurnAdapterNotImplementedError,
+  it('preserves OpenAI assistant tool_calls and replies with the same tool_call_id', async () => {
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(completion({
+        role: 'assistant',
+        content: null,
+        tool_calls: [{
+          id: 'profile-call',
+          type: 'function',
+          function: { name: 'get_profile', arguments: '{}' },
+        }],
+      }))
+      .mockResolvedValueOnce(completion({
+        role: 'assistant',
+        content: null,
+        tool_calls: [{
+          id: 'ask-call',
+          type: 'function',
+          function: {
+            name: 'ask_student',
+            arguments: JSON.stringify({
+              text: '请说明理由。',
+              responseContractId: 'candidate-1',
+            }),
+          },
+        }],
+      }));
+    const executeTool = vi.fn(async (action) => ({
+      accepted: true,
+      action,
+      content: action.name === 'get_profile'
+        ? JSON.stringify({ profile: 'current' })
+        : JSON.stringify({ waiting: true }),
+    }));
+    const adapter = new OpenAICompatibleAgentTurnAdapter({
+      apiKey: 'test-key',
+      baseUrl: 'https://provider.invalid/v1',
+      fetch,
+    });
+
+    const result = await adapter.execute({ ...request, executeTool });
+
+    expect(result.orderedActions.map((action) => action.name)).toEqual([
+      'get_profile',
+      'ask_student',
+    ]);
+    expect(result.terminalAction).toEqual({
+      callId: 'ask-call',
+      name: 'ask_student',
+    });
+    const secondBody = JSON.parse(
+      String((fetch.mock.calls[1]?.[1] as RequestInit).body),
+    ) as {
+      parallel_tool_calls: boolean;
+      messages: Array<Record<string, unknown>>;
+    };
+    expect(secondBody.parallel_tool_calls).toBe(false);
+    expect(secondBody.messages).toContainEqual(expect.objectContaining({
+      role: 'assistant',
+      tool_calls: [expect.objectContaining({ id: 'profile-call' })],
+    }));
+    expect(secondBody.messages).toContainEqual({
+      role: 'tool',
+      tool_call_id: 'profile-call',
+      content: JSON.stringify({ profile: 'current' }),
+    });
+  });
+
+  it('uses only the in-process lq MCP tools on claude-agent and returns their trace', async () => {
+    const registered = new Map<string, (value: unknown) => Promise<unknown>>();
+    const queryMock = vi.fn((input: {
+      options: Record<string, unknown>;
+    }) => (async function* () {
+      yield {
+        type: 'assistant',
+        message: {
+          content: [
+            {
+              type: 'tool_use',
+              id: 'claude-profile',
+              name: 'mcp__lq__get_profile',
+              input: {},
+            },
+            {
+              type: 'tool_use',
+              id: 'claude-ask',
+              name: 'mcp__lq__ask_student',
+              input: {
+                text: '下一步是什么？',
+                responseContractId: 'candidate-1',
+              },
+            },
+          ],
+        },
+      };
+      await Promise.all([
+        registered.get('get_profile')!({}),
+        registered.get('ask_student')!({
+          text: '下一步是什么？',
+          responseContractId: 'candidate-1',
+        }),
+      ]);
+      yield {
+        type: 'result',
+        subtype: 'success',
+        usage: { input_tokens: 20, output_tokens: 6 },
+      };
+      expect(input.options).toMatchObject({
+        tools: [],
+        allowedTools: ['mcp__lq__*'],
+        strictMcpConfig: true,
+        settingSources: [],
+        persistSession: false,
+        maxTurns: 12,
+      });
+    })());
+    const sdk = {
+      query: queryMock,
+      tool: vi.fn((
+        name: string,
+        _description: string,
+        _shape: unknown,
+        handler: (value: unknown) => Promise<unknown>,
+      ) => {
+        registered.set(name, handler);
+        return { name, handler };
+      }),
+      createSdkMcpServer: vi.fn((options: unknown) => ({
+        type: 'sdk',
+        name: 'lq',
+        options,
+      })),
+    };
+    let activeTools = 0;
+    let maximumActiveTools = 0;
+    const executeTool = vi.fn(async (action) => {
+      activeTools += 1;
+      maximumActiveTools = Math.max(maximumActiveTools, activeTools);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      activeTools -= 1;
+      return {
+        accepted: true,
+        action,
+        content: JSON.stringify({ ok: true }),
+      };
+    });
+    const adapter = new ClaudeAgentTurnAdapter({
+      sdk: sdk as never,
+    });
+
+    const result = await adapter.execute({ ...request, executeTool });
+
+    expect(result.orderedActions.map((action) => action.callId)).toEqual([
+      'claude-profile',
+      'claude-ask',
+    ]);
+    expect(result.terminalAction).toEqual({
+      callId: 'claude-ask',
+      name: 'ask_student',
+    });
+    expect(maximumActiveTools).toBe(1);
+    expect(sdk.createSdkMcpServer).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'lq', alwaysLoad: true }),
     );
   });
 });

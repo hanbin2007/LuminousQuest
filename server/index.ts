@@ -5,6 +5,7 @@ import path from 'node:path';
 import { config as loadEnvironment } from 'dotenv';
 
 import { createServerApp } from './app';
+import { AGENT_RECORDING_PROMPT } from './agent/context-builder';
 import { loadAllConfig, ConfigValidationError } from './config/loader';
 import { RecordingStore, RecordingValidationError } from './llm/recording-store';
 import { loadAllPrompts, PromptValidationError } from './prompts/loader';
@@ -30,7 +31,10 @@ async function main() {
   const recordings = new RecordingStore(contentRoot);
   await recordings.validateDemoAssets({
     configVersion: loadedConfig.configVersion,
-    prompts,
+    prompts: {
+      ...prompts,
+      [AGENT_RECORDING_PROMPT.id]: AGENT_RECORDING_PROMPT,
+    },
   });
 
   const preferredPort = Number.parseInt(process.env.LQ_PORT ?? '4173', 10);

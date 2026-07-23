@@ -49,6 +49,8 @@ export function recordPretestEquationAssessments(input: {
     attemptId: string;
     questionId: string;
     value: string;
+    responseToAgentTurnId?: string;
+    responseContractId?: string;
   };
   referenceCaseId: string;
   referenceEquationSetIds?: readonly string[];
@@ -72,6 +74,12 @@ export function recordPretestEquationAssessments(input: {
       attemptId: input.answer.attemptId,
       questionId: input.answer.questionId,
       answer: { format: 'text', value: input.answer.value },
+      ...(input.answer.responseToAgentTurnId && input.answer.responseContractId
+        ? {
+            responseToAgentTurnId: input.answer.responseToAgentTurnId,
+            responseContractId: input.answer.responseContractId,
+          }
+        : {}),
     });
   } else if (existingAnswer.kind !== 'answer.submitted') {
     throw new Error(`Event ${input.answer.id} is not an answer`);
