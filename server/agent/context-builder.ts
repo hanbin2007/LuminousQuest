@@ -110,10 +110,22 @@ function latestJudgments(session: StudentSession) {
       turnId: event.turnId,
       nodeId: event.nodeId,
       verdict: event.verdict,
-      rationale: event.rationale,
       basisThroughSequence: event.basisThroughSequence,
       basisEventIds: event.basisEventIds,
     }));
+}
+
+function contextActionArguments(
+  action: Extract<
+    StudentSession['events'][number],
+    { kind: 'agent.turn.completed' }
+  >['orderedActions'][number],
+) {
+  if (action.name !== 'conclude_node') return action.arguments;
+  return {
+    nodeId: action.arguments.nodeId,
+    verdict: action.arguments.verdict,
+  };
 }
 
 function lastLogicalRounds(session: StudentSession, maximum: number): LogicalRound[] {
@@ -136,7 +148,7 @@ function lastLogicalRounds(session: StudentSession, maximum: number): LogicalRou
         agentTurnId: turn.turnId,
         actions: turn.orderedActions.map((action) => ({
           name: action.name,
-          arguments: action.arguments,
+          arguments: contextActionArguments(action),
         })),
         ...(response
           ? {
@@ -161,12 +173,7 @@ function currentTrigger(session: StudentSession, triggerEventId: string) {
   ) {
     throw new Error('An audit-only event cannot trigger an agent turn');
   }
-  const {
-    occurredAt: _occurredAt,
-    schemaVersion: _schemaVersion,
-    ...deterministicEvent
-  } = event;
-  return deterministicEvent;
+  return stripContextData(event) as Omit<typeof event, 'occurredAt' | 'schemaVersion'>;
 }
 
 function materialIndex(config: LoadedConfig) {
@@ -180,16 +187,58 @@ function materialIndex(config: LoadedConfig) {
     })));
 }
 
-function assertNoOccurredAt(value: unknown) {
+function isTimingKey(key: string, value: unknown) {
+  return key === 'occurredAt'
+    || key.toLowerCase().includes('elapsed')
+    || (key.endsWith('Ms') && typeof value === 'number');
+}
+
+const answerDataKeys = new Set([
+  'answerKey',
+  'correctValue',
+  'acceptedValues',
+  'accepted',
+  'answerGuidance',
+  'referenceEquations',
+  'referenceAnswerPoints',
+  'factRequirements',
+]);
+
+function stripContextData(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(stripContextData);
+  if (!value || typeof value !== 'object') return value;
+  const record = value as Record<string, unknown>;
+  return Object.fromEntries(
+    Object.entries(record)
+      .filter(([key, entry]) =>
+        key !== 'schemaVersion'
+        && key !== 'rationale'
+        && !answerDataKeys.has(key)
+        && !(record.kind === 'polarity.revealed' && key === 'values')
+        && !isTimingKey(key, entry))
+      .map(([key, entry]) => [key, stripContextData(entry)]),
+  );
+}
+
+function assertSafeContextData(value: unknown) {
   if (!value || typeof value !== 'object') return;
   if (Array.isArray(value)) {
-    value.forEach(assertNoOccurredAt);
+    value.forEach(assertSafeContextData);
     return;
   }
-  if (Object.hasOwn(value, 'occurredAt')) {
-    throw new Error('Agent context cannot contain occurredAt');
+  const record = value as Record<string, unknown>;
+  for (const [key, entry] of Object.entries(value)) {
+    if (isTimingKey(key, entry)) {
+      throw new Error(`Agent context cannot contain timing field ${key}`);
+    }
+    if (
+      answerDataKeys.has(key)
+      || (record.kind === 'polarity.revealed' && key === 'values')
+    ) {
+      throw new Error(`Agent context cannot contain answer field ${key}`);
+    }
+    assertSafeContextData(entry);
   }
-  Object.values(value).forEach(assertNoOccurredAt);
 }
 
 export interface BuildAgentTurnContextInput {
@@ -245,7 +294,7 @@ export function buildAgentTurnContext(
   );
   if (!freeCandidate) throw new Error('Agent context lacks an unassessed response candidate');
 
-  const context: AgentTurnContext = {
+  const rawContext: AgentTurnContext = {
     version: AGENT_CONTEXT_BUILDER_VERSION,
     systemPromptVersion: AGENT_SYSTEM_PROMPT_VERSION,
     contextThroughSequence: session.events.length - 1,
@@ -263,7 +312,8 @@ export function buildAgentTurnContext(
     currentTrigger: currentTrigger(session, input.triggerEventId),
     freeResponseContractCandidateId: freeCandidate.candidateId,
   };
-  assertNoOccurredAt(context);
+  const context = stripContextData(rawContext) as AgentTurnContext;
+  assertSafeContextData(context);
   const serializedContext = deterministicJson(context);
   const tools = createAgentToolDefinitions();
   const maxTurns = input.maxTurns ?? 16;

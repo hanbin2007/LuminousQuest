@@ -34,6 +34,8 @@ describe('M2 browser runtime', () => {
 
     const result = defaultRuntime.extractAssessment({
       sessionId: 'runtime-session',
+      expectedSequence: 0,
+      idempotencyKey: 'stable-submission',
       questionId: 'pretest-principle-process',
       targetNodeIds: ['P3', 'P4'],
       studentAnswer: '作答',
@@ -69,6 +71,8 @@ describe('M2 browser runtime', () => {
 
     await defaultRuntime.extractAssessment({
       sessionId: 'training-session',
+      expectedSequence: 0,
+      idempotencyKey: 'analysis-1',
       caseId: 'zinc-copper',
       questionId: 'zinc-copper:analysis',
       targetNodeIds: ['D1'],
@@ -77,6 +81,8 @@ describe('M2 browser runtime', () => {
     });
     await defaultRuntime.assessEquation({
       sessionId: 'training-session',
+      expectedSequence: 0,
+      idempotencyKey: 'equation-1',
       caseId: 'zinc-copper',
       equationSetId: 'zinc-negative',
       equation: 'Zn -> Zn^2+ + 2e^-',
@@ -84,6 +90,8 @@ describe('M2 browser runtime', () => {
     });
     await defaultRuntime.tutorTurn({
       sessionId: 'training-session',
+      expectedSequence: 0,
+      idempotencyKey: 'tutor-D1-0',
       nodeId: 'D1',
       studentAnswer: '不知道',
     });

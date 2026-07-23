@@ -149,6 +149,54 @@ describe('provider-neutral AgentTurnAdapter runtime', () => {
     });
   });
 
+  it('budgets OpenAI argument repair independently for each provider call id', async () => {
+    const invalid = (id: string) => completion({
+      role: 'assistant',
+      content: null,
+      tool_calls: [{
+        id,
+        type: 'function',
+        function: { name: 'ask_student', arguments: '{}' },
+      }],
+    });
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(invalid('invalid-call-1'))
+      .mockResolvedValueOnce(invalid('invalid-call-2'))
+      .mockResolvedValueOnce(completion({
+        role: 'assistant',
+        content: null,
+        tool_calls: [{
+          id: 'valid-call',
+          type: 'function',
+          function: {
+            name: 'ask_student',
+            arguments: JSON.stringify({
+              text: '请说明理由。',
+              responseContractId: 'candidate-1',
+            }),
+          },
+        }],
+      }));
+    const adapter = new OpenAICompatibleAgentTurnAdapter({
+      apiKey: 'test-key',
+      baseUrl: 'https://provider.invalid/v1',
+      fetch,
+    });
+
+    // Red-before-green: a global counter treated two distinct bad calls as one retry.
+    await expect(adapter.execute({
+      ...request,
+      executeTool: async (action) => ({
+        accepted: true,
+        action,
+        content: '{"ok":true}',
+      }),
+    })).resolves.toMatchObject({
+      terminalAction: { callId: 'valid-call', name: 'ask_student' },
+    });
+  });
+
   it('uses only the in-process lq MCP tools on claude-agent and returns their trace', async () => {
     const registered = new Map<string, (value: unknown) => Promise<unknown>>();
     const queryMock = vi.fn((input: {
@@ -245,5 +293,57 @@ describe('provider-neutral AgentTurnAdapter runtime', () => {
     expect(sdk.createSdkMcpServer).toHaveBeenCalledWith(
       expect.objectContaining({ name: 'lq', alwaysLoad: true }),
     );
+  });
+
+  it('uses the Claude SDK native tool-use id when the MCP callback provides it', async () => {
+    const registered = new Map<
+      string,
+      (value: unknown, extra?: unknown) => Promise<unknown>
+    >();
+    const sdk = {
+      query: vi.fn(() => (async function* () {
+        await registered.get('ask_student')!(
+          {
+            text: '下一步是什么？',
+            responseContractId: 'candidate-1',
+          },
+          { toolUseId: 'sdk-native-tool-use' },
+        );
+        yield {
+          type: 'result',
+          subtype: 'success',
+          usage: { input_tokens: 4, output_tokens: 2 },
+        };
+      })()),
+      tool: vi.fn((
+        name: string,
+        _description: string,
+        _shape: unknown,
+        handler: (value: unknown, extra?: unknown) => Promise<unknown>,
+      ) => {
+        registered.set(name, handler);
+        return { name, handler };
+      }),
+      createSdkMcpServer: vi.fn((options: unknown) => ({
+        type: 'sdk',
+        name: 'lq',
+        options,
+      })),
+    };
+    const adapter = new ClaudeAgentTurnAdapter({ sdk: sdk as never });
+
+    // Red-before-green: the callback used a synthetic claude-tool-N id.
+    const result = await adapter.execute({
+      ...request,
+      executeTool: async (action) => ({
+        accepted: true,
+        action,
+        content: '{"ok":true}',
+      }),
+    });
+    expect(result.terminalAction).toEqual({
+      callId: 'sdk-native-tool-use',
+      name: 'ask_student',
+    });
   });
 });

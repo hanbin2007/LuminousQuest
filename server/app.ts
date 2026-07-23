@@ -13,7 +13,10 @@ import { demoStartStateSchema } from '../shared/demo/start-state';
 import type { AssessmentCompletedEvent } from '../shared/session/schema';
 import { sessionSchema } from '../shared/session/schema';
 import { projectStudentSession } from '../shared/session/projections';
-import { sessionSyncRequestSchema } from '../shared/session/sync';
+import {
+  sessionCommandEnvelopeSchema,
+  sessionSyncRequestSchema,
+} from '../shared/session/sync';
 import {
   createSession,
   sessionConfigVersions,
@@ -38,6 +41,7 @@ import type { LLMExecutionMode, LLMProvider, LLMRequest } from './llm/types';
 import { loadPrompt, PromptValidationError } from './prompts/loader';
 import {
   coordinateSessionStore,
+  executeSessionCommand,
   InMemorySessionStore,
   SessionIdempotencyConflictError,
   SessionPrefixConflictError,
@@ -50,6 +54,13 @@ import {
 } from './workflows/assessment-extraction';
 import { runSocraticTurn } from './workflows/socratic-tutoring';
 import { demoLockEnabled } from './runtime/launch-options';
+
+class TutorEligibilityError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'TutorEligibilityError';
+  }
+}
 
 const llmRequestSchema = z
   .object({
@@ -92,8 +103,10 @@ const llmRequestSchema = z
     }
   });
 
-const assessmentRouteRequestSchema = z
-  .object({
+const routeCommandEnvelopeSchema = sessionCommandEnvelopeSchema.partial();
+
+const assessmentRouteRequestSchema = routeCommandEnvelopeSchema
+  .extend({
     sessionId: z.string().trim().min(1).max(128),
     caseId: z.string().trim().min(1).max(128).optional(),
     questionId: z.string().trim().min(1).max(128),
@@ -107,8 +120,8 @@ const assessmentRouteRequestSchema = z
     message: 'must contain unique node ids',
   });
 
-const equationRouteRequestSchema = z
-  .object({
+const equationRouteRequestSchema = routeCommandEnvelopeSchema
+  .extend({
     sessionId: z.string().trim().min(1).max(128),
     caseId: z.string().trim().min(1).max(128),
     equationSetId: z.string().trim().min(1).max(128),
@@ -117,8 +130,8 @@ const equationRouteRequestSchema = z
   })
   .strict();
 
-const choiceRouteRequestSchema = z
-  .object({
+const choiceRouteRequestSchema = routeCommandEnvelopeSchema
+  .extend({
     sessionId: z.string().trim().min(1).max(128),
     questionId: z.string().trim().min(1).max(128),
     optionId: z.string().trim().min(1).max(128),
@@ -152,8 +165,8 @@ const drawingFeedbackJsonSchema = {
   },
 } as const;
 
-const tutorRouteRequestSchema = z
-  .object({
+const tutorRouteRequestSchema = routeCommandEnvelopeSchema
+  .extend({
     sessionId: z.string().trim().min(1).max(128),
     nodeId: z.string().trim().min(1).max(128),
     studentAnswer: z.string(),
@@ -296,6 +309,49 @@ function invalidRequest(context: Context, label: string, error: z.ZodError) {
       reason: issue.message,
     })),
   }, 400);
+}
+
+function sessionCommandConflict(context: Context, error: unknown) {
+  if (error instanceof SessionSequenceConflictError) {
+    return context.json({
+      error: 'session-sequence-conflict',
+      expectedSequence: error.expectedSequence,
+      actualSequence: error.actualSequence,
+    }, 409);
+  }
+  if (error instanceof SessionIdempotencyConflictError) {
+    return context.json({
+      error: 'session-idempotency-conflict',
+      idempotencyKey: error.idempotencyKey,
+    }, 409);
+  }
+  if (error instanceof SessionPrefixConflictError) {
+    return context.json({
+      error: 'session-prefix-conflict',
+      ...(error.eventIndex === undefined ? {} : { eventIndex: error.eventIndex }),
+    }, 409);
+  }
+  return null;
+}
+
+function routeExpectedSequence(
+  store: ServerSessionStore,
+  sessionId: string,
+  idempotencyKey: string,
+  supplied: number | undefined,
+) {
+  if (supplied !== undefined) return supplied;
+  const session = store.get(sessionId);
+  const commandEvent = session?.events.find((event) =>
+    event.command?.idempotencyKey === idempotencyKey);
+  if (commandEvent?.command) return commandEvent.command.expectedSequence;
+  const marker = session?.events.find((event) =>
+    event.kind === 'session.command.executed'
+    && event.idempotencyKey === idempotencyKey);
+  if (marker?.kind === 'session.command.executed') {
+    return marker.expectedSequence;
+  }
+  return session?.events.length ?? 0;
 }
 
 function configuredWorkflow(options: ServerAppOptions, lockDemo: boolean): ServerWorkflowOptions {
@@ -576,41 +632,60 @@ export function createServerApp(options: ServerAppOptions) {
       const option = question.options.find((entry) => entry.id === parsed.data.optionId);
       if (!option) return context.json({ error: 'Unknown choice option' }, 400);
       const nowMs = workflow.now?.() ?? Date.now();
-      let session = sessions.get(parsed.data.sessionId) ?? createSession({
-        id: parsed.data.sessionId,
-        now: new Date(nowMs).toISOString(),
-        configVersions: sessionConfigVersions(config),
+      const idempotencyKey =
+        parsed.data.idempotencyKey ?? parsed.data.submissionId;
+      const command = await executeSessionCommand({
+        store: sessions,
+        sessionId: parsed.data.sessionId,
+        commandName: 'choice',
+        expectedSequence: routeExpectedSequence(
+          sessions,
+          parsed.data.sessionId,
+          idempotencyKey,
+          parsed.data.expectedSequence,
+        ),
+        idempotencyKey,
+        request: {
+          questionId: parsed.data.questionId,
+          optionId: parsed.data.optionId,
+          submissionId: parsed.data.submissionId,
+        },
+        initialize: () => createSession({
+          id: parsed.data.sessionId,
+          now: new Date(nowMs).toISOString(),
+          configVersions: sessionConfigVersions(config),
+        }),
+        execute(session) {
+          if (session.configVersions.configDigest !== config.configVersion) {
+            throw new SessionPrefixConflictError();
+          }
+          const operationId = randomUUID();
+          let idIndex = 0;
+          const occurredAt = new Date(
+            Math.max(nowMs, Date.parse(session.updatedAt)),
+          ).toISOString();
+          const recorded = recordChoiceAssessment({
+            session,
+            config,
+            question,
+            optionId: option.id,
+            occurredAt,
+            attemptId: parsed.data.submissionId,
+            idFactory: (prefix) => `${prefix}-${operationId}-${idIndex++}`,
+          });
+          return {
+            session: recorded.session,
+            value: { status: 'recorded' as const },
+          };
+        },
       });
-      if (session.configVersions.configDigest !== config.configVersion) {
-        return context.json({ error: 'Session config version does not match the current server config' }, 409);
-      }
-      const existing = session.events.find((event) =>
-        event.kind === 'answer.submitted' && event.attemptId === parsed.data.submissionId);
-      if (existing?.kind === 'answer.submitted') {
-        const matches = existing.questionId === question.id
-          && existing.answer.format === 'text'
-          && existing.answer.value === option.text;
-        return matches
-          ? context.json({ status: 'already-recorded', session: projectStudentSession(session) })
-          : context.json({ error: 'Submission id was already used for different content' }, 409);
-      }
-
-      const operationId = randomUUID();
-      let idIndex = 0;
-      const occurredAt = new Date(Math.max(nowMs, Date.parse(session.updatedAt))).toISOString();
-      const recorded = recordChoiceAssessment({
-        session,
-        config,
-        question,
-        optionId: option.id,
-        occurredAt,
-        attemptId: parsed.data.submissionId,
-        idFactory: (prefix) => `${prefix}-${operationId}-${idIndex++}`,
+      return context.json({
+        status: command.replayed ? 'already-recorded' : 'recorded',
+        session: projectStudentSession(command.session),
       });
-      session = recorded.session;
-      sessions.set(session);
-      return context.json({ status: 'recorded', session: projectStudentSession(session) });
     } catch (error) {
+      const conflict = sessionCommandConflict(context, error);
+      if (conflict) return conflict;
       const detail = error instanceof Error ? error.message : String(error);
       console.error(`[choice-assessment] request failed: ${detail}`);
       return context.json({ error: 'Choice assessment failed' }, 500);
@@ -699,119 +774,161 @@ export function createServerApp(options: ServerAppOptions) {
         return context.json({ error: 'Target node has no supported assessment path for this question' }, 400);
       }
       const nowMs = workflow.now?.() ?? Date.now();
-      // Local single-process limitation: changing the client-supplied sessionId resets assistance counts.
-      let session = sessions.get(parsed.data.sessionId) ?? createSession({
-        id: parsed.data.sessionId,
-        now: new Date(nowMs).toISOString(),
-        configVersions: sessionConfigVersions(config),
-      });
-      if (session.configVersions.configDigest !== config.configVersion) {
-        return context.json({ error: 'Session config version does not match the current server config' }, 409);
-      }
-      const existing = session.events.find((event) =>
-        event.kind === 'answer.submitted' && event.attemptId === parsed.data.submissionId);
-      if (existing?.kind === 'answer.submitted') {
-        const matches = existing.questionId === parsed.data.questionId
-          && existing.answer.format === 'text'
-          && existing.answer.value === parsed.data.studentAnswer;
-        return matches
-          ? context.json({ status: 'already-recorded', session: projectStudentSession(session) })
-          : context.json({ error: 'Submission id was already used for different content' }, 409);
-      }
-      const assistanceByNode = answerTargetNodeIds.map((nodeId) =>
-        derivedAssistance(session, nodeId));
-      const assistance = assistanceByNode.reduce<AssistanceMetadata>((selected, candidate) =>
-        candidate.rounds > selected.rounds ? candidate : selected, { kind: 'none', rounds: 0 });
-      const operationId = randomUUID();
-      const occurredAt = new Date(Math.max(nowMs, Date.parse(session.updatedAt))).toISOString();
-      const answer = {
-        id: `answer-${operationId}`,
-        occurredAt,
-        caseId: requestedCase?.id ?? 'pretest',
-        stageId: requestedCase
-          ? requestedCase.caseType === 'transfer' ? 'transfer' : 'training'
-          : 'assessment',
-        attemptId: parsed.data.submissionId,
-        questionId: parsed.data.questionId,
-        value: parsed.data.studentAnswer,
-      };
-      let extractionResult: Awaited<ReturnType<typeof runAssessmentExtraction>> | null = null;
-      let profile: ReturnType<typeof recordPretestEquationAssessments>['profile'] | undefined;
-      if (answerTargetNodeIds.length > 0) {
-        extractionResult = await runAssessmentExtraction({
-          service: llmService,
-          evalCandidates,
-          config,
-          prompt,
-          answer: parsed.data.studentAnswer,
-          caseId: referenceCaseId,
-          targetNodeIds: answerTargetNodeIds,
-          questionEvidence: question?.evidence,
-          assistance,
-          executionMode: workflow.executionMode,
-          provider: workflow.provider,
-          model: workflow.model,
-          ...(workflow.extractionStepId ? { stepId: workflow.extractionStepId } : {}),
-        });
-        const provenance = {
-          promptId: prompt.id,
-          promptVersion: prompt.version,
-          cacheKey: extractionResult.cacheKey,
-          model: extractionResult.model,
-        };
-        const recorded = extractionResult.status === 'extracted'
-          ? recordStructuredTextAssessment({
-              session,
+      const idempotencyKey =
+        parsed.data.idempotencyKey ?? parsed.data.submissionId;
+      const command = await executeSessionCommand({
+        store: sessions,
+        sessionId: parsed.data.sessionId,
+        commandName: 'extract',
+        expectedSequence: routeExpectedSequence(
+          sessions,
+          parsed.data.sessionId,
+          idempotencyKey,
+          parsed.data.expectedSequence,
+        ),
+        idempotencyKey,
+        request: {
+          caseId: parsed.data.caseId,
+          questionId: parsed.data.questionId,
+          targetNodeIds: parsed.data.targetNodeIds,
+          studentAnswer: parsed.data.studentAnswer,
+          submissionId: parsed.data.submissionId,
+        },
+        initialize: () => createSession({
+          id: parsed.data.sessionId,
+          now: new Date(nowMs).toISOString(),
+          configVersions: sessionConfigVersions(config),
+        }),
+        async execute(currentSession) {
+          if (currentSession.configVersions.configDigest !== config.configVersion) {
+            throw new SessionPrefixConflictError();
+          }
+          // Local single-process limitation: changing sessionId resets assistance counts.
+          const assistanceByNode = answerTargetNodeIds.map((nodeId) =>
+            derivedAssistance(currentSession, nodeId));
+          const assistance = assistanceByNode.reduce<AssistanceMetadata>(
+            (selected, candidate) =>
+              candidate.rounds > selected.rounds ? candidate : selected,
+            { kind: 'none', rounds: 0 },
+          );
+          const operationId = randomUUID();
+          const occurredAt = new Date(
+            Math.max(nowMs, Date.parse(currentSession.updatedAt)),
+          ).toISOString();
+          const answer = {
+            id: `answer-${operationId}`,
+            occurredAt,
+            caseId: requestedCase?.id ?? 'pretest',
+            stageId: requestedCase
+              ? requestedCase.caseType === 'transfer' ? 'transfer' : 'training'
+              : 'assessment',
+            attemptId: parsed.data.submissionId,
+            questionId: parsed.data.questionId,
+            value: parsed.data.studentAnswer,
+          };
+          let session = currentSession;
+          let extractionResult:
+            Awaited<ReturnType<typeof runAssessmentExtraction>> | null = null;
+          let profile:
+            ReturnType<typeof recordPretestEquationAssessments>['profile']
+            | undefined;
+          if (answerTargetNodeIds.length > 0) {
+            extractionResult = await runAssessmentExtraction({
+              service: llmService,
+              evalCandidates,
               config,
-              answer,
-              extraction: extractionResult.extraction,
-              provenance,
-              assessmentEventIdPrefix: `assessment-${operationId}-text`,
-              assessedAt: occurredAt,
-              referenceCaseId,
+              prompt,
+              answer: parsed.data.studentAnswer,
+              caseId: referenceCaseId,
+              targetNodeIds: answerTargetNodeIds,
               questionEvidence: question?.evidence,
-            })
-          : recordNeedsReviewTextAssessments({
+              assistance,
+              executionMode: workflow.executionMode,
+              provider: workflow.provider,
+              model: workflow.model,
+              ...(workflow.extractionStepId
+                ? { stepId: workflow.extractionStepId }
+                : {}),
+            });
+            const provenance = {
+              promptId: prompt.id,
+              promptVersion: prompt.version,
+              cacheKey: extractionResult.cacheKey,
+              model: extractionResult.model,
+            };
+            const recorded = extractionResult.status === 'extracted'
+              ? recordStructuredTextAssessment({
+                  session,
+                  config,
+                  answer,
+                  extraction: extractionResult.extraction,
+                  provenance,
+                  assessmentEventIdPrefix: `assessment-${operationId}-text`,
+                  assessedAt: occurredAt,
+                  referenceCaseId,
+                  questionEvidence: question?.evidence,
+                })
+              : recordNeedsReviewTextAssessments({
+                  session,
+                  config,
+                  answer,
+                  nodeIds: answerTargetNodeIds,
+                  assistance,
+                  reason: extractionResult.reason,
+                  provenance,
+                  assessmentEventIdPrefix: `assessment-${operationId}-text`,
+                  assessedAt: occurredAt,
+                });
+            session = recorded.session;
+            profile = recorded.profile;
+          }
+          if (equationTargetNodeIds.length > 0) {
+            const recorded = recordPretestEquationAssessments({
               session,
               config,
               answer,
-              nodeIds: answerTargetNodeIds,
-              assistance,
-              reason: extractionResult.reason,
-              provenance,
-              assessmentEventIdPrefix: `assessment-${operationId}-text`,
+              referenceCaseId,
+              referenceEquationSetIds: question?.referenceEquations
+                .filter((reference) => reference.caseId === referenceCaseId)
+                .map((reference) => reference.equationSetId),
+              targetNodeIds: equationTargetNodeIds,
+              assessmentEventIdPrefix: `assessment-${operationId}-equation`,
               assessedAt: occurredAt,
             });
-        session = recorded.session;
-        profile = recorded.profile;
-      }
-      if (equationTargetNodeIds.length > 0) {
-        const recorded = recordPretestEquationAssessments({
-          session,
-          config,
-          answer,
-          referenceCaseId,
-          referenceEquationSetIds: question?.referenceEquations
-            .filter((reference) => reference.caseId === referenceCaseId)
-            .map((reference) => reference.equationSetId),
-          targetNodeIds: equationTargetNodeIds,
-          assessmentEventIdPrefix: `assessment-${operationId}-equation`,
-          assessedAt: occurredAt,
-        });
-        session = recorded.session;
-        profile = recorded.profile;
-      }
-      sessions.set(session);
+            session = recorded.session;
+            profile = recorded.profile;
+          }
+          return {
+            session,
+            value: {
+              ...(extractionResult ?? { status: 'deterministic' as const }),
+              profile,
+              recordingStatus: 'recorded' as const,
+            },
+          };
+        },
+      });
+      const responseValue = command.value ?? {
+          status: 'already-recorded' as const,
+          profile: buildLearnerProfile(command.session, config),
+          recordingStatus: 'already-recorded' as const,
+        };
       return context.json({
-        ...(extractionResult ?? { status: 'deterministic' as const }),
-        session: projectStudentSession(session),
-        profile,
-        recordingStatus: 'recorded',
+        ...responseValue,
+        ...(command.replayed
+          ? {
+              status: 'already-recorded' as const,
+              recordingStatus: 'already-recorded' as const,
+            }
+          : {}),
+        session: projectStudentSession(command.session),
       });
     } catch (error) {
       if (error instanceof ExtractionValidationError && error.category === 'answer-too-long') {
         return context.json({ error: error.message }, 413);
       }
+      const conflict = sessionCommandConflict(context, error);
+      if (conflict) return conflict;
       const detail = error instanceof Error ? error.message : String(error);
       console.error(`[assessment] request failed: ${detail}`);
       return context.json({ error: 'Assessment extraction failed' }, 500);
@@ -833,54 +950,77 @@ export function createServerApp(options: ServerAppOptions) {
         return context.json({ error: 'Unknown case equation set' }, 400);
       }
       const nowMs = workflow.now?.() ?? Date.now();
-      let session = sessions.get(parsed.data.sessionId) ?? createSession({
-        id: parsed.data.sessionId,
-        now: new Date(nowMs).toISOString(),
-        configVersions: sessionConfigVersions(config),
-      });
-      if (session.configVersions.configDigest !== config.configVersion) {
-        return context.json({ error: 'Session config version does not match the current server config' }, 409);
-      }
       const questionId = `${trainingCase.id}:${equationSet.id}`;
-      const existing = session.events.find((event) =>
-        event.kind === 'answer.submitted' && event.attemptId === parsed.data.submissionId);
-      if (existing?.kind === 'answer.submitted') {
-        const matches = existing.questionId === questionId
-          && existing.answer.format === 'text'
-          && existing.answer.value === parsed.data.equation;
-        return matches
-          ? context.json({ status: 'already-recorded', session: projectStudentSession(session) })
-          : context.json({ error: 'Submission id was already used for different content' }, 409);
-      }
-
-      const operationId = randomUUID();
-      const occurredAt = new Date(Math.max(nowMs, Date.parse(session.updatedAt))).toISOString();
-      const recorded = recordEquationAssessment({
-        session,
-        config,
-        equationSetId: equationSet.id,
-        answer: {
-          id: `answer-${operationId}`,
-          occurredAt,
-          caseId: trainingCase.id,
-          stageId: trainingCase.caseType === 'transfer' ? 'transfer' : 'training',
-          attemptId: parsed.data.submissionId,
-          questionId,
-          value: parsed.data.equation,
+      const idempotencyKey =
+        parsed.data.idempotencyKey ?? parsed.data.submissionId;
+      const command = await executeSessionCommand({
+        store: sessions,
+        sessionId: parsed.data.sessionId,
+        commandName: 'equation',
+        expectedSequence: routeExpectedSequence(
+          sessions,
+          parsed.data.sessionId,
+          idempotencyKey,
+          parsed.data.expectedSequence,
+        ),
+        idempotencyKey,
+        request: {
+          caseId: parsed.data.caseId,
+          equationSetId: parsed.data.equationSetId,
+          equation: parsed.data.equation,
+          submissionId: parsed.data.submissionId,
         },
-        assistance: { kind: 'none', rounds: 0 },
-        assessmentEventIdPrefix: `assessment-${operationId}-equation`,
-        assessedAt: occurredAt,
+        initialize: () => createSession({
+          id: parsed.data.sessionId,
+          now: new Date(nowMs).toISOString(),
+          configVersions: sessionConfigVersions(config),
+        }),
+        execute(session) {
+          if (session.configVersions.configDigest !== config.configVersion) {
+            throw new SessionPrefixConflictError();
+          }
+          const operationId = randomUUID();
+          const occurredAt = new Date(
+            Math.max(nowMs, Date.parse(session.updatedAt)),
+          ).toISOString();
+          const recorded = recordEquationAssessment({
+            session,
+            config,
+            equationSetId: equationSet.id,
+            answer: {
+              id: `answer-${operationId}`,
+              occurredAt,
+              caseId: trainingCase.id,
+              stageId: trainingCase.caseType === 'transfer'
+                ? 'transfer'
+                : 'training',
+              attemptId: parsed.data.submissionId,
+              questionId,
+              value: parsed.data.equation,
+            },
+            assistance: { kind: 'none', rounds: 0 },
+            assessmentEventIdPrefix: `assessment-${operationId}-equation`,
+            assessedAt: occurredAt,
+          });
+          return {
+            session: recorded.session,
+            value: {
+              profile: recorded.profile,
+              assessment: recorded.assessment,
+            },
+          };
+        },
       });
-      session = recorded.session;
-      sessions.set(session);
       return context.json({
-        status: 'recorded',
-        session: projectStudentSession(session),
-        profile: recorded.profile,
-        assessment: recorded.assessment,
+        status: command.replayed ? 'already-recorded' : 'recorded',
+        session: projectStudentSession(command.session),
+        ...(command.value ?? {
+          profile: buildLearnerProfile(command.session, config),
+        }),
       });
     } catch (error) {
+      const conflict = sessionCommandConflict(context, error);
+      if (conflict) return conflict;
       const detail = error instanceof Error ? error.message : String(error);
       console.error(`[equation-assessment] request failed: ${detail}`);
       return context.json({ error: 'Equation assessment failed' }, 500);
@@ -892,47 +1032,102 @@ export function createServerApp(options: ServerAppOptions) {
     if (!requestBody.ok) return requestBody.response;
     const parsed = tutorRouteRequestSchema.safeParse(requestBody.body);
     if (!parsed.success) return invalidRequest(context, 'tutor turn', parsed.error);
-    const session = sessions.get(parsed.data.sessionId);
-    if (!session) return context.json({ error: 'Session not found' }, 404);
+    const existingSession = sessions.get(parsed.data.sessionId);
+    if (!existingSession) return context.json({ error: 'Session not found' }, 404);
 
     try {
       const config = await loadAllConfig(options.contentRoot);
-      if (session.configVersions.configDigest !== config.configVersion) {
-        return context.json({ error: 'Session config version does not match the current server config' }, 409);
-      }
-      let latestAssessment: AssessmentCompletedEvent | undefined;
-      for (const event of session.events) {
-        if (event.kind !== 'assessment.completed' || event.nodeId !== parsed.data.nodeId) continue;
-        if (!latestAssessment || event.sequence > latestAssessment.sequence) latestAssessment = event;
-      }
-      if (!latestAssessment) {
-        return context.json({ error: 'Tutor requires an assessed training-stage answer' }, 409);
-      }
-      const assessedCase = config.cases.find((entry) => entry.id === latestAssessment.caseId);
-      if (latestAssessment.stageId !== 'training' || assessedCase?.caseType !== 'training') {
-        return context.json({ error: 'Tutor is only available for training-stage answers' }, 409);
-      }
       const prompt = await loadPrompt(options.contentRoot, 'socratic-tutoring');
       if (!prompt) throw new Error('Required prompt socratic-tutoring is missing');
-      const result = await runSocraticTurn({
-        service: llmService,
-        config,
-        prompt,
-        session,
-        nodeId: parsed.data.nodeId,
-        studentAnswer: parsed.data.studentAnswer,
-        now: workflow.now,
-        executionMode: workflow.executionMode,
-        provider: workflow.provider,
-        model: workflow.model,
-        ...(workflow.tutorStepId ? { stepId: workflow.tutorStepId } : {}),
+      const fallbackSequence = existingSession.events.length;
+      const idempotencyKey = parsed.data.idempotencyKey
+        ?? `tutor:${parsed.data.nodeId}:${fallbackSequence}`;
+      const command = await executeSessionCommand({
+        store: sessions,
+        sessionId: parsed.data.sessionId,
+        commandName: 'tutor',
+        expectedSequence: routeExpectedSequence(
+          sessions,
+          parsed.data.sessionId,
+          idempotencyKey,
+          parsed.data.expectedSequence,
+        ),
+        idempotencyKey,
+        request: {
+          nodeId: parsed.data.nodeId,
+          studentAnswer: parsed.data.studentAnswer,
+        },
+        initialize: () => existingSession,
+        async execute(session) {
+          if (session.configVersions.configDigest !== config.configVersion) {
+            throw new SessionPrefixConflictError();
+          }
+          let latestAssessment: AssessmentCompletedEvent | undefined;
+          for (const event of session.events) {
+            if (
+              event.kind !== 'assessment.completed'
+              || event.nodeId !== parsed.data.nodeId
+            ) {
+              continue;
+            }
+            if (
+              !latestAssessment
+              || event.sequence > latestAssessment.sequence
+            ) {
+              latestAssessment = event;
+            }
+          }
+          if (!latestAssessment) {
+            throw new TutorEligibilityError(
+              'Tutor requires an assessed training-stage answer',
+            );
+          }
+          const assessedCase = config.cases.find(
+            (entry) => entry.id === latestAssessment!.caseId,
+          );
+          if (
+            latestAssessment.stageId !== 'training'
+            || assessedCase?.caseType !== 'training'
+          ) {
+            throw new TutorEligibilityError(
+              'Tutor is only available for training-stage answers',
+            );
+          }
+          const result = await runSocraticTurn({
+            service: llmService,
+            config,
+            prompt,
+            session,
+            nodeId: parsed.data.nodeId,
+            studentAnswer: parsed.data.studentAnswer,
+            now: workflow.now,
+            executionMode: workflow.executionMode,
+            provider: workflow.provider,
+            model: workflow.model,
+            ...(workflow.tutorStepId
+              ? { stepId: workflow.tutorStepId }
+              : {}),
+          });
+          const { session: resultSession, ...value } = result;
+          return { session: resultSession, value };
+        },
       });
-      sessions.set(result.session);
+      if (!command.value) {
+        return context.json({
+          error: 'Tutor command replay requires no additional action',
+          session: projectStudentSession(command.session),
+        }, 409);
+      }
       return context.json({
-        ...result,
-        session: projectStudentSession(result.session),
+        ...command.value,
+        session: projectStudentSession(command.session),
       });
     } catch (error) {
+      const conflict = sessionCommandConflict(context, error);
+      if (conflict) return conflict;
+      if (error instanceof TutorEligibilityError) {
+        return context.json({ error: error.message }, 409);
+      }
       const detail = error instanceof Error ? error.message : String(error);
       console.error(`[tutor] request failed: ${detail}`);
       return context.json({ error: 'Tutor turn failed' }, 500);

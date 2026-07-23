@@ -213,6 +213,12 @@ export async function runAgentLoopTurn(
       degraded: adapterResult.source === 'fallback',
     };
   } catch (error) {
+    if (
+      input.executionMode === 'demo'
+      && failureCategory(error) === 'replay-missing'
+    ) {
+      throw error;
+    }
     input.responseContracts.discardTurn(session.id, input.turnId);
     transaction = new AgentTurnTransaction();
     handler = new AgentToolHandler({

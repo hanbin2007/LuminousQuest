@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { sessionSchema } from './schema';
+import { sessionSchema, type StudentSession } from './schema';
 
 export const sessionCommandEnvelopeSchema = z
   .object({
@@ -15,3 +15,16 @@ export const sessionSyncRequestSchema = sessionCommandEnvelopeSchema
 
 export type SessionCommandEnvelope = z.infer<typeof sessionCommandEnvelopeSchema>;
 export type SessionSyncRequest = z.infer<typeof sessionSyncRequestSchema>;
+
+export function sessionServerSequence(session: StudentSession) {
+  let sequence = session.serverSequence ?? 0;
+  for (const event of session.events) {
+    if (event.command) {
+      sequence = Math.max(sequence, event.command.resultingSequence);
+    }
+    if (event.kind === 'session.command.executed') {
+      sequence = Math.max(sequence, event.resultingSequence);
+    }
+  }
+  return sequence;
+}

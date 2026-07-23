@@ -84,8 +84,10 @@ function withPolarity(
   },
 ) {
   const caseId = input.caseId ?? 'zinc-copper';
-  return appendSessionEvent(session, {
-    id: `polarity-${caseId}-${input.outcome}`,
+  const assessmentId = `polarity-${caseId}-${input.outcome}`;
+  const correctValue = input.correctValue ?? 'negative=Zn;positive=Cu';
+  const assessed = appendSessionEvent(session, {
+    id: assessmentId,
     occurredAt: '2026-07-16T12:00:03.000Z',
     kind: 'polarity.assessed',
     pipelineStage: 'rule',
@@ -96,10 +98,27 @@ function withPolarity(
     anchorId: 'case-polarity',
     facts: [{ id: 'negative', value: 'Zn', evidence: { quote: '锌极', start: 3, end: 5 } }],
     extractedValue: 'negative=Zn',
-    correctValue: input.correctValue ?? 'negative=Zn;positive=Cu',
+    correctValue,
     outcome: input.outcome,
     evidence: [{ quote: '锌极', start: 3, end: 5 }],
     engine: { id: 'case-anchor-policy', version: 'rubric-policy.v2' },
+  });
+  if (input.outcome === 'miss') return assessed;
+  const values = Object.fromEntries(correctValue.split(';').map((entry) => {
+    const separator = entry.indexOf('=');
+    return [entry.slice(0, separator), entry.slice(separator + 1)];
+  })) as { negative: string; positive: string };
+  return appendSessionEvent(assessed, {
+    id: `${assessmentId}-reveal`,
+    occurredAt: '2026-07-16T12:00:03.000Z',
+    kind: 'polarity.revealed',
+    pipelineStage: 'reveal',
+    caseId,
+    stageId: 'training',
+    attemptId: input.attemptId,
+    sourcePolarityAssessmentEventId: assessmentId,
+    anchorId: 'case-polarity',
+    values,
   });
 }
 

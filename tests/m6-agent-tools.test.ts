@@ -14,7 +14,10 @@ import {
   sessionConfigVersions,
 } from '../shared/session';
 
-async function handlerFixture(turnId: string) {
+async function handlerFixture(
+  turnId: string,
+  caseId = 'zinc-copper',
+) {
   const config = await loadAllConfig(process.cwd());
   let session = createSession({
     id: `tool-handler-${turnId}`,
@@ -27,10 +30,10 @@ async function handlerFixture(turnId: string) {
     occurredAt: '2026-07-23T19:00:01.000Z',
     kind: 'answer.submitted',
     pipelineStage: 'answer',
-    caseId: 'zinc-copper',
+    caseId,
     stageId: 'training',
     attemptId: `trigger-attempt-${turnId}`,
-    questionId: 'zinc-copper:analysis',
+    questionId: `${caseId}:analysis`,
     answer: { format: 'text', value: '我先尝试分析。' },
   });
   const builtContext = buildAgentTurnContext({
@@ -38,7 +41,7 @@ async function handlerFixture(turnId: string) {
     config,
     triggerEventId: `trigger-${turnId}`,
     turnId,
-    currentCaseId: 'zinc-copper',
+    currentCaseId: caseId,
     model: 'tool-test-model',
   });
   const transaction = new AgentTurnTransaction();
@@ -53,7 +56,7 @@ async function handlerFixture(turnId: string) {
     triggerEventId: `trigger-${turnId}`,
     occurredAt: '2026-07-23T19:00:02.000Z',
     identity: {
-      caseId: 'zinc-copper',
+      caseId,
       stageId: 'training',
       attemptId: `response-attempt-${turnId}`,
     },
@@ -155,5 +158,35 @@ describe('M6 Phase 2 agent tool handlers', () => {
       },
     });
     expect(fixture.transaction.state).toBe('terminal');
+  });
+
+  it('enforces revealAfterNodeIds before presenting a gated material', async () => {
+    const blocked = await handlerFixture('material-gated', 'aluminum-air');
+
+    // Red-before-green: present_material previously checked only ready/materialRef.
+    expect(await blocked.handler.execute({
+      callId: 'blocked-cross-section',
+      name: 'present_material',
+      arguments: { materialId: 'cross-section' },
+    })).toMatchObject({
+      accepted: false,
+      errorCategory: 'material-gated',
+    });
+
+    const unlocked = await handlerFixture('material-unlocked', 'aluminum-air');
+    for (const nodeId of ['P2', 'P3']) {
+      const node = unlocked.builtContext.context.recordTrack.nodes.find(
+        (entry) => entry.nodeId === nodeId,
+      )!;
+      node.status = 'scored';
+    }
+    expect(await unlocked.handler.execute({
+      callId: 'unlocked-cross-section',
+      name: 'present_material',
+      arguments: { materialId: 'cross-section' },
+    })).toMatchObject({
+      accepted: true,
+      action: { name: 'present_material' },
+    });
   });
 });

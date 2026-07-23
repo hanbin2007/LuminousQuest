@@ -4,6 +4,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { recordBuilderAssessment } from '../../../shared/workflows/engine-assessment';
 import { appendSessionEvent } from '../../../shared/session/session';
 import type { StudentSession } from '../../../shared/session/schema';
+import { sessionServerSequence } from '../../../shared/session/sync';
 import { useAppContext } from '../../app/AppContext';
 import { pretestStepPath, resolvePretestStep } from '../../app/route-config';
 import { getWorkspaceStorage } from '../../persistence/workspace-storage';
@@ -229,6 +230,8 @@ export function PretestPage() {
       if (activeQuestion.type === 'choice') {
         const result = await runtime.assessChoice({
           sessionId: session.id,
+          expectedSequence: sessionServerSequence(session),
+          idempotencyKey: submissionId,
           questionId: activeQuestion.id,
           optionId: choiceAnswer ?? answer,
           submissionId,
@@ -237,6 +240,8 @@ export function PretestPage() {
       } else {
         const result = await runtime.extractAssessment({
           sessionId: session.id,
+          expectedSequence: sessionServerSequence(session),
+          idempotencyKey: submissionId,
           questionId: activeQuestion.id,
           targetNodeIds: [...activeQuestion.targetNodeIds],
           studentAnswer: answer,

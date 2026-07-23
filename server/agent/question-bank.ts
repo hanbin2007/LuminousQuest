@@ -15,7 +15,7 @@ export type AgentQuestionBankEntry = {
   contentHash: `sha256:${string}`;
   targetNodeIds: string[];
   responseContractCandidateId?: string;
-  answerKey: unknown;
+  assessmentFocus: string[];
 };
 
 export function hashQuestionContent(prompt: string): `sha256:${string}` {
@@ -23,6 +23,17 @@ export function hashQuestionContent(prompt: string): `sha256:${string}` {
 }
 
 function configuredEntries(config: LoadedConfig): AgentQuestionBankEntry[] {
+  const focusForNodes = (nodeIds: readonly string[]) => {
+    const selected = new Set(nodeIds);
+    return config.knowledgeModel.nodes
+      .filter((node) => selected.has(node.id))
+      .flatMap((node) => [
+        `${node.id}: ${node.statement}`,
+        ...node.misconceptions.map(
+          (misconception) => `${node.id} 常见误区: ${misconception.statement}`,
+        ),
+      ]);
+  };
   const pretest: AgentQuestionBankEntry[] = [
     {
       questionId: 'pretest-builder',
@@ -33,10 +44,11 @@ function configuredEntries(config: LoadedConfig): AgentQuestionBankEntry[] {
       targetNodeIds: [...new Set(
         config.pretest.builder.structuralRules.flatMap((rule) => rule.nodeIds),
       )],
-      answerKey: {
-        structuralRules: config.pretest.builder.structuralRules,
-        assessment: config.pretest.builder.assessment,
-      },
+      assessmentFocus: focusForNodes([
+        ...new Set(
+          config.pretest.builder.structuralRules.flatMap((rule) => rule.nodeIds),
+        ),
+      ]),
     },
     ...config.pretest.questions.map((question): AgentQuestionBankEntry => ({
       questionId: question.id,
@@ -45,15 +57,7 @@ function configuredEntries(config: LoadedConfig): AgentQuestionBankEntry[] {
       prompt: question.prompt,
       contentHash: hashQuestionContent(question.prompt),
       targetNodeIds: [...question.targetNodeIds],
-      answerKey: question.type === 'choice'
-        ? {
-            options: question.options,
-          }
-        : {
-            answerGuidance: question.answerGuidance,
-            evidence: question.evidence ?? [],
-            referenceEquations: question.referenceEquations,
-          },
+      assessmentFocus: focusForNodes(question.targetNodeIds),
     })),
   ];
   const cases = config.cases.flatMap((trainingCase): AgentQuestionBankEntry[] => [
@@ -66,10 +70,11 @@ function configuredEntries(config: LoadedConfig): AgentQuestionBankEntry[] {
         `请分析案例“${trainingCase.title}”中的关键电化学过程。`,
       ),
       targetNodeIds: [...trainingCase.targetNodeIds],
-      answerKey: {
-        followingAnchors: trainingCase.followingAnchors,
-        evidencePaths: trainingCase.evidencePaths,
-      },
+      assessmentFocus: [
+        ...focusForNodes(trainingCase.targetNodeIds),
+        ...trainingCase.evidencePaths.map((entry) =>
+          `${entry.nodeId} 考查点: ${entry.description}`),
+      ],
     },
     ...trainingCase.equationSets.map((equationSet): AgentQuestionBankEntry => {
       const electrodeLabel = equationSet.electrode === 'negative'
@@ -89,9 +94,16 @@ function configuredEntries(config: LoadedConfig): AgentQuestionBankEntry[] {
             .filter((entry) => entry.source === 'equation')
             .map((entry) => entry.nodeId),
         )],
-        answerKey: {
-          equationSet,
-        },
+        assessmentFocus: [
+          `${electrodeLabel}的配平、守恒与介质条件`,
+          ...focusForNodes([
+            ...new Set(
+              trainingCase.evidencePaths
+                .filter((entry) => entry.source === 'equation')
+                .map((entry) => entry.nodeId),
+            ),
+          ]),
+        ],
       };
     }),
   ]);

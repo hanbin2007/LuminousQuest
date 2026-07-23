@@ -52,13 +52,20 @@ export function selectShadowAssessmentAtBasis(
   });
   const node = buildLearnerProfile(prefix, config).nodes.find((entry) =>
     entry.nodeId === nodeId);
-  if (!node?.selectedAssessment) {
-    const latestStatus = node?.latestAttempt?.status;
+  const latestStatus = node?.latestAttempt?.status;
+  if (latestStatus !== 'scored') {
     return {
       status: 'incomparable',
       reason: latestStatus === 'needs-review' || latestStatus === 'unanswered'
         ? latestStatus
         : 'unassessed',
+      comparisonPolicyVersion: AGENT_SHADOW_COMPARISON_POLICY_VERSION,
+    };
+  }
+  if (!node?.selectedAssessment) {
+    return {
+      status: 'incomparable',
+      reason: 'unassessed',
       comparisonPolicyVersion: AGENT_SHADOW_COMPARISON_POLICY_VERSION,
     };
   }
@@ -71,12 +78,9 @@ export function selectShadowAssessmentAtBasis(
   }
   const verdict = normalizedVerdict(assessment);
   if (!verdict) {
-    const latestStatus = node.latestAttempt?.status;
     return {
       status: 'incomparable',
-      reason: latestStatus === 'needs-review' || latestStatus === 'unanswered'
-        ? latestStatus
-        : 'unassessed',
+      reason: 'unassessed',
       comparisonPolicyVersion: AGENT_SHADOW_COMPARISON_POLICY_VERSION,
     };
   }

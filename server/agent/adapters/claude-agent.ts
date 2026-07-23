@@ -56,6 +56,17 @@ function localToolName(name: string) {
   return name.startsWith('mcp__lq__') ? name.slice('mcp__lq__'.length) : name;
 }
 
+function nativeToolUseId(extra: unknown) {
+  if (!extra || typeof extra !== 'object') return undefined;
+  const value = extra as Record<string, unknown>;
+  for (const key of ['toolUseID', 'toolUseId', 'tool_use_id']) {
+    if (typeof value[key] === 'string' && value[key].trim()) {
+      return value[key] as string;
+    }
+  }
+  return undefined;
+}
+
 function defaultToolResult(action: NormalizedAgentAction): AgentToolExecutionResult {
   return {
     accepted: true,
@@ -167,8 +178,8 @@ export class ClaudeAgentTurnAdapter implements AgentTurnAdapter {
         spec.name,
         spec.description,
         shape,
-        async (argumentsValue) => {
-          const callId = await broker.take(spec.name);
+        async (argumentsValue, extra) => {
+          const callId = nativeToolUseId(extra) ?? await broker.take(spec.name);
           handledProviderCallIds.add(callId);
           recordToolAttempt(callId);
           return executeSerially(async () => {
@@ -271,6 +282,7 @@ export class ClaudeAgentTurnAdapter implements AgentTurnAdapter {
               });
               invalidToolUseCount = 0;
               observedToolUses.push(observed);
+              if (handledProviderCallIds.has(block.id)) continue;
               const matchedFallback = broker.publish(name, block.id);
               if (matchedFallback) {
                 handledProviderCallIds.add(block.id);

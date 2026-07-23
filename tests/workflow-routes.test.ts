@@ -7,6 +7,7 @@ import { createServerApp } from '../server/app';
 import { loadAllConfig } from '../server/config/loader';
 import type { LLMProvider, LLMRequest, LLMResponse } from '../server/llm/types';
 import type { AssessmentCompletedEvent, StudentSession } from '../shared/session';
+import { projectStudentSession } from '../shared/session/projections';
 import { createTemporaryDirectory, writeValidContentTree } from './helpers/content-fixture';
 
 const apiToken = 'workflow-token';
@@ -663,7 +664,7 @@ describe('server-owned assessment and tutor routes', () => {
     expect(payload.session.events.filter((event) => event.kind === 'answer.submitted')).toHaveLength(1);
     expect(payload.session.events.filter((event) => event.kind === 'assessment.completed')).toHaveLength(3);
     expect(await retry.json()).toMatchObject({ status: 'already-recorded', session: payload.session });
-    expect(sessions.get('choice-session')).toEqual(payload.session);
+    expect(projectStudentSession(sessions.get('choice-session'))).toEqual(payload.session);
   });
 
   it('records one answer attempt for a multi-node extraction submission', async () => {
@@ -794,7 +795,7 @@ describe('server-owned assessment and tutor routes', () => {
     expect(payload.session.events).toEqual(expect.arrayContaining([
       expect.objectContaining({ kind: 'tutor.cycle.terminal', reason: 'max-rounds' }),
     ]));
-    expect(sessions.get(sessionId)).toEqual(payload.session);
+    expect(projectStudentSession(sessions.get(sessionId))).toEqual(payload.session);
   });
 
   it('rejects tutor turns for both pretest and transfer assessments', async () => {

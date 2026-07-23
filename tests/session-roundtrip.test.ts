@@ -4,6 +4,7 @@ import {
   LocalSessionStore,
   appendSessionEvent,
   createSession,
+  exportAuditSession,
   exportSession,
   importSession,
   sessionSchema,
@@ -132,7 +133,7 @@ describe('session persistence and staged assessment state', () => {
   it('round-trips the complete answer-to-score evidence chain with provenance', () => {
     const assessed = completeSession();
 
-    const restored = importSession(exportSession(assessed));
+    const restored = importSession(exportAuditSession(assessed));
 
     expect(restored).toEqual(assessed);
     expect(restored.events[1]).toMatchObject({
@@ -190,7 +191,7 @@ describe('session persistence and staged assessment state', () => {
       activeElapsedMs: 120,
     });
 
-    expect(importSession(exportSession(session))).toEqual(session);
+    expect(importSession(exportAuditSession(session))).toEqual(session);
   });
 
   it('restores the latest session from a newly constructed store after a refresh', () => {

@@ -547,6 +547,26 @@ export function recordStructuredTextAssessment(input: RecordStructuredTextAssess
       evidence: anchor.evidence,
       engine: { id: 'case-anchor-policy', version: rubricPolicyEngineVersion },
     });
+    if (outcome === 'hit') {
+      const negative = correct.get('negative');
+      const positive = correct.get('positive');
+      if (!negative || !positive) {
+        throw new Error(`Polarity anchor ${anchor.anchorId} lacks reveal values`);
+      }
+      session = appendSessionEvent(session, {
+        id: `${input.assessmentEventIdPrefix}-anchor-${index + 1}-reveal`,
+        occurredAt: input.assessedAt,
+        kind: 'polarity.revealed',
+        pipelineStage: 'reveal',
+        caseId: input.answer.caseId,
+        stageId: input.answer.stageId,
+        attemptId: input.answer.attemptId,
+        sourcePolarityAssessmentEventId:
+          `${input.assessmentEventIdPrefix}-anchor-${index + 1}`,
+        anchorId: anchor.anchorId,
+        values: { negative, positive },
+      });
+    }
     anchorEvents.set(anchor.anchorId, { outcome, correct, extracted });
   });
 

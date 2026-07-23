@@ -17,6 +17,7 @@ import type {
   StudentSession,
   TutorTurnCompletedEvent,
 } from '../../../shared/session';
+import { sessionServerSequence } from '../../../shared/session/sync';
 import { useAppContext } from '../../app/AppContext';
 import { resolveTrainingCaseId, trainingCasePath } from '../../app/route-config';
 import { getWorkspaceStorage } from '../../persistence/workspace-storage';
@@ -708,6 +709,8 @@ export function TrainingPage() {
       attemptIds.push(narrativeId);
       const narrativeResult = await runtime.extractAssessment({
         sessionId: session.id,
+        expectedSequence: sessionServerSequence(merged),
+        idempotencyKey: narrativeId,
         caseId: trainingCase.id,
         questionId: `${trainingCase.id}:analysis`,
         targetNodeIds: answerTargetNodeIds,
@@ -725,6 +728,8 @@ export function TrainingPage() {
         attemptIds.push(equationId);
         const equationResult = await runtime.assessEquation({
           sessionId: session.id,
+          expectedSequence: sessionServerSequence(merged),
+          idempotencyKey: equationId,
           caseId: trainingCase.id,
           equationSetId: equation.id,
           equation: value,
@@ -796,6 +801,8 @@ export function TrainingPage() {
     try {
       const result = await runtime.tutorTurn({
         sessionId: session.id,
+        expectedSequence: sessionServerSequence(session),
+        idempotencyKey: `tutor:${nodeId}:${sessionServerSequence(session)}`,
         nodeId,
         studentAnswer: combinedNarrative(draft, trainingCase, draft.currentLevel),
       });

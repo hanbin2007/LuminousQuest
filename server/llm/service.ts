@@ -25,6 +25,15 @@ import type {
   LLMResponse,
 } from './types';
 
+export class AgentReplayMissingError extends Error {
+  readonly category = 'replay-missing';
+
+  constructor(readonly requestHash: string) {
+    super(`No demo agent turn recording for ${requestHash}`);
+    this.name = 'AgentReplayMissingError';
+  }
+}
+
 export interface LLMServiceLogger {
   error(message: string): void;
   warn(message: string): void;
@@ -204,7 +213,7 @@ export class LLMService {
     if (execution.executionMode === 'demo') {
       const recording = await this.options.recordings.getDemoByCacheKey(cacheKey);
       if (!recording) {
-        throw new Error(`No demo agent turn recording for ${cacheKey}`);
+        throw new AgentReplayMissingError(cacheKey);
       }
       return this.replayAgentTurn(recording, request, 'demo-recording');
     }

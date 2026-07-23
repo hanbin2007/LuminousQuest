@@ -23,12 +23,32 @@ const workflowIdentityShape = {
   attemptId: identifierSchema,
 };
 
+const sessionCommandNameSchema = z.enum([
+  'choice',
+  'extract',
+  'equation',
+  'tutor',
+  'agent-turn',
+  'agent-answer',
+]);
+
+const sessionCommandMetadataSchema = z
+  .object({
+    commandName: sessionCommandNameSchema,
+    idempotencyKey: identifierSchema,
+    expectedSequence: z.number().int().nonnegative(),
+    resultingSequence: z.number().int().positive(),
+    requestFingerprint: z.string().regex(/^sha256:[a-f0-9]{64}$/),
+  })
+  .strict();
+
 const eventBaseShape = {
   schemaVersion: z.literal('event.v2'),
   id: identifierSchema,
   sequence: z.number().int().nonnegative(),
   occurredAt: timestampSchema,
   ...workflowIdentityShape,
+  command: sessionCommandMetadataSchema.optional(),
 };
 
 export const answerPayloadSchema = z.discriminatedUnion('format', [
@@ -382,6 +402,36 @@ export const polarityAssessedEventSchema = z
   })
   .strict();
 
+export const polarityRevealedEventSchema = z
+  .object({
+    ...eventBaseShape,
+    kind: z.literal('polarity.revealed'),
+    pipelineStage: z.literal('reveal'),
+    sourcePolarityAssessmentEventId: identifierSchema,
+    anchorId: identifierSchema,
+    values: z
+      .object({
+        negative: z.string().trim().min(1),
+        positive: z.string().trim().min(1),
+      })
+      .strict(),
+  })
+  .strict();
+
+export const sessionCommandExecutedEventSchema = z
+  .object({
+    ...eventBaseShape,
+    kind: z.literal('session.command.executed'),
+    pipelineStage: z.literal('command'),
+    commandName: sessionCommandNameSchema,
+    idempotencyKey: identifierSchema,
+    expectedSequence: z.number().int().nonnegative(),
+    resultingSequence: z.number().int().positive(),
+    requestFingerprint: z.string().regex(/^sha256:[a-f0-9]{64}$/),
+    resultEventIds: z.array(identifierSchema),
+  })
+  .strict();
+
 const tutorEventIdentityShape = {
   ...eventBaseShape,
   pipelineStage: z.literal('tutor'),
@@ -553,6 +603,8 @@ export const agentDivergenceChangedEventSchema = z
 export const sessionEventSchema = z.union([
   answerSubmittedEventSchema,
   polarityAssessedEventSchema,
+  polarityRevealedEventSchema,
+  sessionCommandExecutedEventSchema,
   assessmentCompletedEventSchema,
   tutorCycleStartedEventSchema,
   tutorTurnCompletedEventSchema,
@@ -583,6 +635,7 @@ export const sessionSchema = z
     anonymousStudentId: z.string().regex(/^anon-[A-Z0-9]{8,}$/),
     startedAt: timestampSchema,
     updatedAt: timestampSchema,
+    serverSequence: z.number().int().nonnegative().optional(),
     configVersions: z
       .object({
         configDigest: identifierSchema,
@@ -609,10 +662,12 @@ export const sessionSchema = z
     const eventsById = new Map<string, z.infer<typeof sessionEventSchema>>();
     const answers = new Map<string, z.infer<typeof answerSubmittedEventSchema>>();
     const assessments = new Map<string, z.infer<typeof assessmentCompletedEventSchema>>();
+    const polarityAssessments = new Map<string, z.infer<typeof polarityAssessedEventSchema>>();
     const agentTurns = new Map<string, z.infer<typeof agentTurnCompletedEventSchema>>();
     const judgments = new Map<string, z.infer<typeof agentJudgmentRecordedEventSchema>>();
     const judgmentKeys = new Set<string>();
     const answerWorkflows = new Set<string>();
+    const commandKeys = new Set<string>();
     const progress = new Map<string, number>();
     const tutorCycles = new Map<string, {
       sourceAssessmentEventId: string;
@@ -638,6 +693,27 @@ export const sessionSchema = z
       eventIds.add(event.id);
       eventsById.set(event.id, event);
 
+      if (event.command) {
+        if (commandKeys.has(event.command.idempotencyKey)) {
+          context.addIssue({
+            code: 'custom',
+            path: ['events', index, 'command', 'idempotencyKey'],
+            message: 'a command idempotency key can be recorded only once',
+          });
+        }
+        commandKeys.add(event.command.idempotencyKey);
+        if (
+          event.command.resultingSequence
+          <= event.command.expectedSequence
+        ) {
+          context.addIssue({
+            code: 'custom',
+            path: ['events', index, 'command'],
+            message: 'command resulting sequence must advance its expected sequence',
+          });
+        }
+      }
+
       if (event.kind === 'answer.submitted') {
         if (event.responseToAgentTurnId && event.responseContractId) {
           const turn = agentTurns.get(event.responseToAgentTurnId);
@@ -648,7 +724,7 @@ export const sessionSchema = z
               message: 'must reference an earlier completed agent turn',
             });
           } else {
-            for (const field of ['caseId', 'stageId', 'attemptId'] as const) {
+            for (const field of ['caseId', 'stageId'] as const) {
               if (event[field] !== turn[field]) {
                 context.addIssue({
                   code: 'custom',
@@ -672,12 +748,20 @@ export const sessionSchema = z
             }
           }
         }
-        const workflowKey = `${event.caseId}\u0000${event.stageId}\u0000${event.attemptId}`;
+        const workflowKey = event.responseToAgentTurnId
+          ? `agent-turn\u0000${event.responseToAgentTurnId}`
+          : `${event.caseId}\u0000${event.stageId}\u0000${event.attemptId}`;
         if (answerWorkflows.has(workflowKey)) {
           context.addIssue({
             code: 'custom',
-            path: ['events', index, 'attemptId'],
-            message: 'duplicate answer for case, stage, and attempt',
+            path: [
+              'events',
+              index,
+              event.responseToAgentTurnId ? 'responseToAgentTurnId' : 'attemptId',
+            ],
+            message: event.responseToAgentTurnId
+              ? 'duplicate answer for agent turn'
+              : 'duplicate answer for case, stage, and attempt',
           });
         }
         answerWorkflows.add(workflowKey);
@@ -830,6 +914,20 @@ export const sessionSchema = z
             message: 'must reference an earlier shadow assessment',
           });
         } else {
+          const basisSelected = judgment
+            ? [...assessments.values()].filter((candidate) =>
+                candidate.nodeId === judgment.nodeId
+                && candidate.sequence <= judgment.basisThroughSequence)
+              .at(-1)
+            : undefined;
+          if (!basisSelected || basisSelected.id !== shadow.id) {
+            context.addIssue({
+              code: 'custom',
+              path: ['events', index, 'shadowAssessmentEventId'],
+              message:
+                'shadow assessment must be the basis-selected latest attempt',
+            });
+          }
           if (judgment && (
             shadow.nodeId !== judgment.nodeId
             || shadow.sequence > judgment.basisThroughSequence
@@ -873,6 +971,81 @@ export const sessionSchema = z
             message: 'divergence status must match whether the verdicts differ',
           });
         }
+        return;
+      }
+
+      if (event.kind === 'polarity.revealed') {
+        const source = polarityAssessments.get(event.sourcePolarityAssessmentEventId);
+        if (!source) {
+          context.addIssue({
+            code: 'custom',
+            path: ['events', index, 'sourcePolarityAssessmentEventId'],
+            message: 'must reference an earlier polarity assessment',
+          });
+        } else {
+          for (const field of ['caseId', 'stageId', 'attemptId', 'anchorId'] as const) {
+            if (event[field] !== source[field]) {
+              context.addIssue({
+                code: 'custom',
+                path: ['events', index, field],
+                message: `must match source polarity assessment ${field}`,
+              });
+            }
+          }
+          if (source.outcome !== 'hit') {
+            context.addIssue({
+              code: 'custom',
+              path: ['events', index, 'sourcePolarityAssessmentEventId'],
+              message: 'polarity can only be revealed after a hit',
+            });
+          }
+          const configured = new Map(source.correctValue.split(';').map((entry) => {
+            const separator = entry.indexOf('=');
+            return [
+              entry.slice(0, separator).trim(),
+              entry.slice(separator + 1).trim(),
+            ];
+          }));
+          if (
+            event.values.negative !== configured.get('negative')
+            || event.values.positive !== configured.get('positive')
+          ) {
+            context.addIssue({
+              code: 'custom',
+              path: ['events', index, 'values'],
+              message: 'revealed polarity must match the server assessment',
+            });
+          }
+        }
+        return;
+      }
+
+      if (event.kind === 'session.command.executed') {
+        if (commandKeys.has(event.idempotencyKey)) {
+          context.addIssue({
+            code: 'custom',
+            path: ['events', index, 'idempotencyKey'],
+            message: 'a command idempotency key can be recorded only once',
+          });
+        }
+        commandKeys.add(event.idempotencyKey);
+        if (event.resultingSequence <= event.expectedSequence) {
+          context.addIssue({
+            code: 'custom',
+            path: ['events', index, 'resultingSequence'],
+            message: 'command marker must advance its expected sequence',
+          });
+        }
+        event.resultEventIds.forEach((eventId, eventIdIndex) => {
+          const resultEvent = eventsById.get(eventId);
+          if (!resultEvent || resultEvent.sequence >= event.sequence) {
+            context.addIssue({
+              code: 'custom',
+              path: ['events', index, 'resultEventIds', eventIdIndex],
+              message: 'command result event must exist before its marker',
+            });
+          }
+        });
         return;
       }
 
@@ -943,7 +1116,10 @@ export const sessionSchema = z
         }
       }
 
-      if (event.kind === 'polarity.assessed') return;
+      if (event.kind === 'polarity.assessed') {
+        polarityAssessments.set(event.id, event);
+        return;
+      }
       if (
         event.kind === 'tutor.cycle.started'
         || event.kind === 'tutor.turn.completed'
@@ -1040,6 +1216,8 @@ export type AnswerSubmittedEvent = z.infer<typeof answerSubmittedEventSchema>;
 export type AgentAnswerSubmission = z.infer<typeof agentAnswerSubmissionSchema>;
 export type AssessmentCompletedEvent = z.infer<typeof assessmentCompletedEventSchema>;
 export type PolarityAssessedEvent = z.infer<typeof polarityAssessedEventSchema>;
+export type PolarityRevealedEvent = z.infer<typeof polarityRevealedEventSchema>;
+export type SessionCommandExecutedEvent = z.infer<typeof sessionCommandExecutedEventSchema>;
 export type TutorCycleStartedEvent = z.infer<typeof tutorCycleStartedEventSchema>;
 export type TutorTurnCompletedEvent = z.infer<typeof tutorTurnCompletedEventSchema>;
 export type TutorCycleTerminalEvent = z.infer<typeof tutorCycleTerminalEventSchema>;
@@ -1053,6 +1231,8 @@ type EventManagedFields = 'schemaVersion' | 'sequence';
 export type SessionEventInput =
   | Omit<z.input<typeof answerSubmittedEventSchema>, EventManagedFields>
   | Omit<z.input<typeof polarityAssessedEventSchema>, EventManagedFields>
+  | Omit<z.input<typeof polarityRevealedEventSchema>, EventManagedFields>
+  | Omit<z.input<typeof sessionCommandExecutedEventSchema>, EventManagedFields>
   | Omit<z.input<typeof assessmentCompletedEventSchema>, EventManagedFields>
   | Omit<z.input<typeof tutorCycleStartedEventSchema>, EventManagedFields>
   | Omit<z.input<typeof tutorTurnCompletedEventSchema>, EventManagedFields>

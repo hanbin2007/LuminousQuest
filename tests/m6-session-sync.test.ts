@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { createServerApp } from '../server/app';
 import { loadAllConfig } from '../server/config/loader';
 import {
+  executeSessionCommand,
   InMemorySessionStore,
   SessionIdempotencyConflictError,
   SessionPrefixConflictError,
@@ -16,6 +17,7 @@ import {
   sessionConfigVersions,
   type StudentSession,
 } from '../shared/session';
+import { sessionServerSequence } from '../shared/session/sync';
 import { createTemporaryDirectory, writeValidContentTree } from './helpers/content-fixture';
 
 const apiToken = 'm6-sync-api-token';
@@ -39,6 +41,69 @@ function withAnswer(session: StudentSession, input: { id: string; value: string 
 }
 
 describe('/api/session/sync', () => {
+  it('executes commands under one mutex and rebuilds idempotency from the event stream', async () => {
+    const root = await createTemporaryDirectory();
+    await writeValidContentTree(root);
+    const config = await loadAllConfig(root);
+    const base = createSession({
+      id: 'command-boundary-session',
+      anonymousStudentId: 'anon-COMMAND1',
+      now: '2026-07-23T15:00:00.000Z',
+      configVersions: sessionConfigVersions(config),
+    });
+    const sessions = new InMemorySessionStore();
+    sessions.set(base);
+    let executions = 0;
+    const run = (store: InMemorySessionStore, value: string) =>
+      executeSessionCommand({
+        store,
+        sessionId: base.id,
+        commandName: 'choice',
+        expectedSequence: 0,
+        idempotencyKey: 'choice-command-1',
+        request: { value },
+        initialize: () => base,
+        execute(session) {
+          executions += 1;
+          return {
+            session: withAnswer(session, {
+              id: 'command-answer',
+              value,
+            }),
+            value: { status: 'recorded' as const },
+          };
+        },
+      });
+
+    // Red-before-green: the old routes had independent race/idempotency checks.
+    const concurrent = await Promise.all([
+      run(sessions, 'A'),
+      run(sessions, 'A'),
+    ]);
+    expect(executions).toBe(1);
+    expect(concurrent.map((entry) => entry.replayed).sort()).toEqual([false, true]);
+    expect(sessions.get(base.id)?.events.map((event) => event.kind)).toEqual([
+      'answer.submitted',
+    ]);
+    expect(sessions.get(base.id)?.events[0]).toMatchObject({
+      command: {
+        commandName: 'choice',
+        idempotencyKey: 'choice-command-1',
+        expectedSequence: 0,
+        resultingSequence: 1,
+      },
+    });
+    expect(sessionServerSequence(sessions.get(base.id)!)).toBe(1);
+
+    const restarted = new InMemorySessionStore();
+    restarted.set(sessions.get(base.id)!);
+    const replay = await run(restarted, 'A');
+    expect(replay.replayed).toBe(true);
+    expect(executions).toBe(1);
+    await expect(run(restarted, 'B'))
+      .rejects.toBeInstanceOf(SessionIdempotencyConflictError);
+  });
+
   it('stores the audit ledger but returns only the student projection', async () => {
     const root = await createTemporaryDirectory();
     await writeValidContentTree(root);

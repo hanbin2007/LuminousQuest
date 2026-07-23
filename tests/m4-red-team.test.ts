@@ -11,6 +11,7 @@ import type { LLMProvider, LLMRequest } from '../server/llm/types';
 import { loadAllPrompts } from '../server/prompts/loader';
 import { runSocraticTurn } from '../server/workflows/socratic-tutoring';
 import { buildLearnerProfile } from '../shared/scoring/profile';
+import { inflateStudentSessionProjection } from '../shared/session/projections';
 import { createTemporaryDirectory, writeValidContentTree } from './helpers/content-fixture';
 import { sessionWithAssessment } from './helpers/tutor-session';
 
@@ -170,7 +171,10 @@ describe('M4 red-team delivery cases', () => {
     const body = await response.json() as any;
     expect(body.status).toBe('needs-review');
     expect(structured).toHaveBeenCalledTimes(1);
-    expect(buildLearnerProfile(body.session, config).nodes.find((node) => node.nodeId === 'P4'))
+    expect(buildLearnerProfile(
+      inflateStudentSessionProjection(body.session),
+      config,
+    ).nodes.find((node) => node.nodeId === 'P4'))
       .toMatchObject({ status: 'needs-review' });
   });
 });

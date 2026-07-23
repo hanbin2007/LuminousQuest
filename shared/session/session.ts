@@ -4,7 +4,6 @@ import {
   type StudentSession,
   sessionSchema,
 } from './schema';
-import { z } from 'zod';
 import {
   AGENT_CONTEXT_BUILDER_VERSION,
   AGENT_CONTRACT_REVISION,
@@ -12,6 +11,7 @@ import {
 } from '../agent/contracts';
 import type { LoadedConfig } from '../config/schemas';
 import {
+  inflateStudentSessionProjection,
   projectStudentSession,
   projectTeacherAuditSession,
 } from './projections';
@@ -99,12 +99,9 @@ export function importSession(source: string) {
     throw new Error('会话文件不是有效的 JSON。');
   }
   try {
-    return sessionSchema.parse(value);
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      throw new Error('会话文件格式不正确，请确认它由 LuminousQuest 导出。');
-    }
-    throw error;
+    return inflateStudentSessionProjection(value);
+  } catch {
+    throw new Error('会话文件格式不正确，请确认它由 LuminousQuest 导出。');
   }
 }
 

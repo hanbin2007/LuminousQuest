@@ -52,6 +52,8 @@ function ExtractionHarness({ runtime }: { runtime: AppRuntime }) {
         onClick={() => {
           void instrumented.extractAssessment({
             sessionId: 'agent-panel-session',
+            expectedSequence: 0,
+            idempotencyKey: 'submission-1',
             questionId: 'pretest-principle',
             targetNodeIds: ['P3', 'P4'],
             studentAnswer: '电子沿导线移动。',

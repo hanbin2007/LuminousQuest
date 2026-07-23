@@ -139,8 +139,11 @@ export function createTrainingRuntime(
         },
       });
     });
-    serverSession = session;
-    return session;
+    serverSession = {
+      ...session,
+      serverSequence: session.events.length,
+    };
+    return serverSession;
   };
 
   const extractAssessment = vi.fn(async (input: ExtractAssessmentInput) => {

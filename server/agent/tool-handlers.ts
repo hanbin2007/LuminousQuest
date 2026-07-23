@@ -91,12 +91,13 @@ function rejected(
 function terminalText(
   session: StudentSession,
   config: LoadedConfig,
+  caseId: string,
 ) {
   return session.events
     .filter((event): event is Extract<
       StudentSession['events'][number],
       { kind: 'agent.turn.completed' }
-    > => event.kind === 'agent.turn.completed')
+    > => event.kind === 'agent.turn.completed' && event.caseId === caseId)
     .flatMap((turn) => {
       const terminal = turn.orderedActions.find(
         (action) => action.callId === turn.terminalAction.callId,
@@ -109,8 +110,7 @@ function terminalText(
       }
       return [];
     })
-    .filter(Boolean)
-    .slice(-3);
+    .filter(Boolean);
 }
 
 function candidateForExistingContract(
@@ -186,6 +186,11 @@ export class AgentToolHandler {
       config: this.options.config,
       text: action.arguments.text,
       candidate,
+      studentVisibleOutputs: terminalText(
+        this.session,
+        this.options.config,
+        this.options.identity.caseId,
+      ),
     });
     if (!guarded.safe) return this.guardFailure('question', action, guarded);
 
@@ -260,6 +265,21 @@ export class AgentToolHandler {
     }
     if (material.status !== 'ready' || !material.materialRef) {
       return rejected(action, 'material-unavailable', 'material asset is not ready');
+    }
+    const reachedNodeIds = new Set(
+      this.options.builtContext.context.recordTrack.nodes
+        .filter((node) => node.status === 'scored')
+        .map((node) => node.nodeId),
+    );
+    const unmetNodeIds = material.revealAfterNodeIds.filter(
+      (nodeId) => !reachedNodeIds.has(nodeId),
+    );
+    if (unmetNodeIds.length > 0) {
+      return rejected(
+        action,
+        'material-gated',
+        `material requires completed nodes: ${unmetNodeIds.join(', ')}`,
+      );
     }
     this.options.transaction.recordAction(action);
     return success(action, {
@@ -366,7 +386,11 @@ export class AgentToolHandler {
       config: this.options.config,
       caseId: this.options.identity.caseId,
       summary: action.arguments.summary,
-      recentAgentOutputs: terminalText(this.session, this.options.config),
+      recentAgentOutputs: terminalText(
+        this.session,
+        this.options.config,
+        this.options.identity.caseId,
+      ),
     });
     if (!guarded.safe) return this.guardFailure('summary', action, guarded);
     this.options.transaction.recordAction(action);

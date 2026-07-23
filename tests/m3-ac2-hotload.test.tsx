@@ -179,9 +179,7 @@ function rawEquationAssessment(session: StudentSession, attemptId: string) {
   return [...session.events].reverse().find((event): event is AssessmentCompletedEvent =>
     event.kind === 'assessment.completed'
     && event.attemptId === attemptId
-    && event.ruleDecision.status !== 'unanswered'
-    && 'engine' in event.ruleDecision
-    && event.ruleDecision.engine.id === 'equation-scoring');
+    && event.ruleDecision.status !== 'unanswered');
 }
 
 afterEach(() => {
@@ -296,6 +294,8 @@ describe('AC2 config-only hot loading', () => {
     for (const [name, equation, expected] of cases) {
       const result = await defaultRuntime.assessEquation({
         sessionId: `ac2-route-${name}`,
+        expectedSequence: 0,
+        idempotencyKey: `attempt-${name}`,
         caseId: 'methane-fuel',
         equationSetId: 'methane-negative',
         equation,

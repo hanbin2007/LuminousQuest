@@ -139,7 +139,7 @@ export class OpenAICompatibleAgentTurnAdapter implements AgentTurnAdapter {
     let inputTokens = 0;
     let outputTokens = 0;
     let totalTokens = 0;
-    let validationFailures = 0;
+    const validationFailures = new Map<string, number>();
     let toolCallAttempts = 0;
 
     for (let turn = 0; turn < request.maxTurns; turn += 1) {
@@ -218,12 +218,13 @@ export class OpenAICompatibleAgentTurnAdapter implements AgentTurnAdapter {
         try {
           action = parseArguments(call);
         } catch (error) {
-          validationFailures += 1;
+          const failures = (validationFailures.get(call.id) ?? 0) + 1;
+          validationFailures.set(call.id, failures);
           const category = error instanceof AgentTurnAdapterError
             ? error.category
             : 'invalid-tool-arguments';
           const detail = error instanceof Error ? error.message : String(error);
-          if (validationFailures > 1) {
+          if (failures > 1) {
             throw new AgentTurnAdapterError(
               `Agent tool arguments remained invalid after one repair: ${detail}`,
               category,
@@ -259,8 +260,9 @@ export class OpenAICompatibleAgentTurnAdapter implements AgentTurnAdapter {
           content: execution.content,
         });
         if (!execution.accepted) {
-          validationFailures += 1;
-          if (validationFailures > 1) {
+          const failures = (validationFailures.get(call.id) ?? 0) + 1;
+          validationFailures.set(call.id, failures);
+          if (failures > 1) {
             throw new AgentTurnAdapterError(
               `Agent tool execution remained invalid after one repair: ${
                 execution.errorCategory ?? 'tool-rejected'
@@ -271,7 +273,7 @@ export class OpenAICompatibleAgentTurnAdapter implements AgentTurnAdapter {
           continue;
         }
 
-        validationFailures = 0;
+        validationFailures.delete(call.id);
         orderedActions.push(canonicalAction);
         if (terminalAgentActionNameSchema.safeParse(canonicalAction.name).success) {
           if (index !== toolCalls.length - 1) {

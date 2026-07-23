@@ -1,8 +1,14 @@
 import type { LoadedConfig } from '../../shared/config/schemas';
 import type { DemoStartState } from '../../shared/demo/start-state';
 import type { StudentSession } from '../../shared/session/schema';
+import { inflateStudentSessionProjection } from '../../shared/session/projections';
 
-export interface ExtractAssessmentInput {
+interface SessionCommandInput {
+  expectedSequence: number;
+  idempotencyKey: string;
+}
+
+export interface ExtractAssessmentInput extends SessionCommandInput {
   sessionId: string;
   caseId?: string;
   questionId: string;
@@ -19,7 +25,7 @@ export interface ExtractAssessmentResult {
   degraded?: boolean;
 }
 
-export interface EquationAssessmentInput {
+export interface EquationAssessmentInput extends SessionCommandInput {
   sessionId: string;
   caseId: string;
   equationSetId: string;
@@ -27,7 +33,7 @@ export interface EquationAssessmentInput {
   submissionId: string;
 }
 
-export interface TutorTurnInput {
+export interface TutorTurnInput extends SessionCommandInput {
   sessionId: string;
   nodeId: string;
   studentAnswer: string;
@@ -55,7 +61,7 @@ export type TutorTurnResult = {
     }
 );
 
-export interface ChoiceAssessmentInput {
+export interface ChoiceAssessmentInput extends SessionCommandInput {
   sessionId: string;
   questionId: string;
   optionId: string;
@@ -140,7 +146,7 @@ export const defaultRuntime: AppRuntime = {
       headers: protectedHeaders(),
       body: '{}',
     });
-    return jsonResponse<{
+    const result = await jsonResponse<{
       executionMode: 'demo';
       session: StudentSession;
       progress: { pretestComplete: boolean; trainingComplete: boolean };
@@ -151,6 +157,10 @@ export const defaultRuntime: AppRuntime = {
         training: DemoStartState['training'];
       };
     }>(response);
+    return {
+      ...result,
+      session: inflateStudentSessionProjection(result.session),
+    };
   },
 
   async setExecutionMode(executionMode) {
@@ -168,7 +178,11 @@ export const defaultRuntime: AppRuntime = {
       headers: protectedHeaders(),
       body: JSON.stringify(input),
     });
-    return jsonResponse<SessionSyncResult>(response);
+    const result = await jsonResponse<SessionSyncResult>(response);
+    return {
+      ...result,
+      session: inflateStudentSessionProjection(result.session),
+    };
   },
 
   async assessChoice(input) {
@@ -177,7 +191,13 @@ export const defaultRuntime: AppRuntime = {
       headers: protectedHeaders(),
       body: JSON.stringify(input),
     });
-    return jsonResponse<{ session: StudentSession }>(response);
+    const result = await jsonResponse<{ session: StudentSession }>(response);
+    return {
+      ...result,
+      session: result.session
+        ? inflateStudentSessionProjection(result.session)
+        : result.session,
+    };
   },
 
   async extractAssessment(input) {
@@ -190,7 +210,13 @@ export const defaultRuntime: AppRuntime = {
         body: JSON.stringify(input),
         signal: controller.signal,
       });
-      return jsonResponse<ExtractAssessmentResult>(response);
+      const result = await jsonResponse<ExtractAssessmentResult>(response);
+      return {
+        ...result,
+        session: result.session
+          ? inflateStudentSessionProjection(result.session)
+          : null,
+      };
     } catch (error) {
       if (controller.signal.aborted || (error instanceof DOMException && error.name === 'AbortError')) {
         throw new Error('判分请求超时，请重试；重试不会重复记录本次作答。');
@@ -207,7 +233,13 @@ export const defaultRuntime: AppRuntime = {
       headers: protectedHeaders(),
       body: JSON.stringify(input),
     });
-    return jsonResponse<{ session: StudentSession }>(response);
+    const result = await jsonResponse<{ session: StudentSession }>(response);
+    return {
+      ...result,
+      session: result.session
+        ? inflateStudentSessionProjection(result.session)
+        : result.session,
+    };
   },
 
   async tutorTurn(input) {
@@ -216,7 +248,13 @@ export const defaultRuntime: AppRuntime = {
       headers: protectedHeaders(),
       body: JSON.stringify(input),
     });
-    return jsonResponse<TutorTurnResult>(response);
+    const result = await jsonResponse<TutorTurnResult>(response);
+    return {
+      ...result,
+      session: result.session
+        ? inflateStudentSessionProjection(result.session)
+        : result.session,
+    };
   },
 
   async reviewDrawing(imageData) {

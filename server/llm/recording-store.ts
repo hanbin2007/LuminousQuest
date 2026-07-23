@@ -160,6 +160,9 @@ function recordedRequest(recording: Recording) {
 
 function recordedCacheKey(recording: Recording) {
   if (recording.cacheKey) return recording.cacheKey;
+  if (recording.metadata.schemaVersion === 'agent-turn-trace.v1') {
+    return undefined;
+  }
   const request = recordedRequest(recording);
   if (
     !request
@@ -273,6 +276,39 @@ export class RecordingStore {
       }
 
       this.assertVersionMatch(step, index, recording, options);
+      if (
+        step.schemaVersion === 'agent-turn-trace.v1'
+        || recording.metadata.schemaVersion === 'agent-turn-trace.v1'
+      ) {
+        if (!recording.cacheKey) {
+          throw new RecordingValidationError(
+            path.join('recordings', step.recording),
+            'cacheKey',
+            'agent replay requires the explicit requestHash cacheKey',
+          );
+        }
+        const request = recordedRequest(recording);
+        const requestHash = request?.input
+          && typeof request.input === 'object'
+          && 'requestHash' in request.input
+          && typeof request.input.requestHash === 'string'
+          ? request.input.requestHash
+          : undefined;
+        if (!requestHash) {
+          throw new RecordingValidationError(
+            path.join('recordings', step.recording),
+            'request.input.requestHash',
+            'agent replay recording must persist its requestHash',
+          );
+        }
+        if (requestHash !== recording.cacheKey) {
+          throw new RecordingValidationError(
+            path.join('recordings', step.recording),
+            'cacheKey',
+            'agent replay cacheKey must equal request.input.requestHash',
+          );
+        }
+      }
       this.validateStructuredReplay(step, recording);
 
       for (const [resourceIndex, resource] of step.resourceRefs.entries()) {

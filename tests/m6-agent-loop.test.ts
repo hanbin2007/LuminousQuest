@@ -30,6 +30,7 @@ import { loadAllConfig } from '../server/config/loader';
 import { RecordingStore } from '../server/llm/recording-store';
 import { LLMService } from '../server/llm/service';
 import {
+  appendSessionEvent,
   createSession,
   sessionConfigVersions,
 } from '../shared/session';
@@ -107,6 +108,139 @@ describe('M6 Phase 2 agent context and guards', () => {
     expect(first.context.rubrics).toEqual(config.rubrics);
   });
 
+  it('keeps answer values out of the agent question bank and all timing data out of context', async () => {
+    const { config, session } = await assessedPretest();
+    const trigger = session.events.at(-1)!;
+
+    const first = buildAgentTurnContext({
+      session,
+      config,
+      triggerEventId: trigger.id,
+      turnId: 'answer-free-context',
+      currentCaseId: 'pretest',
+      model: 'frozen-model',
+    });
+    const polarityAnswer = '锌极为负极，铜极为正极。';
+    let polaritySession = appendSessionEvent(session, {
+      id: 'answer-free-polarity-answer',
+      occurredAt: '2026-07-23T18:00:02.000Z',
+      kind: 'answer.submitted',
+      pipelineStage: 'answer',
+      caseId: 'zinc-copper',
+      stageId: 'training',
+      attemptId: 'answer-free-polarity',
+      questionId: 'zinc-copper:analysis',
+      answer: { format: 'text', value: polarityAnswer },
+    });
+    polaritySession = appendSessionEvent(polaritySession, {
+      id: 'answer-free-polarity-assessment',
+      occurredAt: '2026-07-23T18:00:03.000Z',
+      kind: 'polarity.assessed',
+      pipelineStage: 'rule',
+      caseId: 'zinc-copper',
+      stageId: 'training',
+      attemptId: 'answer-free-polarity',
+      sourceAnswerEventId: 'answer-free-polarity-answer',
+      anchorId: 'case-polarity',
+      facts: [
+        {
+          id: 'negative',
+          value: 'Zn',
+          evidence: { quote: '锌', start: 0, end: 1 },
+        },
+        {
+          id: 'positive',
+          value: 'Cu',
+          evidence: { quote: '铜', start: 6, end: 7 },
+        },
+      ],
+      extractedValue: 'negative=Zn;positive=Cu',
+      correctValue: 'negative=Zn;positive=Cu',
+      outcome: 'hit',
+      evidence: [{ quote: polarityAnswer, start: 0, end: polarityAnswer.length }],
+      engine: { id: 'fixture', version: 'fixture.v1' },
+    });
+    const assessmentTriggerContext = buildAgentTurnContext({
+      session: polaritySession,
+      config,
+      triggerEventId: 'answer-free-polarity-assessment',
+      turnId: 'answer-free-assessment-trigger',
+      currentCaseId: 'zinc-copper',
+      model: 'frozen-model',
+    });
+    polaritySession = appendSessionEvent(polaritySession, {
+      id: 'answer-free-polarity-reveal',
+      occurredAt: '2026-07-23T18:00:04.000Z',
+      kind: 'polarity.revealed',
+      pipelineStage: 'reveal',
+      caseId: 'zinc-copper',
+      stageId: 'training',
+      attemptId: 'answer-free-polarity',
+      sourcePolarityAssessmentEventId: 'answer-free-polarity-assessment',
+      anchorId: 'case-polarity',
+      values: { negative: 'Zn', positive: 'Cu' },
+    });
+    const revealTriggerContext = buildAgentTurnContext({
+      session: polaritySession,
+      config,
+      triggerEventId: 'answer-free-polarity-reveal',
+      turnId: 'answer-free-reveal-trigger',
+      currentCaseId: 'zinc-copper',
+      model: 'frozen-model',
+    });
+    const second = buildAgentTurnContext({
+      session,
+      config,
+      triggerEventId: trigger.id,
+      turnId: 'answer-free-context',
+      currentCaseId: 'pretest',
+      model: 'frozen-model',
+    });
+    const forbiddenKeys: string[] = [];
+    const timingKeys: string[] = [];
+    const walk = (value: unknown, path: string[] = []) => {
+      if (!value || typeof value !== 'object') return;
+      if (Array.isArray(value)) {
+        value.forEach((entry, index) => walk(entry, [...path, String(index)]));
+        return;
+      }
+      Object.entries(value).forEach(([key, entry]) => {
+        if ([
+          'answerKey',
+          'correctValue',
+          'acceptedValues',
+          'answerGuidance',
+          'referenceEquations',
+        ].includes(key)) {
+          forbiddenKeys.push([...path, key].join('.'));
+        }
+        if (
+          key === 'occurredAt'
+          || key.toLowerCase().includes('elapsed')
+          || (key.endsWith('Ms') && typeof entry === 'number')
+        ) {
+          timingKeys.push([...path, key].join('.'));
+        }
+        walk(entry, [...path, key]);
+      });
+    };
+
+    walk(first.context.questionBank);
+    expect(forbiddenKeys).toEqual([]);
+    expect(first.context.questionBank.every((entry) =>
+      entry.assessmentFocus.length > 0)).toBe(true);
+    [
+      first.context,
+      assessmentTriggerContext.context,
+      revealTriggerContext.context,
+    ].forEach((context) => walk(context));
+    expect(forbiddenKeys).toEqual([]);
+    expect(timingKeys).toEqual([]);
+    expect(revealTriggerContext.context.currentTrigger).not.toHaveProperty('values');
+    expect(first.serializedContext).toBe(second.serializedContext);
+    expect(first.requestHash).toBe(second.requestHash);
+  });
+
   it('enforces all three leakage-guard paths and disables question-only heuristics', async () => {
     const { config, question } = await assessedPretest();
     const indexed = buildAgentQuestionBankIndex({
@@ -139,6 +273,50 @@ describe('M6 Phase 2 agent context and guards', () => {
       summary: `结论是 ${hiddenEquation}`,
       recentAgentOutputs: [],
     })).toMatchObject({ safe: false, category: 'summary-answer-leak' });
+  });
+
+  it('blocks the cumulative adversarial leakage corpus across encodings and turns', async () => {
+    const { config } = await assessedPretest();
+    const trainingCase = config.cases.find((entry) => entry.id === 'zinc-copper')!;
+    const hiddenEquation = trainingCase.equationSets[0].accepted[0];
+    const base64 = Buffer.from(hiddenEquation, 'utf8').toString('base64');
+    const unicodeEscaped = [...hiddenEquation]
+      .map((character) => `\\u{${character.codePointAt(0)!.toString(16)}}`)
+      .join('');
+    const hex = Buffer.from(hiddenEquation, 'utf8').toString('hex');
+    const zeroWidth = [...hiddenEquation].join('\u200b');
+    const splitBase64 = base64.match(/.{1,2}/g) ?? [];
+
+    // Red-before-green: every entry below bypassed the old three-message/plain-text guard.
+    const attacks = [
+      { summary: zeroWidth, studentVisibleOutputs: [] },
+      { summary: base64, studentVisibleOutputs: [] },
+      { summary: '', studentVisibleOutputs: splitBase64 },
+      { summary: hex, studentVisibleOutputs: [] },
+      { summary: unicodeEscaped, studentVisibleOutputs: [] },
+      {
+        summary: 'xin ji wei fu ji, tong ji wei zheng ji',
+        studentVisibleOutputs: [],
+      },
+      {
+        summary: 'xīn jí wéi fù jí, tóng jí wéi zhèng jí',
+        studentVisibleOutputs: [],
+      },
+      { summary: '钅 辛 极 为 负 极，钅 同 极 为 正 极', studentVisibleOutputs: [] },
+    ];
+
+    for (const attack of attacks) {
+      expect(guardStudentSummary({
+        config,
+        caseId: trainingCase.id,
+        summary: attack.summary,
+        recentAgentOutputs: [],
+        studentVisibleOutputs: attack.studentVisibleOutputs,
+      }), JSON.stringify(attack)).toMatchObject({
+        safe: false,
+        category: 'summary-answer-leak',
+      });
+    }
   });
 });
 
@@ -229,6 +407,22 @@ describe('M6 Phase 2 loop transaction and replay', () => {
         },
       ],
     });
+    // Red-before-green: conclude_node rationale used to feed both judgment and round context.
+    const nextContext = buildAgentTurnContext({
+      session: result.session,
+      config,
+      triggerEventId: turn!.id,
+      turnId: 'runtime-turn-next',
+      currentCaseId: 'pretest',
+      model: 'frozen-model',
+    });
+    expect(nextContext.serializedContext)
+      .not.toContain('The explanation now connects direction and electrode role.');
+    expect(nextContext.context.latestJudgments[0]).toMatchObject({
+      nodeId,
+      verdict: 'hit',
+    });
+    expect(nextContext.context.latestJudgments[0]).not.toHaveProperty('rationale');
   });
 
   it('records a student-visible deterministic fallback when the adapter fails', async () => {
@@ -421,13 +615,32 @@ describe('M6 Phase 2 loop transaction and replay', () => {
       && event.responseToAgentTurnId === 'choice-agent-turn');
     expect(linked).toMatchObject({
       responseContractId: submitted.contract.responseContractId,
-      attemptId: 'choice-agent-response',
+      id: expect.stringMatching(/^answer-agent-[a-f0-9]+$/),
+      attemptId: expect.stringMatching(/^attempt-agent-[a-f0-9]+$/),
     });
     expect(submitted.session.events.some((event) =>
       event.kind === 'assessment.completed'
       && event.sourceAnswerEventId === linked?.id)).toBe(true);
     expect(buildDiagnosticProfile(submitted.session, config))
       .toEqual(buildDiagnosticProfile(session, config));
+
+    // Red-before-green: retries previously generated a fresh answer id and duplicated the turn.
+    const retried = await submitAgentAnswer({
+      session: submitted.session,
+      config,
+      responseContracts: registry,
+      submission: {
+        turnId: 'choice-agent-turn',
+        answer: {
+          format: 'text',
+          value: question.options[0].id,
+        },
+      },
+      occurredAt: '2026-07-23T18:00:06.000Z',
+      idFactory: (prefix) => `${prefix}-must-not-run`,
+    });
+    expect(retried.status).toBe('choice-assessed');
+    expect(retried.session.events).toEqual(submitted.session.events);
   });
 
   it('records a provider turn once and replays it by requestHash cache key', async () => {
@@ -544,7 +757,7 @@ describe('M6 Phase 2 loop transaction and replay', () => {
             version: AGENT_RECORDING_PROMPT.version,
           },
         },
-        request: {},
+        request: { input: { requestHash } },
         response: {
           content: JSON.stringify(recordedResult),
           structured: recordedResult,
@@ -596,5 +809,139 @@ describe('M6 Phase 2 loop transaction and replay', () => {
     });
     expect(adapter.execute).not.toHaveBeenCalled();
     expect(executeTool).toHaveBeenCalledTimes(1);
+  });
+
+  it('hard-fails a demo agent turn when its requestHash recording is missing', async () => {
+    const { config, session } = await assessedPretest();
+    const root = await createTemporaryDirectory();
+    const service = new LLMService({
+      providers: new Map(),
+      recordings: new RecordingStore(root),
+    });
+    const adapter: AgentTurnAdapter = {
+      id: 'openai-compatible',
+      execute: vi.fn(async () => {
+        throw new Error('demo mode must not reach the provider');
+      }),
+    };
+
+    // Red-before-green: the loop used to swallow the missing replay and commit fallback.
+    await expect(runAgentLoopTurn({
+      session,
+      config,
+      service,
+      adapter,
+      responseContracts: new ResponseContractRegistry(),
+      executionMode: 'demo',
+      provider: 'offline',
+      model: 'missing-demo-model',
+      turnId: 'missing-demo-turn',
+      triggerEventId: session.events.at(-1)!.id,
+      caseId: 'pretest',
+      stageId: 'assessment',
+      attemptId: 'missing-demo-attempt',
+      occurredAt: '2026-07-23T18:01:00.000Z',
+    })).rejects.toMatchObject({
+      category: 'replay-missing',
+    });
+    expect(adapter.execute).not.toHaveBeenCalled();
+  });
+
+  it('rejects an agent demo recording without an explicit requestHash cacheKey', async () => {
+    const root = await createTemporaryDirectory();
+    const demoRoot = path.join(root, 'recordings', 'demo');
+    await mkdir(demoRoot, { recursive: true });
+    const traceSchema = z.toJSONSchema(agentTurnAdapterResultSchema, {
+      target: 'draft-7',
+    });
+    const result = {
+      source: 'provider',
+      model: 'demo-agent-model',
+      orderedActions: [{
+        callId: 'demo-end',
+        name: 'end_session',
+        arguments: { summary: '结束。' },
+      }],
+      terminalAction: { callId: 'demo-end', name: 'end_session' },
+      usage: {},
+    };
+    await writeFile(
+      path.join(root, 'recordings', 'demo-script.json'),
+      JSON.stringify({
+        version: 'demo-script.v2',
+        steps: [{
+          id: 'agent-without-cache-key',
+          recording: 'demo/agent-without-cache-key.json',
+          resourceRefs: [],
+          configVersion: 'config.v1',
+          schemaVersion: 'agent-turn-trace.v1',
+          schema: traceSchema,
+          prompt: {
+            id: AGENT_RECORDING_PROMPT.id,
+            version: AGENT_RECORDING_PROMPT.version,
+          },
+        }],
+      }),
+    );
+    await writeFile(
+      path.join(demoRoot, 'agent-without-cache-key.json'),
+      JSON.stringify({
+        version: 'llm-recording.v2',
+        recordedAt: '2026-07-23T00:00:00.000Z',
+        metadata: {
+          configVersion: 'config.v1',
+          schemaVersion: 'agent-turn-trace.v1',
+          prompt: {
+            id: AGENT_RECORDING_PROMPT.id,
+            version: AGENT_RECORDING_PROMPT.version,
+          },
+        },
+        request: {},
+        response: {
+          content: JSON.stringify(result),
+          structured: result,
+          model: 'demo-agent-model',
+        },
+      }),
+    );
+
+    // Red-before-green: generic LLM cache-key derivation cannot identify agent traces.
+    await expect(new RecordingStore(root).validateDemoAssets({
+      configVersion: 'config.v1',
+      prompts: {
+        [AGENT_RECORDING_PROMPT.id]: AGENT_RECORDING_PROMPT,
+      },
+    })).rejects.toThrow(/cacheKey|requestHash/);
+
+    await writeFile(
+      path.join(demoRoot, 'agent-without-cache-key.json'),
+      JSON.stringify({
+        version: 'llm-recording.v2',
+        cacheKey: `sha256:${'a'.repeat(64)}`,
+        recordedAt: '2026-07-23T00:00:00.000Z',
+        metadata: {
+          configVersion: 'config.v1',
+          schemaVersion: 'agent-turn-trace.v1',
+          prompt: {
+            id: AGENT_RECORDING_PROMPT.id,
+            version: AGENT_RECORDING_PROMPT.version,
+          },
+        },
+        request: {
+          input: { requestHash: `sha256:${'b'.repeat(64)}` },
+        },
+        response: {
+          content: JSON.stringify(result),
+          structured: result,
+          model: 'demo-agent-model',
+        },
+      }),
+    );
+    await expect(new RecordingStore(root).validateDemoAssets({
+      configVersion: 'config.v1',
+      prompts: {
+        [AGENT_RECORDING_PROMPT.id]: AGENT_RECORDING_PROMPT,
+      },
+    })).rejects.toThrow(/must equal/);
   });
 });

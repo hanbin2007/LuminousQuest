@@ -573,8 +573,135 @@ describe('M6 projection and scoring immunity boundaries', () => {
     const studentTurn = student.events.find((event) => event.kind === 'agent.turn.completed');
     expect(studentTurn?.orderedActions.map((action) => action.name)).toEqual(['ask_student']);
     expect(audit).toEqual(full);
-    expect(importSession(exportSession(full)).events).toEqual(student.events);
+    expect(projectStudentSession(importSession(exportSession(full))).events)
+      .toEqual(student.events);
     expect(importSession(exportSession(full, { projection: 'teacher-audit' }))).toEqual(full);
+  });
+
+  it('uses event-specific student DTO allowlists and reveals polarity only after a hit', async () => {
+    const config = await loadAllConfig(process.cwd());
+    const trainingCase = config.cases.find((entry) => entry.id === 'zinc-copper')!;
+    const answer = '锌极为负极，铜极为正极。';
+    let session = createSession({
+      id: 'm6-student-whitelist',
+      anonymousStudentId: 'anon-WHITELST',
+      now: '2026-07-23T13:00:00.000Z',
+      configVersions: sessionConfigVersions(config),
+    });
+    session = appendSessionEvent(session, {
+      id: 'polarity-answer',
+      occurredAt: '2026-07-23T13:00:01.000Z',
+      kind: 'answer.submitted',
+      pipelineStage: 'answer',
+      caseId: trainingCase.id,
+      stageId: 'training',
+      attemptId: 'polarity-attempt',
+      questionId: `${trainingCase.id}:analysis`,
+      answer: { format: 'text', value: answer },
+    });
+    session = appendSessionEvent(session, assessmentEvent({
+      id: 'public-assessment',
+      occurredAt: '2026-07-23T13:00:02.000Z',
+      sourceAnswerEventId: 'polarity-answer',
+      attemptId: 'polarity-attempt',
+      rubric: { id: 'rubric-p4', version: config.rubrics.version },
+      objectiveOutcome: 'hit',
+      extraction: {
+        status: 'assessed',
+        evidence: [{ quote: answer, start: 0, end: answer.length }],
+        model: 'private-model',
+        provenance: {
+          promptId: 'private-prompt',
+          promptVersion: 'private-prompt.v1',
+          cacheKey: 'private-cache-key',
+        },
+      },
+      ruleDecision: {
+        status: 'hit',
+        ruleId: 'p4-hit',
+        reason: 'private rule explanation',
+        engine: { id: 'private-engine', version: 'private-engine.v1' },
+      },
+    }));
+    session = appendSessionEvent(session, {
+      id: 'polarity-assessment',
+      occurredAt: '2026-07-23T13:00:02.000Z',
+      kind: 'polarity.assessed',
+      pipelineStage: 'rule',
+      caseId: trainingCase.id,
+      stageId: 'training',
+      attemptId: 'polarity-attempt',
+      sourceAnswerEventId: 'polarity-answer',
+      anchorId: 'case-polarity',
+      facts: [
+        {
+          id: 'negative',
+          value: 'Zn',
+          evidence: { quote: '锌', start: 0, end: 1 },
+        },
+        {
+          id: 'positive',
+          value: 'Cu',
+          evidence: { quote: '铜', start: 6, end: 7 },
+        },
+      ],
+      extractedValue: 'negative=Zn;positive=Cu',
+      correctValue: 'negative=Zn;positive=Cu',
+      outcome: 'hit',
+      evidence: [{ quote: answer, start: 0, end: answer.length }],
+      engine: { id: 'fixture', version: 'fixture.v1' },
+    });
+    // Red-before-green: correctValue used to be the UI reveal channel and leaked in projection.
+    session = appendSessionEvent(session, {
+      id: 'polarity-reveal',
+      occurredAt: '2026-07-23T13:00:02.000Z',
+      kind: 'polarity.revealed',
+      pipelineStage: 'reveal',
+      caseId: trainingCase.id,
+      stageId: 'training',
+      attemptId: 'polarity-attempt',
+      sourcePolarityAssessmentEventId: 'polarity-assessment',
+      anchorId: 'case-polarity',
+      values: { negative: 'Zn', positive: 'Cu' },
+    });
+
+    const student = projectStudentSession(session);
+    const leakedPaths: string[] = [];
+    const walk = (value: unknown, path: string[] = []) => {
+      if (!value || typeof value !== 'object') return;
+      Object.entries(value).forEach(([key, entry]) => {
+        if (['correctValue', 'engine', 'provenance'].includes(key)) {
+          leakedPaths.push([...path, key].join('.'));
+        }
+        walk(entry, [...path, key]);
+      });
+    };
+    walk(student);
+    walk(JSON.parse(exportSession(session)));
+
+    expect(leakedPaths).toEqual([]);
+    const publicAssessment = student.events.find((event) =>
+      event.kind === 'assessment.completed');
+    expect(publicAssessment).toMatchObject({
+      extraction: {
+        status: 'assessed',
+        evidence: [{ quote: answer, start: 0, end: answer.length }],
+      },
+      ruleDecision: { status: 'hit' },
+      score: { status: 'scored', earned: 2, possible: 2 },
+    });
+    expect(publicAssessment?.ruleDecision).not.toHaveProperty('reason');
+    expect(student.events.find((event) => event.kind === 'polarity.assessed'))
+      .not.toHaveProperty('correctValue');
+    expect(student.events.find((event) => event.kind === 'polarity.revealed'))
+      .toMatchObject({ values: { negative: 'Zn', positive: 'Cu' } });
+    expect(buildLiveCellState(session, config, trainingCase)).toMatchObject({
+      polarityLit: true,
+      electrodes: {
+        negative: { token: 'Zn', label: '锌' },
+        positive: { token: 'Cu', label: '铜' },
+      },
+    });
   });
 
   it('makes agent events inert for learner profiles, model lights, live lights, dimensions, and teacher scoring', async () => {
@@ -726,5 +853,125 @@ describe('M6 projection and scoring immunity boundaries', () => {
       reason: 'unassessed',
       comparisonPolicyVersion: AGENT_SHADOW_COMPARISON_POLICY_VERSION,
     });
+  });
+
+  it('does not fall back to an old score when the latest basis attempt needs review', async () => {
+    const config = await loadAllConfig(process.cwd());
+    let session = createSession({
+      id: 'm6-shadow-latest-status',
+      anonymousStudentId: 'anon-SHADOW02',
+      now: '2026-07-23T14:40:00.000Z',
+      configVersions: sessionConfigVersions(config),
+    });
+    session = appendSessionEvent(session, answerEvent('shadow-old-answer', 'shadow-old'));
+    session = appendSessionEvent(session, assessmentEvent({
+      id: 'shadow-old-hit',
+      sourceAnswerEventId: 'shadow-old-answer',
+      attemptId: 'shadow-old',
+      rubric: { id: 'rubric-p4', version: config.rubrics.version },
+    }));
+    session = appendSessionEvent(session, {
+      ...answerEvent('shadow-review-answer', 'shadow-review'),
+      occurredAt: '2026-07-23T14:40:03.000Z',
+    });
+    session = appendSessionEvent(session, assessmentEvent({
+      id: 'shadow-latest-review',
+      occurredAt: '2026-07-23T14:40:04.000Z',
+      sourceAnswerEventId: 'shadow-review-answer',
+      attemptId: 'shadow-review',
+      rubric: { id: 'rubric-p4', version: config.rubrics.version },
+      pipelineStage: 'extraction',
+      extraction: {
+        status: 'needs-review',
+        reason: 'ambiguous evidence',
+        model: 'fixture',
+        provenance: {
+          promptId: 'fixture',
+          promptVersion: 'fixture.v1',
+          cacheKey: 'fixture:review',
+        },
+      },
+      ruleDecision: { status: 'unassessed', reason: 'awaiting review' },
+      following: { status: 'unassessed' },
+      score: { status: 'unassessed' },
+    }));
+
+    // Red-before-green: record-track selection used to fall back to shadow-old-hit.
+    expect(selectShadowAssessmentAtBasis(session, config, 'P4', 3)).toEqual({
+      status: 'incomparable',
+      reason: 'needs-review',
+      comparisonPolicyVersion: AGENT_SHADOW_COMPARISON_POLICY_VERSION,
+    });
+
+    session = appendSessionEvent(session, {
+      id: 'latest-status-turn-event',
+      occurredAt: '2026-07-23T14:40:05.000Z',
+      kind: 'agent.turn.completed',
+      pipelineStage: 'agent',
+      caseId: 'zinc-copper',
+      stageId: 'training',
+      attemptId: 'latest-status-agent',
+      turnId: 'latest-status-turn',
+      triggerEventId: 'shadow-latest-review',
+      contextThroughSequence: 3,
+      requestHash: `sha256:${'9'.repeat(64)}`,
+      source: 'provider',
+      model: 'fixture',
+      orderedActions: [
+        {
+          callId: 'latest-status-judge',
+          name: 'conclude_node',
+          arguments: {
+            nodeId: 'P4',
+            verdict: 'miss',
+            rationale: 'Current evidence is not sufficient.',
+          },
+        },
+        {
+          callId: 'latest-status-end',
+          name: 'end_session',
+          arguments: { summary: '本轮结束。' },
+        },
+      ],
+      terminalAction: { callId: 'latest-status-end', name: 'end_session' },
+      provenance: {
+        adapter: 'openai-compatible',
+        adapterVersion: 'fixture.v1',
+      },
+    });
+    session = appendSessionEvent(session, {
+      id: 'latest-status-judgment',
+      occurredAt: '2026-07-23T14:40:06.000Z',
+      kind: 'agent.judgment.recorded',
+      pipelineStage: 'agent',
+      caseId: 'zinc-copper',
+      stageId: 'training',
+      attemptId: 'latest-status-agent',
+      turnId: 'latest-status-turn',
+      nodeId: 'P4',
+      verdict: 'miss',
+      rationale: 'Current evidence is not sufficient.',
+      basisThroughSequence: 3,
+      basisEventIds: ['shadow-latest-review'],
+      provenance: {
+        adapter: 'openai-compatible',
+        adapterVersion: 'fixture.v1',
+      },
+    });
+    expect(() => appendSessionEvent(session, {
+      id: 'stale-shadow-divergence',
+      occurredAt: '2026-07-23T14:40:07.000Z',
+      kind: 'agent.divergence.changed',
+      pipelineStage: 'agent',
+      caseId: 'zinc-copper',
+      stageId: 'training',
+      attemptId: 'latest-status-agent',
+      judgmentEventId: 'latest-status-judgment',
+      shadowAssessmentEventId: 'shadow-old-hit',
+      agentVerdict: 'miss',
+      shadowVerdict: 'hit',
+      status: 'detected',
+      comparisonPolicyVersion: AGENT_SHADOW_COMPARISON_POLICY_VERSION,
+    })).toThrow(/basis-selected|latest attempt/i);
   });
 });

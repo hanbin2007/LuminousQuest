@@ -26,7 +26,7 @@ export interface LiveCellState {
   nodes: LiveCellNode[];
   /**
    * 电极显示信息。防泄题:公开配置不含极性锚点,材料名只在学生**答对**
-   * 本案例极性判定后,从会话 polarity.assessed 事件的 correctValue 解析绑定;
+   * 本案例极性判定后,从服务端追加的 polarity.revealed 事件解析绑定;
    * 判定前 label 为 null(界面显示「?」),把揭示做成答对的奖励时刻。
    */
   electrodes: {
@@ -58,18 +58,6 @@ export function electrodeLabel(token: string) {
   return ELECTRODE_LABELS[token] ?? token;
 }
 
-function parsePolarityValue(correctValue: string) {
-  const entries = new Map<string, string>();
-  for (const part of correctValue.split(';')) {
-    const [key, value] = part.split('=');
-    if (key && value) entries.set(key.trim(), value.trim());
-  }
-  return {
-    negative: entries.get('negative') ?? '?',
-    positive: entries.get('positive') ?? '?',
-  };
-}
-
 /** 与训练反馈卡(annotationStatus)同一套判分→灯态语义。 */
 function lightOfEvent(event: AssessmentCompletedEvent): NodeLight {
   if (event.score.status === 'unassessed') {
@@ -91,7 +79,8 @@ export function buildLiveCellState(
 ): LiveCellState {
   const latestByNode = new Map<string, AssessmentCompletedEvent>();
   let polarityLit = false;
-  let polarityCorrectValue: string | null = null;
+  let polarity: { negative: string; positive: string } | null = null;
+  let latestPolarityAssessmentId: string | null = null;
   let polaritySequence = -1;
   for (const event of session.events) {
     if (event.caseId !== trainingCase.id) continue;
@@ -102,7 +91,15 @@ export function buildLiveCellState(
     if (event.kind === 'polarity.assessed' && event.sequence > polaritySequence) {
       polaritySequence = event.sequence;
       polarityLit = event.outcome === 'hit';
-      polarityCorrectValue = event.outcome === 'hit' ? event.correctValue : null;
+      latestPolarityAssessmentId = event.id;
+      polarity = null;
+    }
+    if (
+      event.kind === 'polarity.revealed'
+      && polarityLit
+      && event.sourcePolarityAssessmentEventId === latestPolarityAssessmentId
+    ) {
+      polarity = event.values;
     }
   }
 
@@ -125,8 +122,6 @@ export function buildLiveCellState(
       ignitionIndex: ignitionByNode.get(node.id) ?? null,
     };
   });
-
-  const polarity = polarityCorrectValue ? parsePolarityValue(polarityCorrectValue) : null;
 
   return {
     caseId: trainingCase.id,

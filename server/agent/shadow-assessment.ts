@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 
 import type { LoadedConfig } from '../../shared/config/schemas';
 import type { PretestConfig } from '../../shared/config/schemas';
@@ -169,6 +169,21 @@ export type AgentAnswerAssessmentStatus =
   | 'builder-assessed'
   | 'unassessed';
 
+function statusForContract(contract: ResponseContract): AgentAnswerAssessmentStatus {
+  switch (contract.assessmentEntrypoint.kind) {
+    case 'choice':
+      return 'choice-assessed';
+    case 'text-extraction':
+      return 'text-assessed';
+    case 'equation':
+      return 'equation-assessed';
+    case 'builder':
+      return 'builder-assessed';
+    case 'unassessed':
+      return 'unassessed';
+  }
+}
+
 export async function submitAgentAnswer(
   input: SubmitAgentAnswerInput,
 ): Promise<{
@@ -190,9 +205,48 @@ export async function submitAgentAnswer(
     config: input.config,
   });
   const contract = resolution.contract;
+  const stableDigest = createHash('sha256')
+    .update(`${submission.turnId}\u0000${contract.responseContractId}`)
+    .digest('hex')
+    .slice(0, 32);
+  const answerId = `answer-agent-${stableDigest}`;
+  const attemptId = `attempt-agent-${stableDigest}`;
+  const existingAnswer = session.events.find((event) =>
+    event.kind === 'answer.submitted'
+    && event.responseToAgentTurnId === submission.turnId);
+  if (existingAnswer?.kind === 'answer.submitted') {
+    if (existingAnswer.responseContractId !== contract.responseContractId) {
+      throw new Error('Agent turn already has a response for another contract');
+    }
+    let expectedAnswer = submission.answer;
+    if (
+      contract.assessmentEntrypoint.kind === 'choice'
+      && submission.answer.format === 'text'
+      && contract.questionId
+    ) {
+      const question = input.config.pretest.questions.find(
+        (entry) => entry.id === contract.questionId && entry.type === 'choice',
+      );
+      const option = question?.type === 'choice'
+        ? question.options.find((entry) =>
+            entry.id === submission.answer.value
+            || entry.text === submission.answer.value)
+        : undefined;
+      if (option) {
+        expectedAnswer = { format: 'text', value: option.text };
+      }
+    }
+    if (JSON.stringify(existingAnswer.answer) !== JSON.stringify(expectedAnswer)) {
+      throw new Error('Agent turn answer was already submitted with different content');
+    }
+    return {
+      session,
+      contract,
+      status: statusForContract(contract),
+    };
+  }
   const idFactory = input.idFactory
     ?? ((prefix: string) => `${prefix}-${randomUUID()}`);
-  const answerId = idFactory('answer-agent');
   const link = {
     responseToAgentTurnId: submission.turnId,
     responseContractId: contract.responseContractId,
@@ -202,7 +256,7 @@ export async function submitAgentAnswer(
     occurredAt: input.occurredAt,
     caseId: turn.caseId,
     stageId: turn.stageId,
-    attemptId: turn.attemptId,
+    attemptId,
   };
 
   if (resolution.status === 'unassessed') {
@@ -241,8 +295,9 @@ export async function submitAgentAnswer(
       question,
       optionId: option.id,
       occurredAt: input.occurredAt,
-      attemptId: turn.attemptId,
-      idFactory,
+      attemptId,
+      idFactory: (prefix) =>
+        prefix === 'answer-choice' ? answerId : idFactory(prefix),
       ...link,
     });
     return {
