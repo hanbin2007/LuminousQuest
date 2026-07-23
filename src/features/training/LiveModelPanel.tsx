@@ -5,7 +5,6 @@ import type { StudentSession } from '../../../shared/session';
 import { useReducedMotion } from '../../app/useReducedMotion';
 import { buildLiveCellState, liveNodeById } from '../model/live-cell';
 import { STAGE } from '../model/stage-tokens';
-import { mediumLabel } from './materials';
 
 // three.js 场景按需加载:无 WebGL 或未进入训练页时不下载/解析 3D chunk
 const CellScene = lazy(() =>
@@ -74,14 +73,12 @@ export const LiveModelPanel = memo(function LiveModelPanel({
   // 冷迁移后测:不提供任何即时对错信号,面板冻结为静态说明
   if (trainingCase.caseType === 'transfer') {
     return (
-      <section className="live-model live-model--frozen stage-dark" aria-labelledby="live-model-title">
+      <section className="live-model live-model--frozen ds-frame ds-frame--stage" aria-labelledby="live-model-title">
         <header className="live-model__header">
-          <div>
-            <span className="live-model__eyebrow">冷迁移 · 三维分析</span>
-            <h3 id="live-model-title">电化学统一认知模型</h3>
-          </div>
+          <h3 id="live-model-title">认知模型</h3>
+          <span>暂停点亮</span>
         </header>
-        <p className="live-model__focus">
+        <p className="live-model__focus ds-control">
           冷迁移后测不显示即时对错，模型暂停实时点亮；提交并完成对比后，可在雷达图中回看三维度表现。
         </p>
       </section>
@@ -89,14 +86,11 @@ export const LiveModelPanel = memo(function LiveModelPanel({
   }
 
   return (
-    <section className="live-model stage-dark" aria-labelledby="live-model-title">
+    <section className="live-model ds-frame ds-frame--stage" aria-labelledby="live-model-title">
       <header className="live-model__header">
-        <div>
-          <span className="live-model__eyebrow">实时 · 三维分析</span>
-          <h3 id="live-model-title">电化学统一认知模型</h3>
-        </div>
+        <h3 id="live-model-title">认知模型</h3>
         <p className="live-model__meta" key={trainingCase.id}>
-          {trainingCase.title} · {mediumLabel(trainingCase.medium)} · 已点亮 {state.litCount} / {state.totalCount}
+          已点亮 {state.litCount} / {state.totalCount}
         </p>
       </header>
 
@@ -124,13 +118,13 @@ export const LiveModelPanel = memo(function LiveModelPanel({
         )}
       </div>
 
-      <p className="live-model__focus" aria-live="polite">
-        <span className="live-model__focus-text" key={focusNodeId ?? 'idle'}>
-          {focused
-            ? `聚焦 ${focused.id}（${LIGHT_LABELS[focused.light]}）：${focused.statement}`
-            : '提交作答或点击节点，模型会实时点亮对应部分。'}
-        </span>
-      </p>
+      {focused ? (
+        <p className="live-model__focus ds-control" aria-live="polite">
+          <span className="live-model__focus-text" key={focusNodeId}>
+            {focused.id} · {focused.statement}
+          </span>
+        </p>
+      ) : null}
 
       <div className="live-model__chips" role="group" aria-label="认知模型节点">
         {DIMENSION_GROUPS.map((group) => (
@@ -156,11 +150,6 @@ export const LiveModelPanel = memo(function LiveModelPanel({
         ))}
       </div>
 
-      <ul className="live-model__legend">
-        {Object.entries(LIGHT_LABELS).map(([key, label]) => (
-          <li key={key}><span className={`legend-dot legend-${key === 'needs-review' ? 'review' : key.replace('-lit', '')}`} />{label}</li>
-        ))}
-      </ul>
     </section>
   );
 });

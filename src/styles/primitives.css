@@ -1,0 +1,397 @@
+.primary-button,
+.secondary-button {
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  clip-path: var(--cut-control);
+  font-size: var(--text-sm);
+  font-weight: 650;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+}
+
+.primary-button {
+  color: var(--text-primary);
+  background: var(--accent);
+}
+
+.primary-button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 88%, white);
+}
+
+.primary-button:active:not(:disabled),
+.secondary-button:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.primary-button:disabled {
+  color: var(--text-muted);
+  background: var(--line-strong);
+}
+
+.secondary-button {
+  color: var(--ink);
+  border: 1px solid var(--line-strong);
+  background: var(--card);
+}
+
+.secondary-button:hover:not(:disabled) {
+  background: var(--paper-sunken);
+}
+
+.icon-button {
+  width: 32px;
+  height: 32px;
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+  color: var(--ink-soft);
+  clip-path: var(--cut-control);
+  background: transparent;
+}
+
+.icon-button:hover {
+  color: var(--ink);
+  background: var(--paper-sunken);
+}
+
+.ds-frame {
+  --ds-cut: 23px;
+  --ds-surface: var(--panel-a);
+  position: relative;
+  isolation: isolate;
+  border: 0;
+  clip-path: polygon(
+    var(--ds-cut) 0,
+    100% 0,
+    100% 100%,
+    0 100%,
+    0 var(--ds-cut)
+  );
+  background: var(--edge-gradient);
+}
+
+.ds-frame::before {
+  position: absolute;
+  inset: 1px;
+  z-index: -1;
+  clip-path: polygon(
+    var(--ds-cut) 0,
+    100% 0,
+    100% 100%,
+    0 100%,
+    0 var(--ds-cut)
+  );
+  background: var(--ds-surface);
+  content: '';
+  pointer-events: none;
+}
+
+.ds-frame--paper {
+  --ds-cut: 28px;
+  --ds-surface:
+    radial-gradient(90% 40% at 50% 0%, rgba(255, 255, 255, 0.94), transparent),
+    linear-gradient(180deg, var(--panel-a), var(--panel-b));
+  filter: drop-shadow(var(--shadow-pop));
+}
+
+.ds-frame--secondary {
+  --ds-surface: linear-gradient(180deg, var(--panel2-a), var(--panel2-b));
+}
+
+.ds-frame--stage {
+  --ds-surface: linear-gradient(180deg, var(--stage-a), var(--stage-b) 70%);
+}
+
+.bench.ds-frame,
+.training-workspace.ds-frame,
+.live-model.ds-frame {
+  padding: 1px;
+}
+
+.training-topic.ds-frame {
+  --ds-surface:
+    radial-gradient(90% 40% at 50% 0%, #ffffff, transparent),
+    linear-gradient(180deg, var(--panel-a), var(--panel-c));
+}
+
+.question-card.ds-frame,
+.drawing-panel.ds-frame,
+.diagnosis-view.ds-frame,
+.bench.ds-frame {
+  filter: drop-shadow(var(--shadow-pop));
+}
+
+.app-utility-menu__popover.ds-frame {
+  --ds-surface: linear-gradient(180deg, var(--panel-a), var(--panel-b));
+  position: absolute;
+  z-index: 100;
+}
+
+.ds-control {
+  --ds-cut: 10px;
+  --ds-surface: var(--card);
+  position: relative;
+  isolation: isolate;
+  border: 0;
+  clip-path: polygon(
+    var(--ds-cut) 0,
+    100% 0,
+    100% 100%,
+    0 100%,
+    0 var(--ds-cut)
+  );
+  background: var(--edge-gradient);
+}
+
+.choice-option.ds-control {
+  --ds-cut: 12px;
+}
+
+.choice-option.ds-control:has(input:checked) {
+  --ds-surface: linear-gradient(var(--accent-faint), var(--accent-faint)), var(--card);
+  background: linear-gradient(
+    180deg,
+    var(--accent),
+    color-mix(in srgb, var(--accent) 62%, var(--edge-c))
+  );
+}
+
+.bench__annotate.ds-control.is-active {
+  --ds-surface: var(--accent-soft);
+  background: linear-gradient(
+    180deg,
+    var(--accent),
+    color-mix(in srgb, var(--accent) 60%, var(--edge-c))
+  );
+}
+
+.live-model__focus.ds-control {
+  --ds-surface: rgba(255, 255, 255, 0.86);
+}
+
+.bench.ds-frame .bench__topbar {
+  position: relative;
+  border: 0;
+  border-bottom: 1px solid var(--line-soft);
+  clip-path: polygon(
+    var(--ds-cut) 0,
+    100% 0,
+    100% 100%,
+    0 100%,
+    0 var(--ds-cut)
+  );
+  background: var(--panel2-a);
+}
+
+.bench.ds-frame .bench__drawer {
+  position: relative;
+  border: 0;
+  border-left: 1px solid var(--line-soft);
+  clip-path: none;
+  background: var(--panel2-a);
+}
+
+.bench.ds-frame .tray-item.ds-control:hover {
+  --ds-surface: var(--accent-faint);
+  background: linear-gradient(
+    180deg,
+    var(--accent),
+    color-mix(in srgb, var(--accent) 58%, var(--edge-c))
+  );
+}
+
+.bench.ds-frame .builder-submit.ds-control {
+  --ds-surface: var(--accent);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--accent) 84%, white),
+    color-mix(in srgb, var(--accent) 68%, var(--edge-c))
+  );
+}
+
+.bench.ds-frame .builder-submit.ds-control:hover:not(:disabled) {
+  --ds-surface: color-mix(in srgb, var(--accent) 88%, white);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--accent) 78%, white),
+    color-mix(in srgb, var(--accent) 62%, var(--edge-c))
+  );
+}
+
+.ds-control::before {
+  position: absolute;
+  inset: 1px;
+  z-index: -1;
+  clip-path: polygon(
+    var(--ds-cut) 0,
+    100% 0,
+    100% 100%,
+    0 100%,
+    0 var(--ds-cut)
+  );
+  background: var(--ds-surface);
+  content: '';
+  pointer-events: none;
+}
+
+.route-loading__label {
+  padding: var(--space-6);
+  opacity: 0.6;
+}
+
+.not-found-page {
+  min-height: calc(100dvh - 60px);
+  display: grid;
+  place-content: center;
+  justify-items: start;
+  gap: var(--space-3);
+  padding: var(--space-8);
+}
+
+.not-found-page p,
+.not-found-page h1,
+.not-found-page span {
+  margin: 0;
+}
+
+.not-found-page > p {
+  color: var(--accent);
+  font-size: var(--text-sm);
+  font-weight: 750;
+}
+
+.not-found-page > span {
+  color: var(--ink-soft);
+}
+
+.not-found-page > a {
+  margin-top: var(--space-3);
+  text-decoration: none;
+}
+
+.training-completion {
+  display: grid;
+  gap: 10px;
+  padding: 14px 18px;
+  border-block: 1px solid var(--line-soft);
+  background: color-mix(in srgb, var(--panel-a) 74%, transparent);
+}
+
+.training-completion__summary {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.training-completion__summary > .lucide {
+  color: var(--accent);
+}
+
+.training-completion__summary > div {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.training-completion__summary span {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.training-completion__summary strong {
+  color: var(--text-primary);
+  font-size: 13px;
+}
+
+.training-completion__locate {
+  min-height: 34px;
+  padding: 5px 10px;
+  font-size: 12px;
+}
+
+.training-completion progress {
+  width: 100%;
+  height: 4px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 0;
+  color: var(--accent);
+  background: var(--line-soft);
+  appearance: none;
+}
+
+.training-completion progress::-webkit-progress-bar {
+  background: var(--line-soft);
+}
+
+.training-completion progress::-webkit-progress-value {
+  background: linear-gradient(90deg, var(--accent), var(--dim-principle));
+}
+
+.training-completion progress::-moz-progress-bar {
+  background: linear-gradient(90deg, var(--accent), var(--dim-principle));
+}
+
+.training-completion__sections {
+  display: flex;
+  gap: 8px;
+}
+
+.training-completion__sections button {
+  min-height: 30px;
+  padding: 4px 9px;
+  color: var(--text-secondary);
+  border: 1px solid var(--line-soft);
+  background: transparent;
+  font-size: 11px;
+}
+
+.training-completion__sections button:not(:disabled):hover {
+  border-color: var(--accent);
+}
+
+.training-completion__sections button[data-complete='true'] {
+  color: var(--status-hit);
+  border-color: color-mix(in srgb, var(--status-hit) 40%, var(--line-soft));
+}
+
+.training-completion__error {
+  margin: 0;
+  color: var(--danger);
+  font-size: 12px;
+}
+
+.training-answer-field[data-missing='true'] textarea,
+.training-equations label[data-missing='true'] textarea {
+  outline: 1px solid var(--danger);
+  outline-offset: 2px;
+}
+
+.training-answer-field[data-missing='true'] .training-chat-bubble--assistant,
+.training-equations label[data-missing='true'] > span:first-child {
+  color: var(--danger);
+}
+
+.training-equations .equation-toolbar button {
+  min-width: 40px;
+  min-height: 40px;
+}
+
+@media (max-width: 700px) {
+  .training-completion__summary {
+    grid-template-columns: 20px minmax(0, 1fr);
+  }
+
+  .training-completion__locate {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+}

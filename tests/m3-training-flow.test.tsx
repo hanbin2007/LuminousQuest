@@ -73,7 +73,7 @@ describe('M3 training flow', () => {
     expect(screen.getByText('连续 1 次无辅助答对，下一案例进入二级脚手架。')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: '进入下一案例' }));
 
-    expect(screen.getByRole('heading', { name: '碱性铝-空气电池' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '碱性铝-空气电池' })).toBeInTheDocument();
     expect(screen.getByText('二级 · 三维度标题')).toBeInTheDocument();
     expect(screen.getByLabelText('装置维度作答')).toBeInTheDocument();
     expect(screen.getByLabelText('原理维度作答')).toBeInTheDocument();
@@ -83,14 +83,16 @@ describe('M3 training flow', () => {
     await fillVisibleAnswers(user);
     await user.click(screen.getByRole('button', { name: '提交案例作答' }));
     expect(await screen.findByText('连续 1 次无辅助答对，下一案例进入三级脚手架。')).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/training/aluminum-air');
     await user.click(screen.getByRole('button', { name: '查看结构剖面' }));
-    expect(screen.getByRole('img', { name: '碱性铝-空气电池 结构剖面图' })).toHaveAttribute(
+    expect(window.location.pathname).toBe('/training/aluminum-air');
+    expect(await screen.findByRole('img', { name: '碱性铝-空气电池 结构剖面图' })).toHaveAttribute(
       'src',
       '/assets/cases/aluminum-air/cross-section.png',
     );
     await user.click(screen.getByRole('button', { name: '进入下一案例' }));
 
-    expect(screen.getByRole('heading', { name: '酸性氢氧燃料电池' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '酸性氢氧燃料电池' })).toBeInTheDocument();
     expect(screen.getByText('三级 · 独立作答')).toBeInTheDocument();
     expect(screen.getByLabelText('独立分析')).toBeInTheDocument();
     await fillVisibleAnswers(user);
@@ -99,6 +101,22 @@ describe('M3 training flow', () => {
     expect(await screen.findByText('三个训练案例已完成')).toBeInTheDocument();
     expect(extractAssessment).toHaveBeenCalledTimes(3);
     expect(assessEquation).toHaveBeenCalledTimes(9);
+  });
+
+  it('shows per-section completion and locates the first missing response', async () => {
+    const user = userEvent.setup();
+    const config = await loadAllConfig(process.cwd());
+    const { runtime } = createTrainingRuntime(config);
+    render(<App initialConfig={config} runtime={runtime} />);
+
+    expect(await screen.findByText('本案例完成度')).toBeInTheDocument();
+    const progress = screen.getByRole('progressbar', { name: /本案例已完成/ });
+    expect(progress).toHaveAttribute('value', '0');
+    const firstAnswer = screen.getAllByRole('textbox')[0]!;
+    await user.click(screen.getByRole('button', { name: /定位未完成项/ }));
+    expect(firstAnswer).toHaveFocus();
+    await user.type(firstAnswer, '作答');
+    expect(progress).toHaveAttribute('value', '1');
   });
 
   it('does not expose the next case until the shared case-pass policy passes', async () => {

@@ -303,10 +303,10 @@ export function TopologyBuilder({ config, initialValue, onChange, onSubmit }: To
     : undefined;
 
   return (
-    <div className="bench">
+    <div className="bench ds-frame">
       <div className="bench__topbar">
         <button
-          className={`bench__annotate${annotate ? ' is-active' : ''}`}
+          className={`bench__annotate ds-control${annotate ? ' is-active' : ''}`}
           onClick={() => setAnnotate((current) => !current)}
           type="button"
           aria-pressed={annotate}
@@ -322,7 +322,7 @@ export function TopologyBuilder({ config, initialValue, onChange, onSubmit }: To
           <span data-closed={preview.electronClosed}>{preview.electronClosed ? '电子路径已闭合' : '电子路径未闭合'}</span>
           <span data-closed={preview.ionClosed}>{preview.ionClosed ? '离子路径已闭合' : '离子路径未闭合'}</span>
         </div>
-        <button className="primary-button builder-submit" onClick={submit} type="button">提交搭建</button>
+        <button className="primary-button builder-submit ds-control" onClick={submit} type="button">提交搭建</button>
       </div>
 
       <div className="bench__stage">
@@ -515,7 +515,7 @@ export function TopologyBuilder({ config, initialValue, onChange, onSubmit }: To
                     const arrowKind = arrowKindByComponent[component.id];
                     return (
                       <button
-                        className="tray-item"
+                        className="tray-item ds-control"
                         draggable
                         key={component.id}
                         onClick={() => addComponent(component.id)}

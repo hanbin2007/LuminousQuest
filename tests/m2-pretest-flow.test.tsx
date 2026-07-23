@@ -15,6 +15,10 @@ import { recordChoiceAssessment } from '../shared/workflows/choice-assessment';
 import { QuestionCard } from '../src/features/pretest/QuestionCard';
 import { emptyPretestDraft, savePretestDraft } from '../src/features/pretest/draft';
 
+async function openUtilityMenu(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole('button', { name: '课程与会话工具' }));
+}
+
 describe('M2 pretest route', () => {
   beforeEach(() => {
     const values = new Map<string, string>();
@@ -58,6 +62,51 @@ describe('M2 pretest route', () => {
 
     expect(view.container.querySelector('.question-card')).not.toHaveClass('question-card--correct');
     expect(onSubmit).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers a skip action without submitting the current answer', async () => {
+    const config = await loadAllConfig(process.cwd());
+    const question = config.pretest.questions.find((candidate) => candidate.type === 'choice');
+    if (!question) throw new Error('Expected a configured choice question');
+    const onSkip = vi.fn();
+    const onSubmit = vi.fn();
+    render(
+      <QuestionCard
+        question={question}
+        dimensionLabel="原理"
+        onAnswerChange={() => undefined}
+        onSkip={onSkip}
+        onSubmit={onSubmit}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '跳过' }));
+
+    expect(onSkip).toHaveBeenCalledTimes(1);
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it('distinguishes answered questions and omits diagnosis from the step rail', async () => {
+    const config = await loadAllConfig(process.cwd());
+    const session = createSession({
+      id: 'session-pretest-step-states',
+      now: '2026-07-22T12:00:00.000Z',
+      configVersions: sessionConfigVersions(config),
+    });
+    new LocalSessionStore(window.localStorage).save(session);
+    savePretestDraft(window.localStorage, session.id, {
+      ...emptyPretestDraft(),
+      step: 1,
+      answers: {
+        [config.pretest.questions[0].id]: 'A',
+      },
+    });
+
+    render(<App initialConfig={config} />);
+
+    expect(await screen.findByRole('button', { name: '跳转到题目 1，已作答' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '跳转到题目 2，未作答' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /诊断结果/ })).not.toBeInTheDocument();
   });
 
   it('uses the configured dimension label and does not infer judgment type from two options', async () => {
@@ -239,6 +288,7 @@ describe('M2 pretest route', () => {
     expect(await screen.findByRole('heading', { name: '诊断结果' })).toBeInTheDocument();
     expect(screen.getAllByText(/失电子场所.*电子导体.*离子导体.*得电子场所/).length).toBeGreaterThan(0);
     expect(screen.getByText('rubric-d1')).toBeInTheDocument();
+    await openUtilityMenu(user);
     expect(screen.getByRole('button', { name: '导出会话 JSON' })).toBeInTheDocument();
   });
 
@@ -251,9 +301,24 @@ describe('M2 pretest route', () => {
     expect(await screen.findByRole('heading', { name: '思维模型训练' })).toBeInTheDocument();
     await user.click(screen.getByRole('link', { name: '外显' }));
     expect(await screen.findByRole('heading', { name: '电化学统一认知模型' })).toBeInTheDocument();
+    await openUtilityMenu(user);
     await user.click(screen.getByRole('link', { name: '教师视图' }));
     expect(await screen.findByRole('heading', { name: '教师视图' })).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: '课程与会话工具' })).not.toBeInTheDocument();
     expect(screen.getByLabelText('电子流进度')).toBeInTheDocument();
+  });
+
+  it('dismisses the controlled utility menu with Escape and restores trigger focus', async () => {
+    const user = userEvent.setup();
+    const config = await loadAllConfig(process.cwd());
+    render(<App initialConfig={config} />);
+
+    await openUtilityMenu(user);
+    expect(screen.getByRole('dialog', { name: '课程与会话工具' })).toBeInTheDocument();
+    await user.keyboard('{Escape}');
+    const trigger = screen.getByRole('button', { name: '课程与会话工具' });
+    expect(screen.queryByRole('dialog', { name: '课程与会话工具' })).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
   });
 
   it('restores global pretest progress on a direct training route', async () => {
@@ -296,6 +361,7 @@ describe('M2 pretest route', () => {
     });
     render(<App initialConfig={config} />);
 
+    await openUtilityMenu(user);
     await user.upload(
       screen.getByLabelText('导入会话 JSON 文件'),
       new File([exportSession(imported)], 'm2-session.json', { type: 'application/json' }),
@@ -327,6 +393,7 @@ describe('M2 pretest route', () => {
     assessment.rubric.id = 'rubric-p3';
     render(<App initialConfig={config} />);
 
+    await openUtilityMenu(user);
     await user.upload(
       screen.getByLabelText('导入会话 JSON 文件'),
       new File([exportSession(assessed)], 'tampered.json', { type: 'application/json' }),

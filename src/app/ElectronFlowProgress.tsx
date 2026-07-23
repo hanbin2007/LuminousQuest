@@ -1,22 +1,18 @@
+import { Check } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 
 import { useAppContext } from './AppContext';
+import { appStages, pretestStepPath, trainingCasePath } from './route-config';
 
 interface ElectronFlowProgressProps {
   pretestComplete: boolean;
   trainingComplete: boolean;
 }
 
-const stages = [
-  { path: '/pretest', label: '前测' },
-  { path: '/training', label: '训练' },
-  { path: '/model', label: '外显' },
-] as const;
-
 /** 测试阶段的手动阶段跳转(LQ_TEST_NAV=1 才渲染;悬浮面板,不改变头部高度)。 */
 function TestStageJumps() {
-  const { config, requestStageJump } = useAppContext();
+  const { config } = useAppContext();
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
@@ -52,13 +48,11 @@ function TestStageJumps() {
     })), [config.cases]);
 
   const jumpPretest = (step: number) => {
-    requestStageJump({ module: 'pretest', step });
-    navigate('/pretest');
+    navigate(pretestStepPath(config, step));
     setOpen(false);
   };
   const jumpTraining = (caseId: string) => {
-    requestStageJump({ module: 'training', caseId });
-    navigate('/training');
+    navigate(trainingCasePath(caseId));
     setOpen(false);
   };
   const jumpRoute = (path: string) => {
@@ -115,28 +109,21 @@ function TestStageJumps() {
 export function ElectronFlowProgress({ pretestComplete, trainingComplete }: ElectronFlowProgressProps) {
   const { pathname } = useLocation();
   const { testNavigation } = useAppContext();
-  const routeIndex = Math.max(0, stages.findIndex((stage) => pathname.startsWith(stage.path)));
+  const routeIndex = Math.max(0, appStages.findIndex((stage) => pathname.startsWith(stage.path)));
   const completed = trainingComplete ? 2 : pretestComplete ? 1 : 0;
-  const progress = Math.min(100, completed * 50);
-  const flowing = completed > 0 && completed < stages.length;
 
   return (
     <nav className="electron-progress" aria-label="电子流进度">
-      <div
-        className="electron-progress__track"
-        style={{ '--progress': `${progress}%`, '--progress-scale': `${progress / 100}` } as React.CSSProperties}
-      >
-        <span className="electron-progress__completed" />
-        {flowing ? (
-          <span className="electron-progress__dots" aria-hidden="true">
-            <i /><i /><i />
-          </span>
-        ) : null}
-      </div>
       <ol>
-        {stages.map((stage, index) => (
+        {appStages.map((stage, index) => (
           <li key={stage.path} data-complete={index < completed} data-current={index === routeIndex}>
-            <NavLink to={stage.path}>{stage.label}</NavLink>
+            <NavLink to={stage.path} aria-current={index === routeIndex ? 'step' : undefined}>
+              <span className="electron-progress__marker" aria-hidden="true">
+                {index < completed ? <Check /> : index + 1}
+              </span>
+              <span>{stage.label}</span>
+            </NavLink>
+            {index < appStages.length - 1 ? <i className="electron-progress__connector" aria-hidden="true" /> : null}
           </li>
         ))}
       </ol>

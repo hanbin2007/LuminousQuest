@@ -1,5 +1,14 @@
-import { ArrowRight, Check, Lightbulb, LoaderCircle } from 'lucide-react';
+import {
+  ArrowRight,
+  Check,
+  Lightbulb,
+  ListChecks,
+  LoaderCircle,
+  LocateFixed,
+  Send,
+} from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 import type { CaseConfig } from '../../../shared/config/schemas';
 import type { ScaffoldScoreInput } from '../../../shared/scoring/scaffold';
@@ -9,6 +18,8 @@ import type {
   TutorTurnCompletedEvent,
 } from '../../../shared/session';
 import { useAppContext } from '../../app/AppContext';
+import { resolveTrainingCaseId, trainingCasePath } from '../../app/route-config';
+import { getWorkspaceStorage } from '../../persistence/workspace-storage';
 import { AnnotationCard, type AnnotationStatus } from '../diagnosis/AnnotationCard';
 import { EquationToolbar } from '../pretest/EquationToolbar';
 import { mergeServerSession } from '../pretest/session-merge';
@@ -67,7 +78,11 @@ function restoredDemoRound(
   cases: readonly CaseConfig[],
   draft: TrainingDraft,
 ): CompletedRound | null {
-  const stored = loadDemoTrainingRound(storage(), session.id, cases.map((entry) => entry.id));
+  const stored = loadDemoTrainingRound(
+    getWorkspaceStorage(),
+    session.id,
+    cases.map((entry) => entry.id),
+  );
   if (!stored) return null;
   const trainingCase = cases.find((entry) => entry.id === stored.caseId);
   if (!trainingCase) return null;
@@ -116,14 +131,6 @@ function tutorSourceLabel(source: TutorNote['source']) {
   return '辅导记录';
 }
 
-function storage() {
-  try {
-    return window.localStorage;
-  } catch {
-    return null;
-  }
-}
-
 function caseAnswer(draft: TrainingDraft, caseId: string, fieldId: string) {
   return draft.answers[caseId]?.[fieldId] ?? '';
 }
@@ -137,6 +144,55 @@ function activeScaffold(trainingCase: CaseConfig, level: number) {
   return trainingCase.scaffold.find((entry) => entry.level === forcedLevel)
     ?? trainingCase.scaffold.find((entry) => entry.level === 3)
     ?? trainingCase.scaffold[0]!;
+}
+
+type TrainingCompletionSection = 'analysis' | 'equations';
+
+interface TrainingRequiredItem {
+  id: string;
+  controlId: string;
+  label: string;
+  section: TrainingCompletionSection;
+  complete: boolean;
+}
+
+function requiredTrainingItems(
+  trainingCase: CaseConfig,
+  draft: TrainingDraft,
+  level: number,
+): TrainingRequiredItem[] {
+  const scaffold = activeScaffold(trainingCase, level);
+  const analysis = scaffold.level === 1
+    ? scaffold.fields.map((field) => ({
+      id: `analysis:${field.id}`,
+      controlId: `training-answer-${trainingCase.id}-${field.id}`,
+      label: field.prompt,
+      section: 'analysis' as const,
+      complete: caseAnswer(draft, trainingCase.id, field.id).trim().length > 0,
+    }))
+    : scaffold.level === 2
+      ? scaffold.dimensionIds.map((dimensionId) => ({
+        id: `analysis:${dimensionId}`,
+        controlId: `training-answer-${trainingCase.id}-${dimensionId}`,
+        label: dimensionAnswerLabels[dimensionId],
+        section: 'analysis' as const,
+        complete: caseAnswer(draft, trainingCase.id, dimensionId).trim().length > 0,
+      }))
+      : [{
+        id: 'analysis:independent',
+        controlId: `training-answer-${trainingCase.id}-independent`,
+        label: '独立分析',
+        section: 'analysis' as const,
+        complete: caseAnswer(draft, trainingCase.id, 'independent').trim().length > 0,
+      }];
+  const equations = trainingCase.equationSets.map((equation) => ({
+    id: `equation:${equation.id}`,
+    controlId: `training-equation-${trainingCase.id}-${equation.id}`,
+    label: equationLabels[equation.electrode],
+    section: 'equations' as const,
+    complete: equationAnswer(draft, trainingCase.id, equation.id).trim().length > 0,
+  }));
+  return [...analysis, ...equations];
 }
 
 function combinedNarrative(draft: TrainingDraft, trainingCase: CaseConfig, level: number) {
@@ -197,12 +253,33 @@ function transitionPresentation(
   return transition.changeReason;
 }
 
+const topicTitles: Record<string, string> = {
+  'zinc-copper': '电极与反应物',
+  'hydrogen-oxygen': '反应场所与离子通路',
+  'aluminum-air': '多孔电极与介质',
+  'methane-fuel': '燃料、氧化剂与能量',
+};
+
+function topicDescription(trainingCase: CaseConfig, level: number) {
+  const scaffold = activeScaffold(trainingCase, level);
+  if (scaffold.level === 1) {
+    const prompts = scaffold.fields.slice(0, 4).map((field) => field.prompt).join('');
+    return `结合${trainingCase.title}装置示意图思考：${prompts}`;
+  }
+  if (scaffold.level === 2) {
+    return `结合${trainingCase.title}，从装置、原理和能量三个维度完成分析，并说明判断依据。`;
+  }
+  return scaffold.prompt;
+}
+
 function MaterialPanel({
   trainingCase,
   completedNodeIds,
+  level,
 }: {
   trainingCase: CaseConfig;
   completedNodeIds: readonly string[];
+  level: number;
 }) {
   const [materialId, setMaterialId] = useState<string | null>(null);
   const available = visibleCaseMaterials(trainingCase, completedNodeIds);
@@ -211,11 +288,27 @@ function MaterialPanel({
   useEffect(() => setMaterialId(null), [trainingCase.id]);
 
   return (
-    <section className="training-material" aria-labelledby="training-material-title">
-      <header>
-        <span>案例素材</span>
-        <h3 id="training-material-title">先读装置，再看内部</h3>
-      </header>
+    <section className="training-topic ds-frame" aria-labelledby="training-topic-title">
+      <div className="training-topic__summary">
+        <div className="training-topic__media">
+          {material?.materialRef ? (
+            <img
+              src={`/${material.materialRef}`}
+              alt={`${trainingCase.title} ${material.kind === 'cross-section' ? '结构剖面图' : '装置简图'}`}
+            />
+          ) : (
+            <span>素材待签收</span>
+          )}
+        </div>
+        <div className="training-topic__title">
+          <span>装置维度</span>
+          <h2 id="training-topic-title">{topicTitles[trainingCase.id] ?? trainingCase.title}</h2>
+        </div>
+        <div className="training-topic__level">
+          <span>当前等级</span>
+          <strong>{levelNumerals[level] ?? `${level}级`}</strong>
+        </div>
+      </div>
       {available.length > 1 ? (
         <div className="segmented-control training-material__switch" aria-label="案例素材视图">
           {available.map((entry) => (
@@ -230,19 +323,7 @@ function MaterialPanel({
           ))}
         </div>
       ) : null}
-      {material?.materialRef ? (
-        <figure>
-          <img
-            src={`/${material.materialRef}`}
-            alt={`${trainingCase.title} ${material.kind === 'cross-section' ? '结构剖面图' : '装置简图'}`}
-          />
-          <figcaption>
-            {material.kind === 'cross-section' ? '结构剖面' : '装置简图'} · {mediumLabel(trainingCase.medium)}
-          </figcaption>
-        </figure>
-      ) : (
-        <p className="training-material__pending">素材待签收</p>
-      )}
+      <p>{topicDescription(trainingCase, level)}</p>
     </section>
   );
 }
@@ -266,103 +347,245 @@ function AnswerWorkspace({
   onEquation,
   onSubmit,
 }: AnswerWorkspaceProps) {
+  const [showValidation, setShowValidation] = useState(false);
   const scaffold = activeScaffold(trainingCase, level);
   const policyLabel = trainingCase.caseType === 'transfer'
     ? '三级 · 冷迁移独立作答'
     : `${levelNumerals[scaffold.level]} · ${scaffold.level === 1
       ? '完整引导'
       : scaffold.level === 2 ? '三维度标题' : '独立作答'}`;
+  const requiredItems = requiredTrainingItems(trainingCase, draft, level);
+  const completedCount = requiredItems.filter((item) => item.complete).length;
+  const missingItems = requiredItems.filter((item) => !item.complete);
+  const analysisItems = requiredItems.filter((item) => item.section === 'analysis');
+  const equationItems = requiredItems.filter((item) => item.section === 'equations');
+  const analysisComplete = analysisItems.filter((item) => item.complete).length;
+  const equationsComplete = equationItems.filter((item) => item.complete).length;
+  const isComplete = missingItems.length === 0;
+
+  const locateMissing = (section?: TrainingCompletionSection) => {
+    const item = missingItems.find((candidate) => !section || candidate.section === section);
+    if (!item) return;
+    const control = document.getElementById(item.controlId);
+    if (control && typeof control.scrollIntoView === 'function') {
+      control.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+    control?.focus({ preventScroll: true });
+  };
+
+  const attemptSubmit = () => {
+    if (!isComplete) {
+      setShowValidation(true);
+      locateMissing();
+    } else {
+      setShowValidation(false);
+    }
+    onSubmit();
+  };
 
   return (
-    <section className="training-workspace" aria-labelledby="training-workspace-title">
+    <section className="training-workspace ds-frame ds-frame--secondary" aria-labelledby="training-workspace-title">
       <header>
-        <div>
-          <span>当前脚手架</span>
-          <h3 id="training-workspace-title">{policyLabel}</h3>
-        </div>
-        <small>{trainingCase.caseType === 'transfer' ? '固定等级，不提供提示' : '由作答状态自动调整'}</small>
+        <h2 id="training-workspace-title">AI 助教</h2>
+        <span>在线</span>
       </header>
 
-      <div className="training-answer-fields">
-        {scaffold.level === 1 ? scaffold.fields.map((field) => (
-          <label key={field.id} className="training-answer-field" data-dimension={field.dimensionId}>
-            <span>
-              <strong>{field.nodeId === 'D5' ? 'D5 · 场所与反应物四连问' : field.nodeId}</strong>
-              {field.prompt}
-            </span>
-            <textarea
-              value={caseAnswer(draft, trainingCase.id, field.id)}
-              onChange={(event) => onAnswer(field.id, event.target.value)}
-              rows={3}
-            />
-          </label>
-        )) : null}
-        {scaffold.level === 2 ? scaffold.dimensionIds.map((dimensionId) => (
-          <label key={dimensionId} className="training-answer-field" data-dimension={dimensionId}>
-            <span><strong>{dimensionAnswerLabels[dimensionId]}</strong></span>
-            <textarea
-              aria-label={dimensionAnswerLabels[dimensionId]}
-              value={caseAnswer(draft, trainingCase.id, dimensionId)}
-              onChange={(event) => onAnswer(dimensionId, event.target.value)}
-              rows={6}
-            />
-          </label>
-        )) : null}
-        {scaffold.level === 3 ? (
-          <label className="training-answer-field" data-dimension="principle">
-            <span><strong>独立分析</strong>{scaffold.prompt}</span>
-            <textarea
-              aria-label="独立分析"
-              value={caseAnswer(draft, trainingCase.id, 'independent')}
-              onChange={(event) => onAnswer('independent', event.target.value)}
-              rows={10}
-            />
-          </label>
-        ) : null}
+      <div className="training-workspace__thread">
+        <div className="training-chat-bubble training-chat-bubble--assistant ds-control">
+          <strong>{policyLabel}</strong>
+          <p>
+            {trainingCase.caseType === 'transfer'
+              ? '请独立完成分析，本轮不会显示即时提示。'
+              : '先观察装置，再按下面的问题逐步写出你的判断。'}
+          </p>
+        </div>
+
+        <section className="training-completion" aria-labelledby="training-completion-title">
+          <div className="training-completion__summary">
+            <ListChecks aria-hidden="true" />
+            <div>
+              <span id="training-completion-title">本案例完成度</span>
+              <strong>{completedCount} / {requiredItems.length}</strong>
+            </div>
+            <button
+              className="secondary-button training-completion__locate"
+              disabled={isComplete}
+              onClick={() => locateMissing()}
+              type="button"
+            >
+              <LocateFixed aria-hidden="true" />定位未完成项
+            </button>
+          </div>
+          <progress
+            aria-label={`本案例已完成 ${completedCount} 项，共 ${requiredItems.length} 项`}
+            max={requiredItems.length}
+            value={completedCount}
+          />
+          <div className="training-completion__sections">
+            <button
+              data-complete={analysisComplete === analysisItems.length || undefined}
+              disabled={analysisComplete === analysisItems.length}
+              onClick={() => locateMissing('analysis')}
+              type="button"
+            >
+              分析 {analysisComplete}/{analysisItems.length}
+            </button>
+            <button
+              data-complete={equationsComplete === equationItems.length || undefined}
+              disabled={equationsComplete === equationItems.length}
+              onClick={() => locateMissing('equations')}
+              type="button"
+            >
+              方程式 {equationsComplete}/{equationItems.length}
+            </button>
+          </div>
+          {showValidation && !isComplete ? (
+            <p className="training-completion__error" role="alert">
+              还有 {missingItems.length} 项未完成，已定位到第一处。
+            </p>
+          ) : null}
+        </section>
+
+        <div className="training-answer-fields">
+          {scaffold.level === 1 ? scaffold.fields.map((field) => {
+            const controlId = `training-answer-${trainingCase.id}-${field.id}`;
+            const missing = showValidation && !requiredItems.find((item) => item.controlId === controlId)?.complete;
+            return (
+            <label
+              key={field.id}
+              className="training-answer-field"
+              data-dimension={field.dimensionId}
+              data-missing={missing || undefined}
+            >
+              <span className="training-chat-bubble training-chat-bubble--assistant ds-control">
+                <strong>{field.nodeId === 'D5' ? 'D5 · 场所与反应物四连问' : field.nodeId}</strong>
+                {field.prompt}
+              </span>
+              <span className="training-chat-bubble training-chat-bubble--student">
+                <textarea
+                  id={controlId}
+                  aria-label={field.prompt}
+                  placeholder="输入你的想法…"
+                  value={caseAnswer(draft, trainingCase.id, field.id)}
+                  onChange={(event) => onAnswer(field.id, event.target.value)}
+                  rows={2}
+                />
+              </span>
+            </label>
+            );
+          }) : null}
+          {scaffold.level === 2 ? scaffold.dimensionIds.map((dimensionId) => {
+            const controlId = `training-answer-${trainingCase.id}-${dimensionId}`;
+            const missing = showValidation && !requiredItems.find((item) => item.controlId === controlId)?.complete;
+            return (
+            <label
+              key={dimensionId}
+              className="training-answer-field"
+              data-dimension={dimensionId}
+              data-missing={missing || undefined}
+            >
+              <span className="training-chat-bubble training-chat-bubble--assistant ds-control">
+                <strong>{dimensionAnswerLabels[dimensionId]}</strong>
+              </span>
+              <span className="training-chat-bubble training-chat-bubble--student">
+                <textarea
+                  id={controlId}
+                  aria-label={dimensionAnswerLabels[dimensionId]}
+                  placeholder="输入你的分析…"
+                  value={caseAnswer(draft, trainingCase.id, dimensionId)}
+                  onChange={(event) => onAnswer(dimensionId, event.target.value)}
+                  rows={4}
+                />
+              </span>
+            </label>
+            );
+          }) : null}
+          {scaffold.level === 3 ? (() => {
+            const controlId = `training-answer-${trainingCase.id}-independent`;
+            const missing = showValidation && !requiredItems.find((item) => item.controlId === controlId)?.complete;
+            return (
+            <label
+              className="training-answer-field"
+              data-dimension="principle"
+              data-missing={missing || undefined}
+            >
+              <span className="training-chat-bubble training-chat-bubble--assistant ds-control">
+                <strong>独立分析</strong>
+                {scaffold.prompt}
+              </span>
+              <span className="training-chat-bubble training-chat-bubble--student">
+                <textarea
+                  id={controlId}
+                  aria-label="独立分析"
+                  placeholder="输入完整分析…"
+                  value={caseAnswer(draft, trainingCase.id, 'independent')}
+                  onChange={(event) => onAnswer('independent', event.target.value)}
+                  rows={6}
+                />
+              </span>
+            </label>
+            );
+          })() : null}
+        </div>
+
+        <fieldset className="training-equations ds-control">
+          <legend>补全反应式</legend>
+          {trainingCase.equationSets.map((equation) => {
+            const id = `training-equation-${trainingCase.id}-${equation.id}`;
+            const value = equationAnswer(draft, trainingCase.id, equation.id);
+            return (
+              <label
+                data-missing={showValidation && !value.trim() || undefined}
+                key={equation.id}
+                htmlFor={id}
+              >
+                <span>{equationLabels[equation.electrode]}</span>
+                <EquationToolbar
+                  textareaId={id}
+                  value={value}
+                  onChange={(next) => onEquation(equation.id, next)}
+                />
+                <textarea
+                  id={id}
+                  aria-label={equationLabels[equation.electrode]}
+                  placeholder="输入反应式…"
+                  value={value}
+                  onChange={(event) => onEquation(equation.id, event.target.value)}
+                  rows={2}
+                />
+              </label>
+            );
+          })}
+        </fieldset>
       </div>
 
-      <fieldset className="training-equations">
-        <legend>电极反应式与总反应式</legend>
-        {trainingCase.equationSets.map((equation) => {
-          const id = `training-equation-${trainingCase.id}-${equation.id}`;
-          const value = equationAnswer(draft, trainingCase.id, equation.id);
-          return (
-            <label key={equation.id} htmlFor={id}>
-              <span>{equationLabels[equation.electrode]}</span>
-              <EquationToolbar
-                textareaId={id}
-                value={value}
-                onChange={(next) => onEquation(equation.id, next)}
-              />
-              <textarea
-                id={id}
-                aria-label={equationLabels[equation.electrode]}
-                value={value}
-                onChange={(event) => onEquation(equation.id, event.target.value)}
-                rows={2}
-              />
-            </label>
-          );
-        })}
-      </fieldset>
-
-      <button className="primary-button training-submit" type="button" disabled={busy} onClick={onSubmit}>
-        {busy ? <LoaderCircle className="training-spinner" aria-hidden="true" /> : <Check aria-hidden="true" />}
-        {trainingCase.caseType === 'transfer' ? '提交冷迁移作答' : '提交案例作答'}
-      </button>
+      <footer className="training-workspace__composer">
+        <span>{isComplete
+          ? (trainingCase.caseType === 'transfer' ? '独立作答已完成，可以提交' : '全部内容已完成，可以提交')
+          : `还需完成 ${missingItems.length} 项`}</span>
+        <button
+          aria-label={trainingCase.caseType === 'transfer' ? '提交冷迁移作答' : '提交案例作答'}
+          className="training-submit"
+          disabled={busy}
+          onClick={attemptSubmit}
+          type="button"
+        >
+          {busy ? <LoaderCircle className="training-spinner" aria-hidden="true" /> : <Send aria-hidden="true" />}
+        </button>
+      </footer>
     </section>
   );
 }
 
 export function TrainingPage() {
+  const { pathname } = useLocation();
+  const navigate = useNavigate();
   const {
     config,
     runtime,
     session,
     setSession,
     setTrainingComplete,
-    stageJump,
-    consumeStageJump,
   } = useAppContext();
   const cases = useMemo(
     () => [...config.cases].sort((left, right) => left.sequence - right.sequence),
@@ -373,7 +596,7 @@ export function TrainingPage() {
     ? initialScaffold(firstCase.caseType, config.scaffoldPolicy).level
     : 1;
   const initialDraft = () =>
-    loadTrainingDraft(storage(), session.id, cases.map((entry) => entry.id), firstLevel);
+    loadTrainingDraft(getWorkspaceStorage(), session.id, cases.map((entry) => entry.id), firstLevel);
   const [draft, setDraft] = useState<TrainingDraft>(initialDraft);
   const [round, setRound] = useState<CompletedRound | null>(() =>
     restoredDemoRound(session, config, cases, initialDraft()));
@@ -386,7 +609,9 @@ export function TrainingPage() {
   const [error, setError] = useState<string | null>(null);
   const submissionIds = useRef(new Map<string, string>());
 
-  const activeIndex = Math.max(0, cases.findIndex((entry) => entry.id === draft.activeCaseId));
+  const routedCaseId = resolveTrainingCaseId(config, pathname);
+  const activeCaseId = routedCaseId ?? draft.activeCaseId;
+  const activeIndex = Math.max(0, cases.findIndex((entry) => entry.id === activeCaseId));
   const trainingCase = cases[activeIndex] ?? firstCase;
   const completedTrainingCount = trainingCase
     ? cases.slice(0, activeIndex + (round?.caseId === trainingCase.id ? 1 : 0))
@@ -394,7 +619,7 @@ export function TrainingPage() {
     : 0;
 
   useEffect(() => {
-    const next = loadTrainingDraft(storage(), session.id, cases.map((entry) => entry.id), firstLevel);
+    const next = loadTrainingDraft(getWorkspaceStorage(), session.id, cases.map((entry) => entry.id), firstLevel);
     const restoredRound = restoredDemoRound(session, config, cases, next);
     setDraft(next);
     setRound(restoredRound);
@@ -404,11 +629,26 @@ export function TrainingPage() {
 
   useEffect(() => {
     try {
-      saveTrainingDraft(storage(), session.id, draft);
+      saveTrainingDraft(getWorkspaceStorage(), session.id, draft);
     } catch {
       setError('训练草稿保存失败，请导出会话。');
     }
   }, [draft, session.id]);
+
+  useEffect(() => {
+    const routeCaseId = resolveTrainingCaseId(config, pathname);
+    if (pathname === '/training' || routeCaseId === null) {
+      navigate(trainingCasePath(draft.activeCaseId || firstCase?.id || ''), { replace: true });
+      return;
+    }
+    if (draft.activeCaseId === routeCaseId) return;
+    setDraft((current) => ({ ...current, activeCaseId: routeCaseId }));
+    setRound(null);
+    setTutorNotes({});
+    setFocusNodeId(null);
+    setComparison(null);
+    setError(null);
+  }, [config, firstCase?.id, navigate, pathname]);
 
   if (!trainingCase) {
     return <main className="page-content"><p className="form-error">没有可用的训练案例。</p></main>;
@@ -531,25 +771,12 @@ export function TrainingPage() {
       activeCaseId: next.id,
       currentLevel: nextLevel,
     }));
+    navigate(trainingCasePath(next.id));
     setRound(null);
     setTutorNotes({});
     setFocusNodeId(null);
     setError(null);
   };
-
-  // 测试阶段手动跳转:切到目标案例,复位本轮状态(与进入下一案例同一路径)
-  useEffect(() => {
-    if (stageJump?.module !== 'training') return;
-    if (cases.some((entry) => entry.id === stageJump.caseId)) {
-      setDraft((current) => ({ ...current, activeCaseId: stageJump.caseId }));
-      setRound(null);
-      setTutorNotes({});
-      setFocusNodeId(null);
-      setComparison(null);
-      setError(null);
-    }
-    consumeStageJump();
-  }, [stageJump, cases, consumeStageJump]);
 
   const askTutor = async (nodeId: string) => {
     setTutorBusyNode(nodeId);
@@ -629,30 +856,14 @@ export function TrainingPage() {
   const tutorNodeIds = new Set(trainingCase.tutoring.map((entry) => entry.nodeId));
 
   return (
-    <main className="page-content training-page training-page--split">
+    <main className="training-page training-page--split">
+      <h1 className="visually-hidden">思维模型训练</h1>
+      <h2 className="visually-hidden">{trainingCase.title}</h2>
       <div className="training-main" key={trainingCase.id}>
-      <header className="page-heading training-page__heading">
-        <div>
-          <span>模块二 · 案例 {activeIndex + 1} / {cases.length}</span>
-          <h1>思维模型训练</h1>
-        </div>
-        <p>{completedTrainingCount} 个训练案例已完成</p>
-      </header>
-
-      <section className="training-case-heading">
-        <span>{trainingCase.caseType === 'transfer' ? '冷迁移后测' : '案例训练'}</span>
-        <h2>{trainingCase.title}</h2>
-        <p>
-          {trainingCase.caseType === 'transfer'
-            ? '本案例固定独立作答；不显示即时对错，也不提供提示。'
-            : `当前等级：${levelNumerals[draft.currentLevel]}。完成后由脚手架策略决定下一案例等级。`}
-        </p>
-      </section>
-
-      <div className="training-layout">
         <MaterialPanel
           trainingCase={trainingCase}
           completedNodeIds={feedbackEvents.map((event) => event.nodeId)}
+          level={draft.currentLevel}
         />
         <AnswerWorkspace
           trainingCase={trainingCase}
@@ -663,12 +874,11 @@ export function TrainingPage() {
           onEquation={updateEquation}
           onSubmit={submitCase}
         />
-      </div>
 
       {error ? <p className="form-error training-error" role="alert">{error}</p> : null}
 
       {trainingCase.caseType === 'training' && round ? (
-        <section className="training-feedback" aria-labelledby="training-feedback-title">
+        <section className="training-feedback ds-frame" aria-labelledby="training-feedback-title">
           <header>
             <div>
               <span>即时反馈</span>

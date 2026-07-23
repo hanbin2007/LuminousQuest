@@ -36,7 +36,7 @@ export function DiagnosisView({ config, session }: DiagnosisViewProps) {
   const rubricByNode = new Map(config.rubrics.rubrics.map((rubric) => [rubric.nodeId, rubric]));
 
   return (
-    <section className="diagnosis-view" aria-labelledby="diagnosis-title">
+    <section className="diagnosis-view ds-frame ds-frame--paper" aria-labelledby="diagnosis-title">
       <header className="page-heading">
         <span>前测完成</span>
         <h1 id="diagnosis-title">诊断结果</h1>

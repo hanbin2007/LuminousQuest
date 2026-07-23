@@ -4,16 +4,9 @@ import type { LoadedConfig } from '../../shared/config/schemas';
 import type { StudentSession } from '../../shared/session/schema';
 import type { AppRuntime, LLMExecutionMode } from '../runtime/api';
 
-export type StageJump =
-  | { module: 'pretest'; step: number }
-  | { module: 'training'; caseId: string };
-
 export interface AppContextValue {
   /** 测试阶段的手动阶段跳转(服务端 LQ_TEST_NAV=1 下发,比赛构建恒 false)。 */
   testNavigation: boolean;
-  stageJump: StageJump | null;
-  requestStageJump: (jump: StageJump) => void;
-  consumeStageJump: () => void;
   config: LoadedConfig;
   runtime: AppRuntime;
   session: StudentSession;

@@ -110,6 +110,7 @@ describe('M2 draft and render resilience', () => {
   });
 
   it('keeps the app usable and asks for export when local persistence fails', async () => {
+    const user = userEvent.setup();
     const values = new Map<string, string>();
     Object.defineProperty(window, 'localStorage', {
       configurable: true,
@@ -126,6 +127,7 @@ describe('M2 draft and render resilience', () => {
 
     render(<App initialConfig={config} />);
 
+    await user.click(await screen.findByRole('button', { name: '课程与会话工具' }));
     expect(await screen.findByText('本地保存失败，请导出会话。')).toHaveAttribute('role', 'alert');
     expect(screen.getByRole('button', { name: '导出会话 JSON' })).toBeInTheDocument();
   });
@@ -160,10 +162,12 @@ describe('M2 draft and render resilience', () => {
     new LocalSessionStore(window.localStorage).save(historical);
 
     const first = render(<App initialConfig={config} />);
+    await user.click(await screen.findByRole('button', { name: '课程与会话工具' }));
     expect(await screen.findByLabelText('历史会话')).toHaveValue(historical.id);
     first.unmount();
 
     render(<App initialConfig={config} />);
+    await user.click(await screen.findByRole('button', { name: '课程与会话工具' }));
     expect(await screen.findByLabelText('历史会话')).toHaveValue(historical.id);
     await user.click(screen.getByRole('button', { name: '导出历史会话' }));
 

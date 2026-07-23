@@ -1,31 +1,20 @@
-import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
-import {
-  BrowserRouter,
-  Navigate,
-  Route,
-  Routes,
-} from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { BrowserRouter } from 'react-router-dom';
 
 import type { LoadedConfig } from '../shared/config/schemas';
+import { AppRoutes } from './app/AppRoutes';
 import { AppContext } from './app/AppContext';
 import { AppErrorBoundary } from './app/AppErrorBoundary';
-import { AppShell } from './app/AppShell';
 import { savePretestDraft } from './features/pretest/draft';
 import { saveDemoTrainingStart } from './features/training/draft';
-import type { StageJump } from './app/AppContext';
+import {
+  readStageProgress,
+  writeStageProgress,
+  type StageProgress,
+} from './persistence/stage-progress';
+import { getWorkspaceStorage } from './persistence/workspace-storage';
 import { defaultRuntime, type AppRuntime, type LLMExecutionMode } from './runtime/api';
 import { useLocalSession } from './session/useLocalSession';
-
-const PretestPage = lazy(async () => {
-  const module = await import('./features/pretest/PretestPage');
-  return { default: module.PretestPage };
-});
-const TrainingPage = lazy(async () => {
-  const module = await import('./features/training/TrainingPage');
-  return { default: module.TrainingPage };
-});
-const TeacherPage = lazy(() => import('./features/teacher/TeacherPage'));
-const ModelPage = lazy(() => import('./features/model/ModelPage'));
 
 const demoPreviousModeKey = 'luminous-quest:demo.v1:previous-mode';
 type DemoActivation = Awaited<ReturnType<NonNullable<AppRuntime['activateDemo']>>>;
@@ -46,32 +35,24 @@ function ConfiguredApp({ config, runtime }: { config: LoadedConfig; runtime: App
     persistenceError,
     historicalSessions,
   } = useLocalSession(config);
-  const pretestProgressKey = `luminous-quest:pretest-complete.v1:${session.id}`;
-  const trainingProgressKey = `luminous-quest:training-complete.v1:${session.id}`;
-  const readProgress = (key: string) => {
-    try {
-      return window.localStorage.getItem(key) === 'true';
-    } catch {
-      return false;
-    }
-  };
-  const [pretestComplete, setStoredPretestComplete] = useState(() => readProgress(pretestProgressKey));
-  const [trainingComplete, setStoredTrainingComplete] = useState(() => readProgress(trainingProgressKey));
+  const workspaceStorage = useMemo(() => getWorkspaceStorage(), []);
+  const [progress, setProgress] = useState<StageProgress>(() =>
+    readStageProgress(workspaceStorage, session.id));
+  const { pretestComplete, trainingComplete } = progress;
   const [executionMode, setExecutionModeState] = useState<LLMExecutionMode>('development');
   const [testNavigation, setTestNavigation] = useState(false);
-  const [stageJump, setStageJump] = useState<StageJump | null>(null);
   const [demoModePending, setDemoModePending] = useState(false);
   const [demoModeError, setDemoModeError] = useState<string | null>(null);
   const previousMode = useRef<LLMExecutionMode>('development');
   const previousSession = useRef<typeof session | null>(null);
 
   const saveDemoPageState = (activated: DemoActivation) => {
-    savePretestDraft(window.localStorage, activated.session.id, {
+    savePretestDraft(workspaceStorage, activated.session.id, {
       step: config.pretest.questions.length + 1,
       builder: { components: [], connections: [] },
       answers: {},
     });
-    saveDemoTrainingStart(window.localStorage, activated.session.id, activated.uiState.training);
+    saveDemoTrainingStart(workspaceStorage, activated.session.id, activated.uiState.training);
   };
 
   useEffect(() => {
@@ -86,7 +67,7 @@ function ConfiguredApp({ config, runtime }: { config: LoadedConfig; runtime: App
         }
         previousSession.current = session;
         try {
-          const persistedMode = window.localStorage.getItem(demoPreviousModeKey);
+          const persistedMode = workspaceStorage.getItem(demoPreviousModeKey);
           previousMode.current = persistedMode === 'live' || persistedMode === 'development'
             ? persistedMode
             : 'development';
@@ -97,12 +78,7 @@ function ConfiguredApp({ config, runtime }: { config: LoadedConfig; runtime: App
         if (!active) return;
         try {
           saveDemoPageState(activated);
-          const pretestKey = `luminous-quest:pretest-complete.v1:${activated.session.id}`;
-          const trainingKey = `luminous-quest:training-complete.v1:${activated.session.id}`;
-          if (activated.progress.pretestComplete) window.localStorage.setItem(pretestKey, 'true');
-          else window.localStorage.removeItem(pretestKey);
-          if (activated.progress.trainingComplete) window.localStorage.setItem(trainingKey, 'true');
-          else window.localStorage.removeItem(trainingKey);
+          writeStageProgress(workspaceStorage, activated.session.id, activated.progress);
         } catch {
           // The versioned server state still initializes the in-memory demo session.
         }
@@ -111,35 +87,43 @@ function ConfiguredApp({ config, runtime }: { config: LoadedConfig; runtime: App
       })
       .catch(() => undefined);
     return () => { active = false; };
-  }, [runtime]);
+  }, [runtime, workspaceStorage]);
 
   useEffect(() => {
-    setStoredPretestComplete(readProgress(pretestProgressKey));
-  }, [pretestProgressKey]);
+    setProgress(readStageProgress(workspaceStorage, session.id));
+  }, [session.id, workspaceStorage]);
 
-  useEffect(() => {
-    setStoredTrainingComplete(readProgress(trainingProgressKey));
-  }, [trainingProgressKey]);
+  useEffect(() => workspaceStorage.subscribe(() => {
+    setProgress(readStageProgress(workspaceStorage, session.id));
+  }), [session.id, workspaceStorage]);
+
+  const updateProgress = useCallback((update: Partial<Pick<
+    StageProgress,
+    'pretestComplete' | 'trainingComplete'
+  >>) => {
+    try {
+      const current = readStageProgress(workspaceStorage, session.id);
+      const next = { ...current, ...update };
+      if (
+        next.pretestComplete === current.pretestComplete
+        && next.trainingComplete === current.trainingComplete
+      ) {
+        return;
+      }
+      writeStageProgress(workspaceStorage, session.id, next);
+      setProgress(next);
+    } catch {
+      // Session persistence already exposes the primary storage failure state.
+    }
+  }, [session.id, workspaceStorage]);
 
   const setPretestComplete = useCallback((complete: boolean) => {
-    setStoredPretestComplete(complete);
-    try {
-      if (complete) window.localStorage.setItem(pretestProgressKey, 'true');
-      else window.localStorage.removeItem(pretestProgressKey);
-    } catch {
-      // Session persistence already exposes the primary storage failure state.
-    }
-  }, [pretestProgressKey]);
+    updateProgress({ pretestComplete: complete });
+  }, [updateProgress]);
 
   const setTrainingComplete = useCallback((complete: boolean) => {
-    setStoredTrainingComplete(complete);
-    try {
-      if (complete) window.localStorage.setItem(trainingProgressKey, 'true');
-      else window.localStorage.removeItem(trainingProgressKey);
-    } catch {
-      // Session persistence already exposes the primary storage failure state.
-    }
-  }, [trainingProgressKey]);
+    updateProgress({ trainingComplete: complete });
+  }, [updateProgress]);
 
   const toggleDemoMode = useCallback(async () => {
     setDemoModePending(true);
@@ -155,7 +139,7 @@ function ConfiguredApp({ config, runtime }: { config: LoadedConfig; runtime: App
           previousSession.current = null;
         }
         try {
-          window.localStorage.removeItem(demoPreviousModeKey);
+          workspaceStorage.removeItem(demoPreviousModeKey);
         } catch {
           // The server mode and in-memory session still restore correctly.
         }
@@ -165,7 +149,7 @@ function ConfiguredApp({ config, runtime }: { config: LoadedConfig; runtime: App
       previousMode.current = executionMode;
       previousSession.current = session;
       try {
-        window.localStorage.setItem(demoPreviousModeKey, executionMode);
+        workspaceStorage.setItem(demoPreviousModeKey, executionMode);
       } catch {
         // In-memory refs preserve the same-tab exit path.
       }
@@ -173,12 +157,7 @@ function ConfiguredApp({ config, runtime }: { config: LoadedConfig; runtime: App
       const activated = await runtime.activateDemo();
       try {
         saveDemoPageState(activated);
-        const pretestKey = `luminous-quest:pretest-complete.v1:${activated.session.id}`;
-        const trainingKey = `luminous-quest:training-complete.v1:${activated.session.id}`;
-        if (activated.progress.pretestComplete) window.localStorage.setItem(pretestKey, 'true');
-        else window.localStorage.removeItem(pretestKey);
-        if (activated.progress.trainingComplete) window.localStorage.setItem(trainingKey, 'true');
-        else window.localStorage.removeItem(trainingKey);
+        writeStageProgress(workspaceStorage, activated.session.id, activated.progress);
       } catch {
         // The in-memory demo remains usable when browser persistence is unavailable.
       }
@@ -193,7 +172,7 @@ function ConfiguredApp({ config, runtime }: { config: LoadedConfig; runtime: App
     } finally {
       setDemoModePending(false);
     }
-  }, [executionMode, runtime, session, setSession, setTransientSession]);
+  }, [executionMode, runtime, session, setSession, setTransientSession, workspaceStorage]);
 
   return (
     <AppContext.Provider value={{
@@ -212,26 +191,10 @@ function ConfiguredApp({ config, runtime }: { config: LoadedConfig; runtime: App
       demoModeError,
       toggleDemoMode,
       testNavigation,
-      stageJump,
-      requestStageJump: setStageJump,
-      consumeStageJump: () => setStageJump(null),
     }}>
       <AppErrorBoundary session={session} onReset={resetSession}>
         <BrowserRouter>
-          <Routes>
-          <Route element={<AppShell />}>
-            <Route index element={<Navigate replace to="/pretest" />} />
-            <Route path="pretest" element={<PretestPage />} />
-            <Route path="training" element={<TrainingPage />} />
-            <Route path="model" element={(
-              <Suspense fallback={<div className="stage-dark model-stage model-stage--on" aria-busy="true"><p style={{ padding: 'var(--space-6)', opacity: 0.6 }}>正在点亮舞台…</p></div>}>
-                <ModelPage />
-              </Suspense>
-            )} />
-            <Route path="teacher" element={<TeacherPage />} />
-            <Route path="*" element={<Navigate replace to="/pretest" />} />
-          </Route>
-          </Routes>
+          <AppRoutes />
         </BrowserRouter>
       </AppErrorBoundary>
     </AppContext.Provider>

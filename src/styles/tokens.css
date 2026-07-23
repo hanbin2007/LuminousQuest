@@ -1,50 +1,86 @@
 /**
- * LuminousQuest 设计 Token(权威来源,由 Fable 5 制定与维护)
- * 全部 UI 颜色/字体/间距/动效从此文件取值;组件内禁止硬编码色值。
- * 亮态 = 「新教辅」纸面;暗态仅用于模块三 3D 舞台(.stage-dark 作用域)。
+ * LuminousQuest light theme tokens.
+ * The values mirror the Claude Design "浅色" tweak while preserving the
+ * semantic aliases used by the existing feature screens during migration.
  */
 
 :root {
-  /* ---- 纸面与墨色 ---- */
-  --paper: #f7f8f5;            /* 页面底:冷调纸白 */
-  --paper-raised: #ffffff;     /* 卡片面 */
-  --paper-sunken: #eef0ec;     /* 输入区/画布底 */
-  --ink: #1f262b;              /* 正文与描边 */
-  --ink-soft: #4b565e;         /* 次要文字 */
-  --ink-faint: #8a959c;        /* 辅助说明/占位 */
-  --hairline: #d8dcd6;         /* 分隔线 */
+  color-scheme: light;
 
-  /* ---- 三维度色(唯一强色系统,源自校徽) ---- */
-  --dim-device: #2b5ca8;       /* 装置维度 = 校深蓝 */
-  --dim-device-soft: #dee9f9;
-  --dim-principle: #2cb8b8;    /* 原理维度 = 校青 */
-  --dim-principle-soft: #dff3f2;
-  --dim-energy: #e8960c;       /* 能量维度 = 琥珀 */
-  --dim-energy-soft: #fbebd2;
+  /* Claude Design light surfaces */
+  --page-solid: #dfe2e6;
+  --screen-a: #f1f2f4;
+  --screen-b: #e5e7ea;
+  --panel-a: #fdfdfe;
+  --panel-b: #f2f3f6;
+  --panel-c: #f8f9fb;
+  --panel2-a: #f6f7f9;
+  --panel2-b: #eceef2;
+  --stage-a: #dde8eb;
+  --stage-b: #eceff1;
+  --card: #ffffff;
+  --card2: #ffffff;
+  --bubble: #ffffff;
+  --bubble-user: rgba(18, 18, 24, 0.09);
+  --input: #f2f3f6;
+  --topbar: rgba(255, 255, 255, 0.72);
 
-  /* ---- 批注色(AI 反馈 = 老师批改的视觉语言) ---- */
-  --annotate-red: #c2453a;     /* 红笔:错因批注 */
-  --annotate-red-soft: #f9e7e5;
-  --annotate-blue: #3a63c2;    /* 蓝笔:启发式追问 */
-  --annotate-blue-soft: #e7edf9;
+  /* Text and edges */
+  --text-primary: #17171a;
+  --text-strong: #26262b;
+  --text-secondary: rgba(18, 18, 24, 0.72);
+  --text-tertiary: rgba(18, 18, 24, 0.52);
+  --text-muted: rgba(18, 18, 24, 0.38);
+  --line-strong: rgba(18, 18, 24, 0.18);
+  --line-soft: rgba(18, 18, 24, 0.12);
+  --line-emphasis: rgba(18, 18, 24, 0.26);
+  --edge-a: rgba(18, 18, 24, 0.12);
+  --edge-b: rgba(18, 18, 24, 0.2);
+  --edge-c: rgba(18, 18, 24, 0.26);
+  --edge-gradient: linear-gradient(180deg, var(--edge-a), var(--edge-b) 40%, var(--edge-c));
+  --dot-grid: rgba(18, 18, 24, 0.08);
+  --surface-sheen: rgba(255, 255, 255, 0.8);
 
-  /* ---- 状态色 ---- */
-  --status-hit: #2f8a4c;       /* 掌握(用于对勾/边框,不做大面积填充) */
-  --status-hit-soft: #e3f2e8;
+  /* The imported light preview is set to the blue accent tweak. */
+  --accent: #7aa7ff;
+  --accent-ink: #0f326e;
+  --accent-soft: rgba(122, 167, 255, 0.18);
+  --accent-faint: rgba(122, 167, 255, 0.1);
+  --danger: #d8402f;
+  --link: #0c7d75;
+
+  /* Existing semantic aliases, retained while screens are migrated. */
+  --paper: var(--screen-b);
+  --paper-raised: var(--card);
+  --paper-sunken: var(--input);
+  --ink: var(--text-primary);
+  --ink-soft: var(--text-secondary);
+  --ink-faint: var(--text-tertiary);
+  --hairline: var(--line-soft);
+  --dim-device: var(--accent);
+  --dim-device-soft: var(--accent-soft);
+  --dim-principle: #0c8f86;
+  --dim-principle-soft: rgba(12, 143, 134, 0.12);
+  --dim-energy: #c67a00;
+  --dim-energy-soft: rgba(198, 122, 0, 0.12);
+  --annotate-red: var(--danger);
+  --annotate-red-soft: rgba(216, 64, 47, 0.1);
+  --annotate-blue: #426fca;
+  --annotate-blue-soft: rgba(66, 111, 202, 0.1);
+  --status-hit: #218653;
+  --status-hit-soft: rgba(33, 134, 83, 0.1);
   --status-partial: var(--dim-energy);
-  --status-miss: var(--annotate-red);
-  --status-unassessed: #aab4ba; /* 未测到:灰,和 miss 严格区分 */
+  --status-miss: var(--danger);
+  --status-unassessed: rgba(18, 18, 24, 0.34);
+  --eflow: var(--accent);
+  --eflow-track: var(--line-soft);
+  --brand-teal: var(--accent);
+  --amber: var(--dim-energy);
 
-  /* ---- 电子流母题(校青的流动形态) ---- */
-  --eflow: var(--dim-principle);
-  --eflow-track: #cfe9e8;      /* 流动轨道底色 */
-
-  /* ---- 字体 ---- */
-  --font-display: "Source Han Serif SC", "Noto Serif SC", "Songti SC", serif; /* 本地文件源为 Noto Serif SC,以兼容别名用于模块标题 */
-  --font-body: -apple-system, "PingFang SC", "HarmonyOS Sans SC", "Microsoft YaHei", "Noto Sans SC", sans-serif;
-  --font-mono: "SF Mono", "JetBrains Mono", ui-monospace, monospace; /* 分数/坐标/数据 */
-
-  /* 字号阶梯(基准 16) */
+  /* Typography */
+  --font-display: Inter, "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-body: Inter, "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-mono: "SFMono-Regular", "SF Mono", "JetBrains Mono", ui-monospace, monospace;
   --text-xs: 0.75rem;
   --text-sm: 0.875rem;
   --text-base: 1rem;
@@ -52,53 +88,59 @@
   --text-xl: 1.4375rem;
   --text-2xl: 1.75rem;
   --text-display: 2.25rem;
-
-  --leading-body: 1.75;        /* 中文正文行高要松 */
+  --leading-body: 1.75;
   --leading-tight: 1.3;
 
-  /* ---- 几何 ---- */
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 16px;
+  /* Geometry: sharp, cut, or perfectly circular. */
+  --radius-sm: 0;
+  --radius-md: 0;
+  --radius-lg: 0;
   --radius-pill: 999px;
-  --space-1: 4px;  --space-2: 8px;  --space-3: 12px; --space-4: 16px;
-  --space-5: 24px; --space-6: 32px; --space-7: 48px; --space-8: 64px;
-  --content-max: 1200px;
+  --cut-sm: 10px;
+  --cut-md: 16px;
+  --cut-lg: 24px;
+  --cut-panel: polygon(var(--cut-lg) 0, 100% 0, 100% 100%, 0 100%, 0 var(--cut-lg));
+  --cut-control: polygon(var(--cut-sm) 0, 100% 0, 100% 100%, 0 100%, 0 var(--cut-sm));
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+  --content-max: 1194px;
 
-  /* 阴影:纸上薄影,禁大面积弥散 */
-  --shadow-card: 0 1px 3px rgba(31, 38, 43, 0.08), 0 1px 2px rgba(31, 38, 43, 0.04);
-  --shadow-pop: 0 4px 16px rgba(31, 38, 43, 0.12);
+  /* Depth from the light tweak */
+  --shadow-card: 0 14px 30px rgba(35, 40, 60, 0.2);
+  --shadow-pop: 0 22px 44px rgba(35, 40, 60, 0.28);
 
-  /* ---- 动效 ---- */
+  /* Motion */
   --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
-  --dur-fast: 150ms;           /* hover/按压 */
-  --dur-press: 120ms;          /* 按压反馈(比 hover 更利落) */
-  --dur-enter: 220ms;          /* 小型浮层/文本进场 */
-  --dur-base: 250ms;           /* 面板/状态切换 */
-  --dur-panel: 420ms;          /* 大面板 materialize */
-  --dur-eflow-answer: 600ms;   /* 模块二训练答题反馈 */
+  --dur-fast: 150ms;
+  --dur-press: 120ms;
+  --dur-enter: 220ms;
+  --dur-base: 250ms;
+  --dur-panel: 420ms;
+  --dur-eflow-answer: 600ms;
   --delay-eflow-answer: 150ms;
-  --dur-eflow-complete: 2000ms;/* 完成步骤后的电子流,只运行一次 */
-  --dur-stage: 900ms;          /* 全项目唯一的大动效:关灯时刻 */
-
-  /* 焦点环(键盘可达性) */
-  --focus-ring: 0 0 0 3px rgba(44, 184, 184, 0.45);
+  --dur-eflow-complete: 2000ms;
+  --dur-stage: 900ms;
+  --focus-ring: 0 0 0 3px rgba(122, 167, 255, 0.38);
 }
 
-/* ---- 暗态 3D 舞台(仅模块三,校深蓝的夜色) ---- */
 .stage-dark {
   --stage-bg: #0a1526;
   --stage-fog: #101f38;
-  --glow-device: #5b8de8;      /* 三维度色的发光态 */
+  --glow-device: #7aa7ff;
   --glow-principle: #3fe0d8;
   --glow-energy: #ffb84d;
-  --glow-unlit: #2a3a52;       /* 未点亮节点:暗玻璃 */
+  --glow-unlit: #2a3a52;
   --stage-text: #d7e2ef;
   color: var(--stage-text);
   background: var(--stage-bg);
 }
 
-/* ---- 降级动效偏好 ---- */
 @media (prefers-reduced-motion: reduce) {
   :root {
     --dur-fast: 0ms;

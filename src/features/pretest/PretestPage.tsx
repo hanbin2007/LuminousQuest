@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 import { recordBuilderAssessment } from '../../../shared/workflows/engine-assessment';
 import { appendSessionEvent } from '../../../shared/session/session';
 import type { StudentSession } from '../../../shared/session/schema';
 import { useAppContext } from '../../app/AppContext';
+import { pretestStepPath, resolvePretestStep } from '../../app/route-config';
+import { getWorkspaceStorage } from '../../persistence/workspace-storage';
 import type { BuilderAnswer } from '../builder/TopologyBuilder';
 import { TopologyBuilder } from '../builder/TopologyBuilder';
 import { DiagnosisView } from '../diagnosis/DiagnosisView';
@@ -16,13 +19,7 @@ import {
   type PretestDraft,
 } from './draft';
 
-function draftStorage() {
-  try {
-    return window.localStorage;
-  } catch {
-    return null;
-  }
-}
+const pretestTimerSeconds = 45;
 
 function appendUnassessedTextAnswer(
   session: StudentSession,
@@ -45,19 +42,20 @@ function appendUnassessedTextAnswer(
 }
 
 export function PretestPage() {
+  const { pathname } = useLocation();
+  const navigate = useNavigate();
   const {
     config,
     runtime,
     session,
     setSession,
     setPretestComplete,
-    stageJump,
-    consumeStageJump,
   } = useAppContext();
   const [draft, setDraft] = useState<PretestDraft>(() =>
-    loadPretestDraft(draftStorage(), session.id, config.pretest));
+    loadPretestDraft(getWorkspaceStorage(), session.id, config.pretest));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [secondsLeft, setSecondsLeft] = useState(pretestTimerSeconds);
   const submissionIds = useRef(new Map<string, string>());
   const questionCount = config.pretest.questions.length;
   const drawingStep = questionCount + 1;
@@ -68,12 +66,12 @@ export function PretestPage() {
     : null;
 
   useEffect(() => {
-    setDraft(loadPretestDraft(draftStorage(), session.id, config.pretest));
+    setDraft(loadPretestDraft(getWorkspaceStorage(), session.id, config.pretest));
   }, [config.pretest, session.id]);
 
   useEffect(() => {
     try {
-      savePretestDraft(draftStorage(), session.id, draft);
+      savePretestDraft(getWorkspaceStorage(), session.id, draft);
     } catch {
       setError('草稿保存失败，请导出会话。');
     }
@@ -82,20 +80,63 @@ export function PretestPage() {
 
   const stepLabels = useMemo(() => [
     '搭建通用模型',
-    ...config.pretest.questions.map((question, index) => `题目 ${index + 1}`),
+    ...config.pretest.questions.map((_, index) => `题目 ${index + 1}`),
     '手绘彩蛋',
-    '诊断结果',
   ], [config.pretest.questions]);
 
-  const advance = () => setDraft((current) => ({ ...current, step: Math.min(maxStep, current.step + 1) }));
+  const goToStep = (step: number, replace = false) => {
+    const target = Math.max(0, Math.min(maxStep, step));
+    setDraft((current) => current.step === target ? current : { ...current, step: target });
+    navigate(pretestStepPath(config, target), { replace });
+  };
+  const advance = () => goToStep(draft.step + 1);
+  const goPrevious = () => goToStep(draft.step - 1);
+  const skipQuestion = () => {
+    if (!activeQuestion) return;
+    setDraft((current) => {
+      const answers = { ...current.answers };
+      delete answers[activeQuestion.id];
+      return {
+        ...current,
+        answers,
+        step: Math.min(maxStep, current.step + 1),
+      };
+    });
+    navigate(pretestStepPath(config, Math.min(maxStep, draft.step + 1)));
+  };
 
-  // 测试阶段手动跳转:直接落到目标步骤(动画路径与正常推进一致)
+  const submittedQuestionIds = useMemo(() => new Set(
+    session.events
+      .filter((event) => event.kind === 'answer.submitted')
+      .map((event) => event.questionId),
+  ), [session.events]);
+  const stepAnswered = (index: number) => {
+    if (index === 0) return submittedQuestionIds.has('pretest-builder');
+    if (index <= questionCount) {
+      const question = config.pretest.questions[index - 1];
+      return submittedQuestionIds.has(question.id)
+        || Boolean(draft.answers[question.id]?.trim());
+    }
+    return draft.step > drawingStep;
+  };
+
   useEffect(() => {
-    if (stageJump?.module !== 'pretest') return;
-    const target = Math.min(maxStep, Math.max(0, stageJump.step));
-    setDraft((current) => ({ ...current, step: target }));
-    consumeStageJump();
-  }, [stageJump, maxStep, consumeStageJump]);
+    setSecondsLeft(pretestTimerSeconds);
+    if (!activeQuestion) return undefined;
+    const timer = window.setInterval(() => {
+      setSecondsLeft((current) => Math.max(0, current - 1));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [activeQuestion]);
+
+  useEffect(() => {
+    const routeStep = resolvePretestStep(config, pathname);
+    if (pathname === '/pretest' || routeStep === null) {
+      navigate(pretestStepPath(config, draft.step), { replace: true });
+      return;
+    }
+    setDraft((current) => current.step === routeStep ? current : { ...current, step: routeStep });
+  }, [config, navigate, pathname]);
 
   const submitQuestion = async (answer: string) => {
     if (!activeQuestion) return;
@@ -136,25 +177,64 @@ export function PretestPage() {
     }
   };
 
+  const timerText = `${String(Math.floor(secondsLeft / 60)).padStart(2, '0')}:${String(secondsLeft % 60).padStart(2, '0')}`;
+  const timerProgress = `${(secondsLeft / pretestTimerSeconds) * 100}%`;
+
   return (
     <main className={`page-content pretest-page${draft.step === 0 ? ' pretest-page--bench' : ''}`}>
-      <header className="page-heading">
-        <span>模块一</span>
+      <header className="visually-hidden">
         <h1>前测诊断</h1>
       </header>
+      <div className="pretest-timer-track" aria-hidden="true">
+        <span
+          data-low={secondsLeft <= 10 || undefined}
+          style={{ width: timerProgress }}
+        />
+      </div>
+      <time
+        aria-label={`本题剩余时间 ${timerText}`}
+        className="pretest-timer"
+        data-low={secondsLeft <= 10 || undefined}
+      >
+        {timerText}
+      </time>
       <ol className="pretest-steps" aria-label="前测步骤">
-        {stepLabels.map((label, index) => (
-          <li key={label} aria-current={index === draft.step ? 'step' : undefined} data-complete={index < draft.step}>
-            <span>{index + 1}</span>{label}
+        {stepLabels.map((label, index) => {
+          const answered = stepAnswered(index);
+          return (
+          <li
+            key={label}
+            aria-current={index === draft.step ? 'step' : undefined}
+            data-answered={answered || undefined}
+          >
+            <button
+              aria-label={`跳转到${label}，${answered ? '已作答' : '未作答'}`}
+              onClick={() => goToStep(index)}
+              title={`${label} · ${answered ? '已作答' : '未作答'}`}
+              type="button"
+            >
+              {String(index).padStart(2, '0')}
+            </button>
           </li>
-        ))}
+          );
+        })}
       </ol>
 
-      <div className="step-content" key={draft.step}>
+      <div className="pretest-stage">
+      <div
+        className={`step-content step-content--${draft.step === 0
+          ? 'builder'
+          : activeQuestion
+            ? 'question'
+            : draft.step === drawingStep
+              ? 'drawing'
+              : 'diagnosis'}`}
+        key={draft.step}
+      >
       {draft.step === 0 ? (
         <section className="builder-section" aria-labelledby="builder-title">
           <header>
-            <span>通用模型</span>
+            <span>00 / {String(questionCount).padStart(2, '0')} · 通用模型</span>
             <h2 id="builder-title">{config.pretest.builder.prompt}</h2>
           </header>
           <TopologyBuilder
@@ -214,10 +294,14 @@ export function PretestPage() {
             dimension.id === activeQuestion.dimensionId)?.label ?? activeQuestion.dimensionId}
           answer={draft.answers[activeQuestion.id]}
           busy={busy}
+          questionIndex={draft.step}
+          questionTotal={questionCount}
           onAnswerChange={(value) => setDraft((current) => ({
             ...current,
             answers: { ...current.answers, [activeQuestion.id]: value },
           }))}
+          onPrevious={goPrevious}
+          onSkip={skipQuestion}
           onSubmit={submitQuestion}
         />
       ) : null}
@@ -225,11 +309,12 @@ export function PretestPage() {
       {draft.step === drawingStep ? (
         <HandDrawingPanel
           onReview={runtime.reviewDrawing}
-          onFinish={() => setDraft((current) => ({ ...current, step: diagnosisStep }))}
+          onFinish={() => goToStep(diagnosisStep)}
         />
       ) : null}
 
       {draft.step >= diagnosisStep ? <DiagnosisView config={config} session={session} /> : null}
+      </div>
       </div>
       {error ? <p className="form-error" role="alert">{error}</p> : null}
     </main>

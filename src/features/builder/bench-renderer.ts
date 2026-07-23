@@ -33,14 +33,14 @@ export interface BenchScene {
 }
 
 const COLORS = {
-  bg: '#42474d',
-  label: '#e9ecef',
-  labelShadow: 'rgba(0, 0, 0, 0.65)',
-  wireCore: '#6f9ae0',
-  wireOutline: 'rgba(16, 20, 26, 0.9)',
-  wireInsulated: '#4a4f55',
-  clip: '#c9cdd4',
-  select: 'rgba(143, 184, 255, 0.9)',
+  bg: '#e8ecef',
+  label: '#26262b',
+  labelShadow: 'rgba(255, 255, 255, 0.92)',
+  wireCore: '#5d86d8',
+  wireOutline: 'rgba(28, 34, 42, 0.76)',
+  wireInsulated: '#676f78',
+  clip: '#aeb5be',
+  select: 'rgba(122, 167, 255, 0.95)',
   flash: 'rgba(69, 224, 210, 0.85)',
   arrow: { electron: '#8fb8ff', cation: '#ffb84d', anion: '#45e0d2' } as const,
 };
@@ -85,9 +85,9 @@ function drawSprite(
   const image = getImage(url, onReady);
   if (!image) return;
   ctx.save();
-  ctx.shadowColor = 'rgba(0, 0, 0, 0.45)';
-  ctx.shadowBlur = 14;
-  ctx.shadowOffsetY = 8;
+  ctx.shadowColor = 'rgba(35, 40, 60, 0.22)';
+  ctx.shadowBlur = 12;
+  ctx.shadowOffsetY = 6;
   ctx.drawImage(image, component.x, component.y, geometry.width, geometry.height);
   ctx.restore();
 }
@@ -148,8 +148,8 @@ function drawWire(
   }
 
   // 抓握点(与命中层的小圆点同位)
-  ctx.fillStyle = 'rgba(20, 23, 26, 0.85)';
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
+  ctx.fillStyle = 'rgba(38, 43, 50, 0.82)';
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.68)';
   ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.arc(grip.x, grip.y, 9, 0, Math.PI * 2);

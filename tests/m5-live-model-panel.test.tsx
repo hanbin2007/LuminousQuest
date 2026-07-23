@@ -87,7 +87,7 @@ describe('live model split panel', () => {
       />,
     );
 
-    expect(screen.getByRole('heading', { name: '电化学统一认知模型' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '认知模型' })).toBeInTheDocument();
     expect(screen.getByText(/当前环境不支持 3D 渲染/)).toBeInTheDocument();
     expect(screen.getByText(/已点亮 1 \//)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^P4（已掌握/ })).toHaveClass('node-chip--full-lit');
@@ -111,7 +111,7 @@ describe('live model split panel', () => {
     );
 
     const statement = config.knowledgeModel.nodes.find((node) => node.id === 'P4')!.statement;
-    expect(screen.getByText((text) => text.includes('聚焦 P4') && text.includes(statement.slice(0, 8))))
+    expect(screen.getByText((text) => text.includes('P4') && text.includes(statement.slice(0, 8))))
       .toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^P4（/ })).toHaveAttribute('aria-pressed', 'true');
 
@@ -129,7 +129,7 @@ describe('live model split panel', () => {
         onFocus={onFocus}
       />,
     );
-    expect(screen.getByText(/提交作答或点击节点/)).toBeInTheDocument();
+    expect(view.container.querySelector('.live-model__focus')).toBeNull();
   });
 
   it('freezes into a static notice for cold-transfer cases without any light state', async () => {

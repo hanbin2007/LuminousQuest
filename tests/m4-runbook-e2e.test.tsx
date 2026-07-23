@@ -96,6 +96,11 @@ describe('M4.2 competition runbook click path', () => {
     const user = userEvent.setup();
 
     render(<App runtime={defaultRuntime} />);
+    await user.click(await screen.findByRole(
+      'button',
+      { name: '课程与会话工具' },
+      routeTransitionTimeout,
+    ));
     const demoSwitch = await screen.findByRole(
       'switch',
       { name: '演示回放' },
@@ -136,6 +141,7 @@ describe('M4.2 competition runbook click path', () => {
       routeTransitionTimeout,
     )).toBeInTheDocument();
 
+    await user.click(screen.getByRole('button', { name: '课程与会话工具' }));
     await user.click(screen.getByRole('link', { name: '教师视图' }));
     expect(await screen.findByRole(
       'heading',

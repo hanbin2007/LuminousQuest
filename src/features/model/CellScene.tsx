@@ -511,10 +511,17 @@ function DimensionRails({ common }: { common: SceneCommon }) {
         <lineBasicMaterial color={STAGE.text} transparent opacity={0.28} />
       </lineSegments>
       <TextSprite text="原理维度" color={STAGE.glow.principle} position={[PRINCIPLE_RAIL_X, 6.55, 0]} height={0.4} />
-      <TextSprite text="装置维度" color={STAGE.glow.device} position={[5.7, DEVICE_RAIL_Y, 0]} height={0.4} />
+      <TextSprite text="装置维度" color={STAGE.glow.device} position={[5.2, DEVICE_RAIL_Y, 0]} height={0.4} />
       {(() => {
         const tip = energyOrigin.clone().addScaledVector(energyDirection, 4.05);
-        return <TextSprite text="能量维度" color={STAGE.glow.energy} position={[tip.x, tip.y, tip.z]} height={0.4} />;
+        return (
+          <TextSprite
+            text="能量维度"
+            color={STAGE.glow.energy}
+            position={[tip.x + 1.1, tip.y + 0.25, tip.z]}
+            height={0.4}
+          />
+        );
       })()}
       {/* 装置轴四类目刻度:对应 D1–D4,点亮则增亮 */}
       {DEVICE_TICKS.map((tick) => {
@@ -570,7 +577,7 @@ function DimensionRails({ common }: { common: SceneCommon }) {
 }
 
 function CellRig({ reducedMotion }: { reducedMotion: boolean }) {
-  const { camera, gl, invalidate } = useThree();
+  const { camera, gl, invalidate, size } = useThree();
   const state = useRef(createOrbitState({ yaw: 0.42, pitch: 0.22, radius: 12.2 }));
 
   useEffect(
@@ -588,10 +595,15 @@ function CellRig({ reducedMotion }: { reducedMotion: boolean }) {
       ? 0.06 * Math.sin(clock.elapsedTime * 0.24)
       : 0;
     const yaw = current.yaw + sway;
+    const narrowPanelScale = Math.min(
+      2.05,
+      Math.max(1, (size.height / Math.max(size.width, 1)) * 1.42),
+    );
+    const framedRadius = current.radius * narrowPanelScale;
     camera.position.set(
-      current.radius * Math.cos(current.pitch) * Math.sin(yaw),
-      2.3 + current.radius * Math.sin(current.pitch),
-      current.radius * Math.cos(current.pitch) * Math.cos(yaw),
+      framedRadius * Math.cos(current.pitch) * Math.sin(yaw),
+      2.3 + framedRadius * Math.sin(current.pitch),
+      framedRadius * Math.cos(current.pitch) * Math.cos(yaw),
     );
     camera.lookAt(0, 2.3, 0);
   });

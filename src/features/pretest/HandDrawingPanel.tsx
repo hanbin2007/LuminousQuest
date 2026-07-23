@@ -46,7 +46,7 @@ export function HandDrawingPanel({ onReview, onFinish }: HandDrawingPanelProps) 
   };
 
   return (
-    <section className="drawing-panel" aria-labelledby="drawing-title">
+    <section className="drawing-panel ds-frame ds-frame--paper" aria-labelledby="drawing-title">
       <header>
         <div>
           <span>可选彩蛋</span>
