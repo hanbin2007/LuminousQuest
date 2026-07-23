@@ -24,7 +24,9 @@ import { ExtractionValidationError } from '../shared/workflows/extraction-valida
 import { recordPretestEquationAssessments } from '../shared/workflows/pretest-equation-assessment';
 import { loadAllConfig, ConfigValidationError } from './config/loader';
 import { createPublicConfigView } from './config/public-view';
+import { resolveLLMConfiguration } from './llm/configuration';
 import { EvalCandidateStore } from './llm/eval-candidate-store';
+import { LLMHealthMonitor } from './llm/health';
 import { RecordingStore } from './llm/recording-store';
 import { createProviderRegistry } from './llm/providers';
 import { LLMService } from './llm/service';
@@ -285,16 +287,17 @@ function invalidRequest(context: Context, label: string, error: z.ZodError) {
 }
 
 function configuredWorkflow(options: ServerAppOptions, lockDemo: boolean): ServerWorkflowOptions {
-  const requestedMode = lockDemo
-    ? 'demo'
-    : options.workflow?.executionMode ?? process.env.LQ_LLM_EXECUTION_MODE;
-  const executionMode: LLMExecutionMode = requestedMode === 'live' || requestedMode === 'demo'
-    ? requestedMode
-    : 'development';
+  const configured = resolveLLMConfiguration({
+    environment: process.env,
+    lockDemo,
+    ...(options.workflow?.executionMode
+      ? { executionMode: options.workflow.executionMode }
+      : {}),
+    ...(options.workflow?.provider ? { provider: options.workflow.provider } : {}),
+    ...(options.workflow?.model ? { model: options.workflow.model } : {}),
+  });
   return {
-    executionMode,
-    provider: options.workflow?.provider ?? process.env.LQ_LLM_PROVIDER ?? 'mock',
-    model: options.workflow?.model ?? process.env.LQ_LLM_MODEL ?? 'mock-v1',
+    ...configured,
     ...(options.workflow?.extractionStepId
       ? { extractionStepId: options.workflow.extractionStepId }
       : {}),
@@ -326,9 +329,14 @@ export function createServerApp(options: ServerAppOptions) {
   const lockDemo = options.lockDemo ?? demoLockEnabled(process.env.LQ_LOCK_DEMO);
   const workflow = configuredWorkflow(options, lockDemo);
   const startupWorkflow = { ...workflow };
+  const providers = options.providers ?? createProviderRegistry();
   const llmService = new LLMService({
-    providers: options.providers ?? createProviderRegistry(),
+    providers,
     recordings,
+  });
+  const llmHealth = new LLMHealthMonitor({
+    providers,
+    configuration: () => workflow,
   });
 
   if (options.accessToken) {
@@ -380,6 +388,11 @@ export function createServerApp(options: ServerAppOptions) {
       executionMode: workflow.executionMode,
       testNavigation: (options.testNavigation ?? false) && !lockDemo,
     });
+  });
+
+  app.get('/api/llm/health', async (context) => {
+    context.header('cache-control', 'no-store');
+    return context.json(await llmHealth.get());
   });
 
   app.post('/api/runtime/execution-mode', async (context) => {
@@ -466,6 +479,8 @@ export function createServerApp(options: ServerAppOptions) {
       const request: LLMRequest = {
         ...parsed.data,
         executionMode: workflow.executionMode,
+        provider: workflow.provider,
+        model: workflow.model,
         prompt,
         configVersion: config.configVersion,
       };

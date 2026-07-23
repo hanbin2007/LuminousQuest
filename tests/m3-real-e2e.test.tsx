@@ -83,6 +83,9 @@ function assessmentProvider(root: string, requests: LLMRequest[]): LLMProvider {
     async chat() { throw new Error('not used'); },
     async vision() { throw new Error('not used'); },
     async structured(request) {
+      if (request.prompt.id === 'llm-health') {
+        return { content: '{"ok":true}', structured: { ok: true }, model: 'm3-real-e2e.v1' };
+      }
       requests.push(request);
       const input = request.input as {
         answer: string;

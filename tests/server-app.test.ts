@@ -149,10 +149,15 @@ describe('Hono server responsibilities', () => {
     expect(q4Text).not.toHaveProperty('referenceEquations');
   });
 
-  it('provides a no-key mock LLM flow through the proxy route', async () => {
+  it('provides an explicitly selected no-key mock LLM flow through the proxy route', async () => {
     const root = await createTemporaryDirectory();
     await writeValidContentTree(root);
-    const app = createServerApp({ contentRoot: root, clientRoot: path.join(root, 'client'), apiToken });
+    const app = createServerApp({
+      contentRoot: root,
+      clientRoot: path.join(root, 'client'),
+      apiToken,
+      workflow: { executionMode: 'development', provider: 'mock', model: 'mock-v1' },
+    });
 
     const response = await app.request('/api/llm', {
       method: 'POST',
@@ -251,6 +256,11 @@ describe('Hono server responsibilities', () => {
       clientRoot: path.join(root, 'client'),
       apiToken,
       providers: new Map([[provider.id, provider]]),
+      workflow: {
+        executionMode: 'development',
+        provider: provider.id,
+        model: 'capture-v1',
+      },
     });
     const request = (claimedConfigVersion: string) =>
       app.request('/api/llm', {

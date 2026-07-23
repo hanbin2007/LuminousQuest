@@ -74,7 +74,10 @@ describe('M3 tutor fault injection through the training UI', () => {
       id: 'ui-fault-provider',
       async chat() { throw new Error('not used'); },
       async vision() { throw new Error('not used'); },
-      async structured() {
+      async structured(request) {
+        if (request.prompt.id === 'llm-health') {
+          return { content: '{"ok":true}', structured: { ok: true }, model: 'ui-fault.v1' };
+        }
         providerCalls += 1;
         const value = { action: 'answer', content: 'not allowed' };
         return { content: JSON.stringify(value), structured: value, model: 'ui-fault.v1' };

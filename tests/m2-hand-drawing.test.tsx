@@ -43,6 +43,7 @@ describe('hand drawing easter egg', () => {
       contentRoot: process.cwd(),
       clientRoot: path.join(process.cwd(), 'dist', 'client'),
       apiToken,
+      workflow: { executionMode: 'development', provider: 'mock', model: 'mock-v1' },
     });
     const response = await app.request('/api/drawing/review', {
       method: 'POST',

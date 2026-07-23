@@ -63,6 +63,7 @@ describe('M4 LAN mode', () => {
       clientRoot: `${process.cwd()}/dist/client`,
       accessToken: 'lan-secret-token',
       apiToken: 'api-token',
+      workflow: { executionMode: 'development', provider: 'mock', model: 'mock-v1' },
     });
 
     expect((await app.request('/api/runtime')).status).toBe(401);

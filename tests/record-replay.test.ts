@@ -83,6 +83,36 @@ describe('LLM recording and replay', () => {
     expect(calls).toBe(1);
   });
 
+  it('records successful live calls without replaying them on the next request', async () => {
+    const root = await createTemporaryDirectory();
+    let calls = 0;
+    const provider: LLMProvider = {
+      id: 'test',
+      async chat() {
+        calls += 1;
+        return { content: `live answer ${calls}`, model: 'test-v1' };
+      },
+      async vision() { throw new Error('not used'); },
+      async structured() { throw new Error('not used'); },
+    };
+    const store = new RecordingStore(root);
+    const service = new LLMService({
+      providers: new Map([[provider.id, provider]]),
+      recordings: store,
+    });
+    const request = developmentRequest({ executionMode: 'live' });
+
+    const first = await service.execute(request);
+    const second = await service.execute(request);
+
+    expect(first).toMatchObject({ source: 'provider', response: { content: 'live answer 1' } });
+    expect(second).toMatchObject({ source: 'provider', response: { content: 'live answer 2' } });
+    expect(calls).toBe(2);
+    await expect(store.getDevelopment(first.cacheKey)).resolves.toMatchObject({
+      content: 'live answer 2',
+    });
+  });
+
   it('runs the redaction hook before a recording reaches disk', async () => {
     const root = await createTemporaryDirectory();
     const store = new RecordingStore(root);
@@ -202,6 +232,75 @@ describe('LLM recording and replay', () => {
     expect(result).toMatchObject({
       source: 'demo-recording',
       response: { content: 'demo answer' },
+    });
+  });
+
+  it('degrades a failed live structured call to needs-review instead of replaying demo data', async () => {
+    const root = await createTemporaryDirectory();
+    const demoRoot = path.join(root, 'recordings', 'demo');
+    await mkdir(demoRoot, { recursive: true });
+    await writeFile(
+      path.join(root, 'recordings', 'demo-script.json'),
+      JSON.stringify({
+        version: 'demo-script.v2',
+        steps: [{
+          id: 'live-step',
+          recording: 'demo/live-step.json',
+          resourceRefs: [],
+          configVersion: 'config.v1',
+          schemaVersion: 'schema.v1',
+          prompt: { id: 'diagnose', version: 'prompt.v1' },
+        }],
+      }),
+    );
+    const structuredRequest = developmentRequest({
+      executionMode: 'live',
+      capability: 'structured',
+      stepId: 'live-step',
+      schema: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['status'],
+        properties: { status: { type: 'string', const: 'hit' } },
+      },
+    });
+    await writeFile(
+      path.join(demoRoot, 'live-step.json'),
+      JSON.stringify({
+        version: 'llm-recording.v2',
+        recordedAt: '2026-07-15T00:00:00.000Z',
+        metadata: {
+          configVersion: 'config.v1',
+          schemaVersion: 'schema.v1',
+          prompt: { id: 'diagnose', version: 'prompt.v1' },
+        },
+        request: structuredRequest,
+        response: {
+          content: '{"status":"hit"}',
+          structured: { status: 'hit' },
+          model: 'recorded',
+        },
+      }),
+    );
+    const provider: LLMProvider = {
+      id: 'test',
+      async chat() { throw new Error('not used'); },
+      async vision() { throw new Error('not used'); },
+      async structured() { throw new Error('provider offline'); },
+    };
+    const service = new LLMService({
+      providers: new Map([[provider.id, provider]]),
+      recordings: new RecordingStore(root),
+      logger: { error: vi.fn(), warn: vi.fn() },
+    });
+
+    const result = await service.execute(structuredRequest);
+
+    expect(result).toMatchObject({
+      source: 'fallback',
+      degraded: true,
+      requiresTeacherReview: true,
+      response: { structured: { status: 'needs-review' } },
     });
   });
 

@@ -53,7 +53,7 @@ async function stopChild(child: ChildProcess) {
 }
 
 describe('M5 packaged server smoke', () => {
-  it('starts the package-equivalent CJS bundle without loading the external Claude SDK', async () => {
+  it('starts the package-equivalent CJS bundle without letting the client select Claude', async () => {
     const temporary = await mkdtemp(path.join(os.tmpdir(), 'lq-package-smoke-'));
     const serverBundle = path.join(temporary, 'server.cjs');
     await build({
@@ -97,7 +97,7 @@ describe('M5 packaged server smoke', () => {
       const configResponse = await fetch(`http://127.0.0.1:${port}/api/config`);
       const apiToken = configResponse.headers.get('x-lq-api-token');
       expect(apiToken).toBeTruthy();
-      const unavailable = await fetch(`http://127.0.0.1:${port}/api/llm`, {
+      const llmResponse = await fetch(`http://127.0.0.1:${port}/api/llm`, {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
@@ -114,11 +114,13 @@ describe('M5 packaged server smoke', () => {
           images: [],
         }),
       });
-      await expect(unavailable.json()).resolves.toMatchObject({
-        source: 'fallback',
-        failureReason: 'provider-error',
+      await expect(llmResponse.json()).resolves.toMatchObject({
+        response: {
+          content: 'Mock response for chat-system',
+          model: 'mock-v1',
+        },
       });
-      expect(stderr).toMatch(/claude-agent.*unavailable.*zhipu.*demo/isu);
+      expect(stderr).not.toMatch(/claude-agent.*unavailable/isu);
     } catch (error) {
       throw new Error(
         `${(error as Error).message}\nstdout:\n${stdout}\nstderr:\n${stderr}`,

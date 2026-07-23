@@ -634,4 +634,54 @@
   }
 }
 
+/* ==== AppShell provider health badge ==== */
 
+.llm-provider-badge {
+  min-width: 54px;
+  height: 24px;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 8px;
+  border: 1px solid var(--line-soft);
+  clip-path: var(--cut-control);
+  background: rgba(255, 255, 255, 0.58);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+
+.llm-provider-badge > i {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 14%, transparent);
+}
+
+.llm-provider-badge--live {
+  color: #18704c;
+  border-color: rgba(24, 112, 76, 0.28);
+  background: rgba(226, 248, 237, 0.72);
+}
+
+.llm-provider-badge--demo,
+.llm-provider-badge--checking {
+  color: var(--text-tertiary);
+  border-color: var(--line-soft);
+  background: rgba(244, 245, 247, 0.72);
+}
+
+.llm-provider-badge--fault {
+  color: #b42318;
+  border-color: rgba(180, 35, 24, 0.3);
+  background: rgba(255, 235, 232, 0.76);
+}

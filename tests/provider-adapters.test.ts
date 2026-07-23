@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createDeepSeekProvider } from '../server/llm/providers/deepseek';
+import { createModelverseProvider } from '../server/llm/providers/modelverse';
 import { createTongyiProvider } from '../server/llm/providers/tongyi';
 import { createZhipuProvider } from '../server/llm/providers/zhipu';
 import type { LLMRequest } from '../server/llm/types';
@@ -33,6 +34,12 @@ const adapters = [
     id: 'deepseek',
     env: 'DEEPSEEK_BASE_URL',
     create: () => createDeepSeekProvider('secret-key'),
+    supportsVision: false,
+  },
+  {
+    id: 'modelverse',
+    env: 'MODELVERSE_BASE_URL',
+    create: () => createModelverseProvider('secret-key'),
     supportsVision: false,
   },
   {

@@ -385,6 +385,7 @@ describe('production assessment extraction pipeline', () => {
 
     const result = await runAssessmentExtraction({
       ...runInput(parts),
+      executionMode: 'live',
       provider: provider.id,
     });
 

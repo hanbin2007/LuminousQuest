@@ -110,6 +110,9 @@ function faithfulAssessmentProvider(root: string): LLMProvider {
     async chat() { throw new Error('not used'); },
     async vision() { throw new Error('not used'); },
     async structured(request: LLMRequest) {
+      if (request.prompt.id === 'llm-health') {
+        return { content: '{"ok":true}', structured: { ok: true }, model: 'ac2.v1' };
+      }
       if (request.prompt.id !== 'structured-assessment') throw new Error('unexpected prompt');
       const input = request.input as {
         answer: string;

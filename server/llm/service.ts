@@ -134,21 +134,23 @@ export class LLMService {
     }
 
     if (providerResponse) {
-      if (request.executionMode === 'development') {
-        try {
-          await this.options.recordings.saveDevelopment(cacheKey, request, providerResponse);
-        } catch (error) {
-          this.logger.warn(
-            `[llm] cache write failed for ${request.provider}/${request.model}: ${(error as Error).message}`,
-          );
-        }
+      try {
+        await this.options.recordings.saveDevelopment(cacheKey, request, providerResponse);
+      } catch (error) {
+        this.logger.warn(
+          `[llm] cache write failed for ${request.provider}/${request.model}: ${(error as Error).message}`,
+        );
       }
       return this.result('provider', providerResponse, cacheKey);
     }
 
     const validationBlocksReplay = finalError instanceof StructuredResponseValidationError
       && !finalError.retryable;
-    if (request.stepId && !validationBlocksReplay) {
+    if (
+      request.executionMode === 'development'
+      && request.stepId
+      && !validationBlocksReplay
+    ) {
       const demoResponse = await this.options.recordings.getDemo(request.stepId);
       if (demoResponse) {
         try {
