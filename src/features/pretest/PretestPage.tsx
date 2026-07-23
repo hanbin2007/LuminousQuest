@@ -66,10 +66,12 @@ export function PretestPage() {
   } = useAppContext();
   const [draft, setDraft] = useState<PretestDraft>(() =>
     loadPretestDraft(getWorkspaceStorage(), session.id, config.pretest));
+  const [draftSessionId, setDraftSessionId] = useState(session.id);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [secondsLeft, setSecondsLeft] = useState(pretestTimerSeconds);
   const submissionIds = useRef(new Map<string, string>());
+  const loadedSessionId = useRef(session.id);
   const questionCount = config.pretest.questions.length;
   const drawingStep = questionCount + 1;
   const diagnosisStep = questionCount + 2;
@@ -79,17 +81,25 @@ export function PretestPage() {
     : null;
 
   useEffect(() => {
-    setDraft(loadPretestDraft(getWorkspaceStorage(), session.id, config.pretest));
-  }, [config.pretest, session.id]);
+    const sessionChanged = loadedSessionId.current !== session.id;
+    loadedSessionId.current = session.id;
+    const restored = loadPretestDraft(getWorkspaceStorage(), session.id, config.pretest);
+    setDraft(restored);
+    setDraftSessionId(session.id);
+    if (sessionChanged && window.location.pathname.startsWith('/pretest')) {
+      navigate(pretestStepPath(config, restored.step), { replace: true });
+    }
+  }, [config, session.id]);
 
   useEffect(() => {
+    if (draftSessionId !== session.id) return;
     try {
       savePretestDraft(getWorkspaceStorage(), session.id, draft);
     } catch {
       setError('草稿保存失败，请导出会话。');
     }
     setPretestComplete(draft.step >= diagnosisStep);
-  }, [diagnosisStep, draft, session.id, setPretestComplete]);
+  }, [diagnosisStep, draft, draftSessionId, session.id, setPretestComplete]);
 
   const goToStep = (step: number, replace = false) => {
     const target = Math.max(0, Math.min(maxStep, step));
@@ -204,13 +214,15 @@ export function PretestPage() {
   }, [activeTimerKey, timerDuration]);
 
   useEffect(() => {
+    if (draftSessionId !== session.id) return;
     const routeStep = resolvePretestStep(config, pathname);
+    if (window.location.pathname !== pathname) return;
     if (pathname === '/pretest' || routeStep === null) {
       navigate(pretestStepPath(config, draft.step), { replace: true });
       return;
     }
     setDraft((current) => current.step === routeStep ? current : { ...current, step: routeStep });
-  }, [config, navigate, pathname]);
+  }, [config, draftSessionId, navigate, pathname, session.id]);
 
   const submitQuestion = async (answer: string) => {
     if (!activeQuestion) return;
@@ -229,6 +241,7 @@ export function PretestPage() {
     try {
       if (activeQuestion.type === 'choice') {
         const result = await runtime.assessChoice({
+          session,
           sessionId: session.id,
           expectedSequence: sessionServerSequence(session),
           idempotencyKey: submissionId,
@@ -239,6 +252,7 @@ export function PretestPage() {
         if (result.session) setSession(mergeServerSession(session, result.session));
       } else {
         const result = await runtime.extractAssessment({
+          session,
           sessionId: session.id,
           expectedSequence: sessionServerSequence(session),
           idempotencyKey: submissionId,

@@ -14,6 +14,23 @@ export function mergeServerSession(
   const merged = completeIncoming.events.reduce((session, event) => {
     if (knownIds.has(event.id)) return session;
     const { schemaVersion: _schemaVersion, sequence: _sequence, ...input } = event;
+    if (event.kind === 'agent.turn.completed') {
+      const contextEventId = completeIncoming.events[event.contextThroughSequence]?.id;
+      const contextEvent = session.events.find((candidate) => candidate.id === contextEventId);
+      const triggerEvent = session.events.find(
+        (candidate) => candidate.id === event.triggerEventId,
+      );
+      if (!contextEvent || !triggerEvent) {
+        throw new Error(`Cannot rebase agent turn ${event.turnId} onto the local session`);
+      }
+      (input as Extract<
+        SessionEventInput,
+        { kind: 'agent.turn.completed' }
+      >).contextThroughSequence = Math.max(
+        contextEvent.sequence,
+        triggerEvent.sequence,
+      );
+    }
     knownIds.add(event.id);
     return appendSessionEvent(session, input as SessionEventInput);
   }, local);

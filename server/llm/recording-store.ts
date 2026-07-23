@@ -1,5 +1,13 @@
 import { randomUUID } from 'node:crypto';
-import { mkdir, readFile, realpath, rename, stat, unlink, writeFile } from 'node:fs/promises';
+import {
+  mkdir,
+  readFile,
+  realpath,
+  rename,
+  stat,
+  unlink,
+  writeFile,
+} from 'node:fs/promises';
 import path from 'node:path';
 
 import Ajv from 'ajv';
@@ -183,6 +191,18 @@ function recordedCacheKey(recording: Recording) {
   }
 }
 
+async function writeJsonAtomically(file: string, value: unknown) {
+  const temporaryFile = `${file}.${process.pid}.${randomUUID()}.tmp`;
+  await mkdir(path.dirname(file), { recursive: true });
+  try {
+    await writeFile(temporaryFile, `${JSON.stringify(value, null, 2)}\n`, { mode: 0o600 });
+    await rename(temporaryFile, file);
+  } catch (error) {
+    await unlink(temporaryFile).catch(() => undefined);
+    throw error;
+  }
+}
+
 export class RecordingStore {
   private readonly recordingsRoot: string;
   private readonly cacheRoot: string;
@@ -229,6 +249,103 @@ export class RecordingStore {
       await unlink(temporaryFile).catch(() => undefined);
       throw error;
     }
+  }
+
+  async publishAgentDemoRecordings(cacheKeys: readonly string[]) {
+    const uniqueKeys = [...new Set(cacheKeys)];
+    if (uniqueKeys.length === 0) {
+      throw new RecordingValidationError(
+        'recordings/cache',
+        '$',
+        'no agent recordings were selected',
+      );
+    }
+    const selected = await Promise.all(uniqueKeys.map(async (cacheKey) => {
+      if (!/^sha256:[a-f0-9]{64}$/.test(cacheKey)) {
+        throw new RecordingValidationError(
+          path.join('recordings', 'cache'),
+          'cacheKey',
+          `invalid agent requestHash ${cacheKey}`,
+        );
+      }
+      const relativeFile = path.join('recordings', 'cache', `${cacheKey}.json`);
+      const value = await readJson(relativeFile, path.join(this.cacheRoot, `${cacheKey}.json`));
+      if (value === null) {
+        throw new RecordingValidationError(relativeFile, '$', 'recording is missing');
+      }
+      const recording = parseRecording(relativeFile, value);
+      const request = recordedRequest(recording);
+      const requestHash = request?.input
+        && typeof request.input === 'object'
+        && 'requestHash' in request.input
+        && typeof request.input.requestHash === 'string'
+        ? request.input.requestHash
+        : undefined;
+      if (
+        recording.metadata.schemaVersion !== 'agent-turn-trace.v1'
+        || recordedCacheKey(recording) !== cacheKey
+        || requestHash !== cacheKey
+      ) {
+        throw new RecordingValidationError(
+          relativeFile,
+          'cacheKey',
+          'agent recording cacheKey must equal request.input.requestHash',
+        );
+      }
+      if (
+        !request?.schema
+        || typeof request.schema !== 'object'
+        || Array.isArray(request.schema)
+      ) {
+        throw new RecordingValidationError(
+          relativeFile,
+          'request.schema',
+          'agent recording requires its replay schema',
+        );
+      }
+      const digest = cacheKey.slice('sha256:'.length);
+      const fileName = `agent-${digest}.json`;
+      return {
+        cacheKey,
+        recording,
+        fileName,
+        step: {
+          id: `agent-${digest}`,
+          recording: `demo/${fileName}`,
+          resourceRefs: [],
+          configVersion: recording.metadata.configVersion,
+          schemaVersion: recording.metadata.schemaVersion,
+          schema: request.schema,
+          prompt: recording.metadata.prompt,
+        },
+      };
+    }));
+
+    await Promise.all(selected.map(({ fileName, recording }) =>
+      writeJsonAtomically(path.join(this.demoRoot, fileName), recording)));
+
+    const existing = await this.loadDemoScript(false);
+    const selectedKeys = new Set(uniqueKeys);
+    const retainedSteps: DemoScript['steps'] = [];
+    for (const step of existing?.steps ?? []) {
+      const recording = await this.readDemoRecording(step.recording);
+      if (recording && selectedKeys.has(recordedCacheKey(recording) ?? '')) continue;
+      retainedSteps.push(step);
+    }
+    const manifest = demoScriptSchema.parse({
+      version: 'demo-script.v2',
+      steps: [...retainedSteps, ...selected.map((entry) => entry.step)],
+    });
+    await writeJsonAtomically(
+      path.join(this.recordingsRoot, 'demo-script.json'),
+      manifest,
+    );
+    this.validatedManifest = null;
+    return {
+      cacheKeys: uniqueKeys,
+      recordings: selected.map((entry) => entry.step.recording),
+      stepIds: selected.map((entry) => entry.step.id),
+    };
   }
 
   async getDemo(stepId: string): Promise<LLMResponse | null> {

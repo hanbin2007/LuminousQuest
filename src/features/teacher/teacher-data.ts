@@ -217,11 +217,61 @@ export function buildTeacherStudentReport(sessionInput: unknown, config: LoadedC
     }
   });
 
-  const needsReview = session.events.flatMap((event) => {
+  const judgmentById = new Map(session.events.flatMap((event) =>
+    event.kind === 'agent.judgment.recorded' ? [[event.id, event] as const] : []));
+  const judgments = session.events.flatMap((event) => {
+    if (event.kind !== 'agent.judgment.recorded') return [];
+    return [{
+      eventId: event.id,
+      sequence: event.sequence,
+      occurredAt: event.occurredAt,
+      caseId: event.caseId,
+      caseTitle: caseById.get(event.caseId)?.title ?? event.caseId,
+      stageId: event.stageId,
+      turnId: event.turnId,
+      nodeId: event.nodeId,
+      verdict: event.verdict,
+      rationale: event.rationale,
+      basisThroughSequence: event.basisThroughSequence,
+      basisEventIds: event.basisEventIds,
+      supersedesEventId: event.supersedesEventId ?? null,
+    }];
+  });
+  const divergenceRows = session.events.flatMap((event) => {
+    if (event.kind !== 'agent.divergence.changed') return [];
+    const judgment = judgmentById.get(event.judgmentEventId);
+    if (!judgment) return [];
+    return [{
+      eventId: event.id,
+      sequence: event.sequence,
+      occurredAt: event.occurredAt,
+      caseId: event.caseId,
+      caseTitle: caseById.get(event.caseId)?.title ?? event.caseId,
+      stageId: event.stageId,
+      nodeId: judgment.nodeId,
+      judgmentEventId: event.judgmentEventId,
+      shadowAssessmentEventId: event.shadowAssessmentEventId,
+      agentVerdict: event.agentVerdict,
+      shadowVerdict: event.shadowVerdict,
+      status: event.status,
+      comparisonPolicyVersion: event.comparisonPolicyVersion,
+    }];
+  });
+  const latestDivergenceByNode = new Map<string, typeof divergenceRows[number]>();
+  divergenceRows.forEach((event) => latestDivergenceByNode.set(event.nodeId, event));
+  const divergences = divergenceRows.map((event) => ({
+    ...event,
+    unresolved: event.status === 'detected'
+      && latestDivergenceByNode.get(event.nodeId)?.eventId === event.eventId,
+  }));
+  const unresolvedDivergences = divergences.filter((event) => event.unresolved);
+
+  const assessmentNeedsReview = session.events.flatMap((event) => {
     if (event.kind !== 'assessment.completed') return [];
     const reason = assessmentReviewReason(event);
     if (!reason) return [];
     return [{
+      kind: 'assessment' as const,
       sequence: event.sequence,
       occurredAt: event.occurredAt,
       caseId: event.caseId,
@@ -234,6 +284,23 @@ export function buildTeacherStudentReport(sessionInput: unknown, config: LoadedC
       originalAnswer: answerText(session, event.sourceAnswerEventId),
     }];
   });
+  const divergenceNeedsReview = unresolvedDivergences.map((event) => ({
+    kind: 'divergence' as const,
+    sequence: event.sequence,
+    occurredAt: event.occurredAt,
+    caseId: event.caseId,
+    caseTitle: event.caseTitle,
+    stageId: event.stageId,
+    attemptId: judgmentById.get(event.judgmentEventId)?.attemptId ?? '',
+    nodeId: event.nodeId,
+    judgmentEventId: event.judgmentEventId,
+    shadowAssessmentEventId: event.shadowAssessmentEventId,
+    agentVerdict: event.agentVerdict,
+    shadowVerdict: event.shadowVerdict,
+    reason: 'Agent 判断与判分引擎记录不一致。',
+  }));
+  const needsReview = [...assessmentNeedsReview, ...divergenceNeedsReview]
+    .sort((left, right) => left.sequence - right.sequence);
 
   return {
     sessionId: session.id,
@@ -245,6 +312,11 @@ export function buildTeacherStudentReport(sessionInput: unknown, config: LoadedC
     trainingRecords,
     scaffoldTrajectory,
     needsReview,
+    agentAudit: {
+      judgments,
+      divergences,
+      unresolvedCount: unresolvedDivergences.length,
+    },
     profile,
   };
 }

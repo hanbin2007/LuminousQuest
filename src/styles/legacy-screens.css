@@ -8,6 +8,18 @@
   -webkit-backdrop-filter: blur(10px);
 }
 
+.session-sync-alert {
+  position: relative;
+  z-index: 2;
+  width: min(calc(100% - var(--space-6)), var(--content-max));
+  margin: var(--space-3) auto 0;
+  border: 1px solid color-mix(in srgb, var(--amber) 45%, var(--line-soft));
+  padding: 9px 12px;
+  background: var(--paper-raised);
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
 .app-header__inner,
 .session-bar {
   width: min(calc(100% - var(--space-6)), var(--content-max));
@@ -1894,6 +1906,82 @@
   color: var(--ink-soft);
   font-size: var(--text-xs);
   font-weight: 700;
+}
+
+.teacher-agent-audit__disclosure {
+  margin: var(--space-2) 0 0;
+  color: var(--annotate-red);
+  font-size: var(--text-sm);
+  font-weight: 700;
+}
+
+.teacher-agent-audit__list {
+  padding: 0;
+  margin: 0;
+  border-top: 1px solid var(--ink);
+  list-style: none;
+}
+
+.teacher-agent-audit__list li {
+  min-height: 72px;
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--space-4);
+  padding: var(--space-3);
+  border-bottom: 1px solid var(--hairline);
+}
+
+.teacher-agent-audit__list li[data-kind='divergence'] {
+  grid-template-columns: 24px minmax(0, 1fr) auto;
+}
+
+.teacher-agent-audit__list li[data-unresolved='true'] {
+  border-left: 3px solid var(--annotate-red);
+  background: var(--annotate-red-soft);
+}
+
+.teacher-agent-audit__list li > svg {
+  color: var(--annotate-red);
+}
+
+.teacher-agent-audit__list p {
+  margin: var(--space-1) 0;
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+}
+
+.teacher-agent-audit__list small,
+.teacher-agent-audit__list time {
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+.teacher-review-section__status,
+.teacher-review-dot {
+  display: inline-flex;
+  align-items: center;
+}
+
+.teacher-review-section__status {
+  gap: var(--space-3);
+}
+
+.teacher-review-dot {
+  gap: 6px;
+  color: var(--annotate-red);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: 700;
+}
+
+.teacher-review-dot i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--annotate-red);
+  box-shadow: 0 0 0 3px var(--annotate-red-soft);
 }
 
 .teacher-two-column {

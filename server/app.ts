@@ -1,4 +1,4 @@
-import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
+import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
@@ -6,12 +6,25 @@ import { Hono, type Context } from 'hono';
 import { z } from 'zod';
 import type { AgentTurnAdapter } from './agent/adapters/adapter';
 import { createAgentAdapterRegistry } from './agent/adapters/factory';
+import { runAgentLoopTurn } from './agent/loop-runtime';
+import {
+  ResponseContractBindingError,
+  ResponseContractRegistry,
+} from './agent/response-contracts';
+import {
+  ExistingTextShadowAssessment,
+  submitAgentAnswer,
+  type AgentAnswerAssessmentStatus,
+} from './agent/shadow-assessment';
 
 import { type AssistanceMetadata } from '../shared/scoring/rubric';
 import { buildLearnerProfile } from '../shared/scoring/profile';
 import { demoStartStateSchema } from '../shared/demo/start-state';
 import type { AssessmentCompletedEvent } from '../shared/session/schema';
-import { sessionSchema } from '../shared/session/schema';
+import {
+  answerPayloadSchema,
+  sessionSchema,
+} from '../shared/session/schema';
 import { projectStudentSession } from '../shared/session/projections';
 import {
   sessionCommandEnvelopeSchema,
@@ -36,7 +49,7 @@ import { EvalCandidateStore } from './llm/eval-candidate-store';
 import { LLMHealthMonitor } from './llm/health';
 import { RecordingStore } from './llm/recording-store';
 import { createProviderRegistry } from './llm/providers';
-import { LLMService } from './llm/service';
+import { AgentReplayMissingError, LLMService } from './llm/service';
 import type { LLMExecutionMode, LLMProvider, LLMRequest } from './llm/types';
 import { loadPrompt, PromptValidationError } from './prompts/loader';
 import {
@@ -173,11 +186,38 @@ const tutorRouteRequestSchema = routeCommandEnvelopeSchema
   })
   .strict();
 
+const agentTurnRouteRequestSchema = sessionCommandEnvelopeSchema
+  .extend({
+    sessionId: z.string().trim().min(1).max(128),
+    caseId: z.string().trim().min(1).max(128),
+    triggerEventId: z.string().trim().min(1).max(128),
+  })
+  .strict();
+
+const agentAnswerRouteRequestSchema = sessionCommandEnvelopeSchema
+  .extend({
+    sessionId: z.string().trim().min(1).max(128),
+    turnId: z.string().trim().min(1).max(128),
+    answer: answerPayloadSchema,
+  })
+  .strict();
+
 const executionModeRequestSchema = z
   .object({ executionMode: z.enum(['live', 'development', 'demo']) })
   .strict();
 
 const emptyRequestSchema = z.object({}).strict();
+
+interface AgentTurnCommandValue {
+  degraded: boolean;
+  failureCategory?: string;
+}
+
+interface AgentAnswerCommandValue {
+  assessmentStatus: AgentAnswerAssessmentStatus;
+  degraded: boolean;
+  failureCategory?: string;
+}
 
 export interface ServerWorkflowOptions {
   executionMode: LLMExecutionMode;
@@ -387,6 +427,40 @@ function derivedAssistance(
   return rounds === 0 ? { kind: 'none', rounds: 0 } : { kind: 'socratic', rounds };
 }
 
+function stableAgentIdentifier(prefix: string, ...parts: string[]) {
+  return `${prefix}-${createHash('sha256')
+    .update(parts.join('\u0000'))
+    .digest('hex')
+    .slice(0, 32)}`;
+}
+
+function unavailableAgentAdapter(provider: string): AgentTurnAdapter {
+  return {
+    id: provider === 'claude-agent' ? 'claude-agent' : 'openai-compatible',
+    async execute() {
+      throw Object.assign(
+        new Error(`Agent adapter ${provider} is not configured`),
+        { category: 'provider-unavailable' },
+      );
+    },
+  };
+}
+
+function agentRouteFailure(context: Context, error: unknown) {
+  const conflict = sessionCommandConflict(context, error);
+  if (conflict) return conflict;
+  if (error instanceof AgentReplayMissingError) {
+    return context.json({
+      error: 'agent-replay-missing',
+      requestHash: error.requestHash,
+    }, 409);
+  }
+  if (error instanceof ResponseContractBindingError) {
+    return context.json({ error: 'agent-answer-rejected' }, 409);
+  }
+  return null;
+}
+
 export function createServerApp(options: ServerAppOptions) {
   const app = new Hono();
   const apiToken = options.apiToken ?? randomBytes(32).toString('hex');
@@ -400,6 +474,7 @@ export function createServerApp(options: ServerAppOptions) {
   const providers = options.providers ?? createProviderRegistry();
   const agentAdapters = options.agentAdapters
     ?? (options.providers ? new Map<string, AgentTurnAdapter>() : createAgentAdapterRegistry());
+  const responseContracts = new ResponseContractRegistry();
   const llmService = new LLMService({
     providers,
     recordings,
@@ -1131,6 +1206,234 @@ export function createServerApp(options: ServerAppOptions) {
       const detail = error instanceof Error ? error.message : String(error);
       console.error(`[tutor] request failed: ${detail}`);
       return context.json({ error: 'Tutor turn failed' }, 500);
+    }
+  });
+
+  app.post('/api/agent/turn', async (context) => {
+    const requestBody = await readProtectedJson(context, apiToken, maxRequestBodyBytes);
+    if (!requestBody.ok) return requestBody.response;
+    const parsed = agentTurnRouteRequestSchema.safeParse(requestBody.body);
+    if (!parsed.success) return invalidRequest(context, 'agent turn', parsed.error);
+    const existingSession = sessions.get(parsed.data.sessionId);
+    if (!existingSession) return context.json({ error: 'Session not found' }, 404);
+
+    try {
+      const config = await loadAllConfig(options.contentRoot);
+      const trainingCase = config.cases.find((entry) => entry.id === parsed.data.caseId);
+      if (!trainingCase) return context.json({ error: 'Unknown training case' }, 400);
+      const adapter = agentAdapters.get(workflow.provider)
+        ?? unavailableAgentAdapter(workflow.provider);
+      const turnId = stableAgentIdentifier(
+        'agent-turn',
+        parsed.data.sessionId,
+        parsed.data.idempotencyKey,
+      );
+      const occurredAt = new Date(Math.max(
+        workflow.now?.() ?? Date.now(),
+        Date.parse(existingSession.updatedAt),
+      )).toISOString();
+      const command = await executeSessionCommand<AgentTurnCommandValue>({
+        store: sessions,
+        sessionId: parsed.data.sessionId,
+        commandName: 'agent-turn',
+        expectedSequence: parsed.data.expectedSequence,
+        idempotencyKey: parsed.data.idempotencyKey,
+        request: {
+          caseId: parsed.data.caseId,
+          triggerEventId: parsed.data.triggerEventId,
+        },
+        initialize: () => existingSession,
+        async execute(session) {
+          if (session.configVersions.configDigest !== config.configVersion) {
+            throw new SessionPrefixConflictError();
+          }
+          const result = await runAgentLoopTurn({
+            session,
+            config,
+            service: llmService,
+            adapter,
+            responseContracts,
+            executionMode: workflow.executionMode,
+            provider: workflow.provider,
+            model: workflow.model,
+            turnId,
+            triggerEventId: parsed.data.triggerEventId,
+            caseId: trainingCase.id,
+            stageId: trainingCase.caseType === 'transfer' ? 'transfer' : 'training',
+            attemptId: stableAgentIdentifier('agent-attempt', turnId),
+            occurredAt,
+          });
+          return {
+            session: result.session,
+            value: {
+              degraded: result.degraded,
+              failureCategory: result.failureCategory,
+            },
+          };
+        },
+      });
+      const turn = command.session.events.find((event) =>
+        event.kind === 'agent.turn.completed' && event.turnId === turnId);
+      if (!turn || turn.kind !== 'agent.turn.completed') {
+        throw new Error('Agent turn command did not persist its completed turn');
+      }
+      return context.json({
+        status: command.replayed ? 'already-completed' : 'completed',
+        turnId,
+        degraded: turn.source === 'fallback',
+        ...(command.value?.failureCategory
+          ? { failureCategory: command.value.failureCategory }
+          : {}),
+        session: projectStudentSession(command.session),
+      });
+    } catch (error) {
+      const failure = agentRouteFailure(context, error);
+      if (failure) return failure;
+      const detail = error instanceof Error ? error.message : String(error);
+      console.error(`[agent-turn] request failed: ${detail}`);
+      return context.json({ error: 'Agent turn failed' }, 500);
+    }
+  });
+
+  app.post('/api/agent/answer', async (context) => {
+    const requestBody = await readProtectedJson(context, apiToken, maxRequestBodyBytes);
+    if (!requestBody.ok) return requestBody.response;
+    const parsed = agentAnswerRouteRequestSchema.safeParse(requestBody.body);
+    if (!parsed.success) return invalidRequest(context, 'agent answer', parsed.error);
+    const existingSession = sessions.get(parsed.data.sessionId);
+    if (!existingSession) return context.json({ error: 'Session not found' }, 404);
+
+    try {
+      const [config, prompt] = await Promise.all([
+        loadAllConfig(options.contentRoot),
+        loadPrompt(options.contentRoot, 'structured-assessment'),
+      ]);
+      if (!prompt) throw new Error('Required prompt structured-assessment is missing');
+      const responseTurn = existingSession.events.find((event) =>
+        event.kind === 'agent.turn.completed'
+        && event.turnId === parsed.data.turnId);
+      if (!responseTurn || responseTurn.kind !== 'agent.turn.completed') {
+        return context.json({ error: 'agent-answer-rejected' }, 409);
+      }
+      const adapter = agentAdapters.get(workflow.provider)
+        ?? unavailableAgentAdapter(workflow.provider);
+      const nextTurnId = stableAgentIdentifier(
+        'agent-turn',
+        parsed.data.sessionId,
+        `response:${parsed.data.turnId}`,
+      );
+      const occurredAt = new Date(Math.max(
+        workflow.now?.() ?? Date.now(),
+        Date.parse(existingSession.updatedAt),
+      )).toISOString();
+      const command = await executeSessionCommand<AgentAnswerCommandValue>({
+        store: sessions,
+        sessionId: parsed.data.sessionId,
+        commandName: 'agent-answer',
+        expectedSequence: parsed.data.expectedSequence,
+        idempotencyKey: parsed.data.idempotencyKey,
+        request: {
+          turnId: parsed.data.turnId,
+          answer: parsed.data.answer,
+        },
+        initialize: () => existingSession,
+        async execute(session) {
+          if (session.configVersions.configDigest !== config.configVersion) {
+            throw new SessionPrefixConflictError();
+          }
+          const submitted = await submitAgentAnswer({
+            session,
+            config,
+            responseContracts,
+            submission: {
+              turnId: parsed.data.turnId,
+              answer: parsed.data.answer,
+            },
+            occurredAt,
+            textAssessment: new ExistingTextShadowAssessment({
+              service: llmService,
+              evalCandidates,
+              prompt,
+              executionMode: workflow.executionMode,
+              provider: workflow.provider,
+              model: workflow.model,
+              ...(workflow.extractionStepId
+                ? { stepId: workflow.extractionStepId }
+                : {}),
+            }),
+            idFactory: (prefix) => stableAgentIdentifier(
+              prefix,
+              parsed.data.sessionId,
+              parsed.data.turnId,
+            ),
+          });
+          const answerEvent = submitted.session.events.find((event) =>
+            event.kind === 'answer.submitted'
+            && event.responseToAgentTurnId === parsed.data.turnId);
+          if (!answerEvent || answerEvent.kind !== 'answer.submitted') {
+            throw new Error('Agent answer command did not persist its linked answer');
+          }
+          const existingNextTurn = submitted.session.events.find((event) =>
+            event.kind === 'agent.turn.completed'
+            && event.triggerEventId === answerEvent.id);
+          if (existingNextTurn?.kind === 'agent.turn.completed') {
+            return {
+              session: submitted.session,
+              value: {
+                assessmentStatus: submitted.status,
+                degraded: existingNextTurn.source === 'fallback',
+              },
+            };
+          }
+          const result = await runAgentLoopTurn({
+            session: submitted.session,
+            config,
+            service: llmService,
+            adapter,
+            responseContracts,
+            executionMode: workflow.executionMode,
+            provider: workflow.provider,
+            model: workflow.model,
+            turnId: nextTurnId,
+            triggerEventId: answerEvent.id,
+            caseId: responseTurn.caseId,
+            stageId: responseTurn.stageId,
+            attemptId: stableAgentIdentifier('agent-attempt', nextTurnId),
+            occurredAt,
+          });
+          return {
+            session: result.session,
+            value: {
+              assessmentStatus: submitted.status,
+              degraded: result.degraded,
+              failureCategory: result.failureCategory,
+            },
+          };
+        },
+      });
+      const nextTurn = command.session.events.find((event) =>
+        event.kind === 'agent.turn.completed' && event.turnId === nextTurnId);
+      if (!nextTurn || nextTurn.kind !== 'agent.turn.completed') {
+        throw new Error('Agent answer command did not persist its next turn');
+      }
+      return context.json({
+        status: command.replayed ? 'already-recorded' : 'recorded',
+        ...(command.value?.assessmentStatus
+          ? { assessmentStatus: command.value.assessmentStatus }
+          : {}),
+        nextTurnId,
+        degraded: nextTurn.source === 'fallback',
+        ...(command.value?.failureCategory
+          ? { failureCategory: command.value.failureCategory }
+          : {}),
+        session: projectStudentSession(command.session),
+      });
+    } catch (error) {
+      const failure = agentRouteFailure(context, error);
+      if (failure) return failure;
+      const detail = error instanceof Error ? error.message : String(error);
+      console.error(`[agent-answer] request failed: ${detail}`);
+      return context.json({ error: 'Agent answer failed' }, 500);
     }
   });
 

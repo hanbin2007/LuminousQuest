@@ -24,6 +24,7 @@
     "eval:live": "tsx eval/cli.ts --mode live",
     "eval:holdout": "tsx eval/cli.ts --mode holdout",
     "eval:import-candidates": "tsx eval/import-cli.ts",
+    "record:agent-session": "tsx scripts/record-agent-session.ts",
     "package:app": "pnpm run build && node scripts/package.mjs",
     "package:mac-arm64": "pnpm run build && node scripts/package.mjs --mac-arm64"
   },

@@ -39,6 +39,7 @@ import {
   type ScaffoldViewState,
 } from './scaffold-adapter';
 import { latestAgentFocus } from '../model/agent-focus';
+import { AgentChat } from './AgentChat';
 import { LiveModelPanel } from './LiveModelPanel';
 import { mediumLabel, visibleCaseMaterials } from './materials';
 import { TransferRadarComparison } from './TransferRadarComparison';
@@ -610,6 +611,24 @@ export function TrainingPage() {
   const [focusNodeId, setFocusNodeId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const submissionIds = useRef(new Map<string, string>());
+  const sessionRef = useRef(session);
+  const agentCommandPending = useRef(false);
+  const agentIdleWaiters = useRef(new Set<() => void>());
+  sessionRef.current = session;
+
+  const handleAgentCommandPending = (pending: boolean) => {
+    agentCommandPending.current = pending;
+    if (pending) return;
+    agentIdleWaiters.current.forEach((resolve) => resolve());
+    agentIdleWaiters.current.clear();
+  };
+
+  const waitForAgentIdle = () => {
+    if (!agentCommandPending.current) return Promise.resolve();
+    return new Promise<void>((resolve) => {
+      agentIdleWaiters.current.add(resolve);
+    });
+  };
 
   // agent 的 focus_node 非权威聚焦:新提示到达才应用一次,学生点选可随时覆盖
   const agentFocus = useMemo(() => latestAgentFocus(session), [session]);
@@ -698,17 +717,19 @@ export function TrainingPage() {
     setBusy(true);
     setError(null);
     setTutorNotes({});
-    let merged = session;
     const attemptIds: string[] = [];
     const narrative = combinedNarrative(draft, trainingCase, draft.currentLevel);
     try {
+      await waitForAgentIdle();
+      let merged = sessionRef.current;
       const answerTargetNodeIds = [...new Set(trainingCase.evidencePaths
         .filter((entry) => entry.source === 'answer')
         .map((entry) => entry.nodeId))];
       const narrativeId = stableSubmissionId(`${trainingCase.id}\0analysis\0${narrative}`);
       attemptIds.push(narrativeId);
       const narrativeResult = await runtime.extractAssessment({
-        sessionId: session.id,
+        session: merged,
+        sessionId: merged.id,
         expectedSequence: sessionServerSequence(merged),
         idempotencyKey: narrativeId,
         caseId: trainingCase.id,
@@ -719,6 +740,7 @@ export function TrainingPage() {
       });
       if (narrativeResult.session) {
         merged = mergeServerSession(merged, narrativeResult.session);
+        sessionRef.current = merged;
         setSession(merged);
       }
 
@@ -727,7 +749,8 @@ export function TrainingPage() {
         const equationId = stableSubmissionId(`${trainingCase.id}\0${equation.id}\0${value}`);
         attemptIds.push(equationId);
         const equationResult = await runtime.assessEquation({
-          sessionId: session.id,
+          session: merged,
+          sessionId: merged.id,
           expectedSequence: sessionServerSequence(merged),
           idempotencyKey: equationId,
           caseId: trainingCase.id,
@@ -737,6 +760,7 @@ export function TrainingPage() {
         });
         if (equationResult.session) {
           merged = mergeServerSession(merged, equationResult.session);
+          sessionRef.current = merged;
           setSession(merged);
         }
       }
@@ -776,9 +800,11 @@ export function TrainingPage() {
     }
   };
 
-  const nextCase = () => {
+  const nextCase = async () => {
     const next = cases[activeIndex + 1];
     if (!next || !round || !round.casePass.passed) return;
+    setBusy(true);
+    if (agentCommandPending.current) await waitForAgentIdle();
     const nextLevel = next.caseType === 'transfer'
       ? 3
       : round.transition?.level ?? draft.currentLevel;
@@ -792,6 +818,7 @@ export function TrainingPage() {
     setTutorNotes({});
     setFocusNodeId(null);
     setError(null);
+    setBusy(false);
   };
 
   const askTutor = async (nodeId: string) => {
@@ -799,14 +826,21 @@ export function TrainingPage() {
     setFocusNodeId(nodeId);
     setError(null);
     try {
+      await waitForAgentIdle();
+      const currentSession = sessionRef.current;
       const result = await runtime.tutorTurn({
-        sessionId: session.id,
-        expectedSequence: sessionServerSequence(session),
-        idempotencyKey: `tutor:${nodeId}:${sessionServerSequence(session)}`,
+        session: currentSession,
+        sessionId: currentSession.id,
+        expectedSequence: sessionServerSequence(currentSession),
+        idempotencyKey: `tutor:${nodeId}:${sessionServerSequence(currentSession)}`,
         nodeId,
         studentAnswer: combinedNarrative(draft, trainingCase, draft.currentLevel),
       });
-      setSession((current) => mergeServerSession(current, result.session));
+      setSession((current) => {
+        const merged = mergeServerSession(current, result.session);
+        sessionRef.current = merged;
+        return merged;
+      });
       if (result.status === 'respond') {
         setTutorNotes((current) => ({
           ...current,
@@ -872,6 +906,7 @@ export function TrainingPage() {
     && Boolean(round?.casePass.passed)
     && completedTrainingCount === cases.filter((entry) => entry.caseType === 'training').length;
   const tutorNodeIds = new Set(trainingCase.tutoring.map((entry) => entry.nodeId));
+  const interactionBusy = busy;
 
   return (
     <main className="training-page training-page--split">
@@ -887,7 +922,7 @@ export function TrainingPage() {
           trainingCase={trainingCase}
           draft={draft}
           level={draft.currentLevel}
-          busy={busy}
+          busy={interactionBusy}
           onAnswer={updateAnswer}
           onEquation={updateEquation}
           onSubmit={submitCase}
@@ -982,7 +1017,7 @@ export function TrainingPage() {
             </div>
           ) : null}
           {next && round.casePass.passed ? (
-            <button className="primary-button training-next" type="button" onClick={nextCase}>
+            <button className="primary-button training-next" type="button" onClick={() => void nextCase()}>
               进入下一案例<ArrowRight aria-hidden="true" />
             </button>
           ) : null}
@@ -991,6 +1026,19 @@ export function TrainingPage() {
       </div>
 
       <aside className="training-stage-rail">
+        <AgentChat
+          config={config}
+          runtime={runtime}
+          session={session}
+          trainingCase={trainingCase}
+          suspended={busy}
+          onCommandPendingChange={handleAgentCommandPending}
+          onSession={(incoming) => {
+            const merged = mergeServerSession(sessionRef.current, incoming);
+            sessionRef.current = merged;
+            setSession(merged);
+          }}
+        />
         <LiveModelPanel
           session={session}
           config={config}

@@ -8,6 +8,7 @@
 @import './styles/pretest-screen.css' layer(screens);
 @import './styles/glass-lab.css' layer(screens);
 @import './styles/agent-activity.css' layer(screens);
+@import './styles/agent-chat.css' layer(screens);
 @import './styles/primitives.css' layer(design-system);
 @import 'tw-animate-css';
 @import 'shadcn/tailwind.css';

@@ -40,6 +40,7 @@ export function AppShell() {
     config,
     executionMode,
     pretestComplete,
+    sessionSyncError,
     trainingComplete,
   } = useAppContext();
   const [llmHealth, setLLMHealth] = useState<LLMHealth | null>(null);
@@ -132,6 +133,11 @@ export function AppShell() {
           </div>
         </div>
       </header>
+      {sessionSyncError ? (
+        <div className="session-sync-alert" role="alert">
+          {sessionSyncError}
+        </div>
+      ) : null}
       <Suspense fallback={<main className="route-loading" aria-label="页面载入中" />}>
         <Outlet />
       </Suspense>

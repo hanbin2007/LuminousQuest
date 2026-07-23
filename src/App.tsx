@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BrowserRouter } from 'react-router-dom';
 
 import type { LoadedConfig } from '../shared/config/schemas';
+import { sessionServerSequence } from '../shared/session/sync';
 import { createAgentActivityRuntime } from './agent/agent-activity';
 import {
   AgentActivityProvider,
@@ -11,6 +12,7 @@ import { AppRoutes } from './app/AppRoutes';
 import { AppContext } from './app/AppContext';
 import { AppErrorBoundary } from './app/AppErrorBoundary';
 import { savePretestDraft } from './features/pretest/draft';
+import { mergeServerSession } from './features/pretest/session-merge';
 import { saveDemoTrainingStart } from './features/training/draft';
 import {
   readStageProgress,
@@ -18,7 +20,12 @@ import {
   type StageProgress,
 } from './persistence/stage-progress';
 import { getWorkspaceStorage } from './persistence/workspace-storage';
-import { defaultRuntime, type AppRuntime, type LLMExecutionMode } from './runtime/api';
+import {
+  defaultRuntime,
+  RuntimeHttpError,
+  type AppRuntime,
+  type LLMExecutionMode,
+} from './runtime/api';
 import { useLocalSession } from './session/useLocalSession';
 
 const demoPreviousModeKey = 'luminous-quest:demo.v1:previous-mode';
@@ -53,6 +60,9 @@ function ConfiguredApp({ config, runtime: baseRuntime }: { config: LoadedConfig;
   const [testNavigation, setTestNavigation] = useState(false);
   const [demoModePending, setDemoModePending] = useState(false);
   const [demoModeError, setDemoModeError] = useState<string | null>(null);
+  const [sessionSyncError, setSessionSyncError] = useState<string | null>(null);
+  const hydratedSessionIds = useRef(new Set<string>());
+  const sessionSyncTargetId = useRef<string | null>(null);
   const previousMode = useRef<LLMExecutionMode>('development');
   const previousSession = useRef<typeof session | null>(null);
 
@@ -92,6 +102,9 @@ function ConfiguredApp({ config, runtime: baseRuntime }: { config: LoadedConfig;
         } catch {
           // The versioned server state still initializes the in-memory demo session.
         }
+        hydratedSessionIds.current.add(activated.session.id);
+        sessionSyncTargetId.current = activated.session.id;
+        setSessionSyncError(null);
         setTransientSession(activated.session);
         setExecutionModeState(activated.executionMode);
       })
@@ -106,6 +119,61 @@ function ConfiguredApp({ config, runtime: baseRuntime }: { config: LoadedConfig;
   useEffect(() => workspaceStorage.subscribe(() => {
     setProgress(readStageProgress(workspaceStorage, session.id));
   }), [session.id, workspaceStorage]);
+
+  const hydrateSession = useCallback(async (
+    target: typeof session,
+    reason: 'startup' | 'import' | 'recovery' = 'recovery',
+  ) => {
+    hydratedSessionIds.current.add(target.id);
+    sessionSyncTargetId.current = target.id;
+    setSessionSyncError(null);
+    if (!runtime.syncSession) return target;
+
+    const initialExpectedSequence = sessionServerSequence(target);
+    const synchronize = (expectedSequence: number, suffix = '') => runtime.syncSession!({
+      session: target,
+      expectedSequence,
+      idempotencyKey: `sync:${reason}:${target.id}:${initialExpectedSequence}${suffix}`,
+    });
+
+    try {
+      let result;
+      try {
+        result = await synchronize(initialExpectedSequence);
+      } catch (error) {
+        const actualSequence = error instanceof RuntimeHttpError
+          && error.status === 409
+          && error.payload
+          && typeof error.payload === 'object'
+          && 'error' in error.payload
+          && error.payload.error === 'session-sequence-conflict'
+          && 'actualSequence' in error.payload
+          && typeof error.payload.actualSequence === 'number'
+          ? error.payload.actualSequence
+          : null;
+        if (actualSequence === null) throw error;
+        result = await synchronize(actualSequence, `:retry-${actualSequence}`);
+      }
+      const merged = mergeServerSession(target, result.session);
+      setSession((current) => current.id === target.id
+        ? mergeServerSession(current, result.session)
+        : current);
+      return merged;
+    } catch (error) {
+      const detail = error instanceof Error && error.message.trim()
+        ? `：${error.message}`
+        : '';
+      if (sessionSyncTargetId.current === target.id) {
+        setSessionSyncError(`会话同步失败，本机记录仍可查看${detail}`);
+      }
+      return target;
+    }
+  }, [runtime, setSession]);
+
+  useEffect(() => {
+    if (!runtime.syncSession || hydratedSessionIds.current.has(session.id)) return;
+    void hydrateSession(session, 'startup');
+  }, [hydrateSession, runtime.syncSession, session]);
 
   const updateProgress = useCallback((update: Partial<Pick<
     StageProgress,
@@ -171,6 +239,9 @@ function ConfiguredApp({ config, runtime: baseRuntime }: { config: LoadedConfig;
       } catch {
         // The in-memory demo remains usable when browser persistence is unavailable.
       }
+      hydratedSessionIds.current.add(activated.session.id);
+      sessionSyncTargetId.current = activated.session.id;
+      setSessionSyncError(null);
       setTransientSession(activated.session);
       setExecutionModeState(activated.executionMode);
       return activated.executionMode;
@@ -190,6 +261,8 @@ function ConfiguredApp({ config, runtime: baseRuntime }: { config: LoadedConfig;
       runtime,
       session,
       setSession,
+      hydrateSession,
+      sessionSyncError,
       persistenceError,
       historicalSessions,
       pretestComplete,

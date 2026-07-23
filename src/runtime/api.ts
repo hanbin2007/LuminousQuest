@@ -1,6 +1,9 @@
 import type { LoadedConfig } from '../../shared/config/schemas';
 import type { DemoStartState } from '../../shared/demo/start-state';
-import type { StudentSession } from '../../shared/session/schema';
+import type {
+  AgentAnswerSubmission,
+  StudentSession,
+} from '../../shared/session/schema';
 import { inflateStudentSessionProjection } from '../../shared/session/projections';
 
 interface SessionCommandInput {
@@ -8,7 +11,11 @@ interface SessionCommandInput {
   idempotencyKey: string;
 }
 
-export interface ExtractAssessmentInput extends SessionCommandInput {
+interface HydratableSessionCommandInput extends SessionCommandInput {
+  session?: StudentSession;
+}
+
+export interface ExtractAssessmentInput extends HydratableSessionCommandInput {
   sessionId: string;
   caseId?: string;
   questionId: string;
@@ -25,7 +32,7 @@ export interface ExtractAssessmentResult {
   degraded?: boolean;
 }
 
-export interface EquationAssessmentInput extends SessionCommandInput {
+export interface EquationAssessmentInput extends HydratableSessionCommandInput {
   sessionId: string;
   caseId: string;
   equationSetId: string;
@@ -33,7 +40,7 @@ export interface EquationAssessmentInput extends SessionCommandInput {
   submissionId: string;
 }
 
-export interface TutorTurnInput extends SessionCommandInput {
+export interface TutorTurnInput extends HydratableSessionCommandInput {
   sessionId: string;
   nodeId: string;
   studentAnswer: string;
@@ -61,7 +68,7 @@ export type TutorTurnResult = {
     }
 );
 
-export interface ChoiceAssessmentInput extends SessionCommandInput {
+export interface ChoiceAssessmentInput extends HydratableSessionCommandInput {
   sessionId: string;
   questionId: string;
   optionId: string;
@@ -81,6 +88,42 @@ export interface SessionSyncResult {
   session: StudentSession;
 }
 
+export interface AgentTurnInput extends SessionCommandInput {
+  session: StudentSession;
+  sessionId: string;
+  caseId: string;
+  triggerEventId: string;
+}
+
+export interface AgentTurnResult {
+  status: 'completed' | 'already-completed';
+  turnId: string;
+  degraded: boolean;
+  failureCategory?: string;
+  session: StudentSession;
+}
+
+export interface AgentAnswerInput extends SessionCommandInput {
+  session: StudentSession;
+  sessionId: string;
+  turnId: string;
+  answer: AgentAnswerSubmission['answer'];
+}
+
+export interface AgentAnswerResult {
+  status: 'recorded' | 'already-recorded';
+  assessmentStatus?:
+    | 'choice-assessed'
+    | 'text-assessed'
+    | 'equation-assessed'
+    | 'builder-assessed'
+    | 'unassessed';
+  nextTurnId: string;
+  degraded: boolean;
+  failureCategory?: string;
+  session: StudentSession;
+}
+
 export interface AppRuntime {
   loadConfig: () => Promise<LoadedConfig>;
   assessChoice: (input: ChoiceAssessmentInput) => Promise<{ session: StudentSession | null }>;
@@ -89,6 +132,8 @@ export interface AppRuntime {
   tutorTurn: (input: TutorTurnInput) => Promise<TutorTurnResult>;
   reviewDrawing: (imageData: string) => Promise<string>;
   syncSession?: (input: SessionSyncInput) => Promise<SessionSyncResult>;
+  runAgentTurn?: (input: AgentTurnInput) => Promise<AgentTurnResult>;
+  submitAgentAnswer?: (input: AgentAnswerInput) => Promise<AgentAnswerResult>;
   getRuntimeState?: () => Promise<{ executionMode: LLMExecutionMode; testNavigation?: boolean }>;
   activateDemo?: () => Promise<{
     executionMode: 'demo';
@@ -121,10 +166,111 @@ function protectedHeaders() {
   };
 }
 
+export class RuntimeHttpError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly payload: unknown,
+  ) {
+    super(message);
+    this.name = 'RuntimeHttpError';
+  }
+}
+
 async function jsonResponse<T>(response: Response) {
   const value = await response.json() as T & { error?: string };
-  if (!response.ok) throw new Error(value.error ?? `Request failed with status ${response.status}`);
+  if (!response.ok) {
+    throw new RuntimeHttpError(
+      value.error ?? `Request failed with status ${response.status}`,
+      response.status,
+      value,
+    );
+  }
   return value;
+}
+
+async function syncSessionRequest(input: SessionSyncInput) {
+  const response = await fetch('/api/session/sync', {
+    method: 'POST',
+    headers: protectedHeaders(),
+    body: JSON.stringify(input),
+  });
+  const result = await jsonResponse<SessionSyncResult>(response);
+  return {
+    ...result,
+    session: inflateStudentSessionProjection(result.session),
+  };
+}
+
+async function hydrateMissingSession(session: StudentSession, idempotencyKey: string) {
+  try {
+    return await syncSessionRequest({
+      session,
+      expectedSequence: 0,
+      idempotencyKey,
+    });
+  } catch (error) {
+    const actualSequence = error instanceof RuntimeHttpError
+      && error.status === 409
+      && error.payload
+      && typeof error.payload === 'object'
+      && 'error' in error.payload
+      && error.payload.error === 'session-sequence-conflict'
+      && 'actualSequence' in error.payload
+      && typeof error.payload.actualSequence === 'number'
+      ? error.payload.actualSequence
+      : null;
+    if (actualSequence === null) throw error;
+    return syncSessionRequest({
+      session,
+      expectedSequence: actualSequence,
+      idempotencyKey: `${idempotencyKey}:retry-${actualSequence}`,
+    });
+  }
+}
+
+async function postSessionCommand<
+  T,
+  TInput extends HydratableSessionCommandInput,
+>(
+  path: string,
+  input: TInput,
+  requestInit: Pick<RequestInit, 'signal'> = {},
+) {
+  const { session, ...command } = input;
+  const send = (body: unknown) => fetch(path, {
+    method: 'POST',
+    headers: protectedHeaders(),
+    body: JSON.stringify(body),
+    ...requestInit,
+  });
+
+  let response = await send(command);
+  if (response.status === 404 && session) {
+    const synchronized = await hydrateMissingSession(
+      session,
+      `hydrate:${input.idempotencyKey}`,
+    );
+    response = await send({
+      ...command,
+      expectedSequence: synchronized.sequence,
+    });
+  }
+  return jsonResponse<T>(response);
+}
+
+async function postAgentCommand<T extends { session: StudentSession }>(
+  path: '/api/agent/turn' | '/api/agent/answer',
+  input: AgentTurnInput | AgentAnswerInput,
+) {
+  const result = await postSessionCommand<T, AgentTurnInput | AgentAnswerInput>(
+    path,
+    input,
+  );
+  return {
+    ...result,
+    session: inflateStudentSessionProjection(result.session),
+  };
 }
 
 export const defaultRuntime: AppRuntime = {
@@ -173,25 +319,22 @@ export const defaultRuntime: AppRuntime = {
   },
 
   async syncSession(input) {
-    const response = await fetch('/api/session/sync', {
-      method: 'POST',
-      headers: protectedHeaders(),
-      body: JSON.stringify(input),
-    });
-    const result = await jsonResponse<SessionSyncResult>(response);
-    return {
-      ...result,
-      session: inflateStudentSessionProjection(result.session),
-    };
+    return syncSessionRequest(input);
+  },
+
+  async runAgentTurn(input) {
+    return postAgentCommand<AgentTurnResult>('/api/agent/turn', input);
+  },
+
+  async submitAgentAnswer(input) {
+    return postAgentCommand<AgentAnswerResult>('/api/agent/answer', input);
   },
 
   async assessChoice(input) {
-    const response = await fetch('/api/assessment/choice', {
-      method: 'POST',
-      headers: protectedHeaders(),
-      body: JSON.stringify(input),
-    });
-    const result = await jsonResponse<{ session: StudentSession }>(response);
+    const result = await postSessionCommand<
+      { session: StudentSession },
+      ChoiceAssessmentInput
+    >('/api/assessment/choice', input);
     return {
       ...result,
       session: result.session
@@ -204,13 +347,12 @@ export const defaultRuntime: AppRuntime = {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 20_000);
     try {
-      const response = await fetch('/api/assessment/extract', {
-        method: 'POST',
-        headers: protectedHeaders(),
-        body: JSON.stringify(input),
+      const result = await postSessionCommand<
+        ExtractAssessmentResult,
+        ExtractAssessmentInput
+      >('/api/assessment/extract', input, {
         signal: controller.signal,
       });
-      const result = await jsonResponse<ExtractAssessmentResult>(response);
       return {
         ...result,
         session: result.session
@@ -228,12 +370,10 @@ export const defaultRuntime: AppRuntime = {
   },
 
   async assessEquation(input) {
-    const response = await fetch('/api/assessment/equation', {
-      method: 'POST',
-      headers: protectedHeaders(),
-      body: JSON.stringify(input),
-    });
-    const result = await jsonResponse<{ session: StudentSession }>(response);
+    const result = await postSessionCommand<
+      { session: StudentSession },
+      EquationAssessmentInput
+    >('/api/assessment/equation', input);
     return {
       ...result,
       session: result.session
@@ -243,12 +383,10 @@ export const defaultRuntime: AppRuntime = {
   },
 
   async tutorTurn(input) {
-    const response = await fetch('/api/tutor/turn', {
-      method: 'POST',
-      headers: protectedHeaders(),
-      body: JSON.stringify(input),
-    });
-    const result = await jsonResponse<TutorTurnResult>(response);
+    const result = await postSessionCommand<TutorTurnResult, TutorTurnInput>(
+      '/api/tutor/turn',
+      input,
+    );
     return {
       ...result,
       session: result.session

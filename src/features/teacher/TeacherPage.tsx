@@ -37,6 +37,13 @@ const statusLabels = {
   unanswered: '未作答',
 } as const;
 
+const agentVerdictLabels = {
+  hit: '命中',
+  partial: '部分命中',
+  miss: '未命中',
+  inconclusive: '无法判定',
+} as const;
+
 function uniqueSessions(sessions: readonly StudentSession[]) {
   const byId = new Map<string, StudentSession>();
   sessions.forEach((session) => {
@@ -209,6 +216,51 @@ function StudentEvidence({ session }: { session: StudentSession }) {
         ) : <p className="teacher-empty">暂无训练记录。</p>}
       </section>
 
+      <section className="teacher-section teacher-agent-audit" aria-labelledby="teacher-agent-audit-title">
+        <header className="teacher-section__heading">
+          <div>
+            <span>驾驶轨 / 记录轨</span>
+            <h2 id="teacher-agent-audit-title">Agent 判断与分歧审计</h2>
+            <p className="teacher-agent-audit__disclosure">量表记录以判分引擎为准</p>
+          </div>
+          <History aria-hidden="true" />
+        </header>
+        {report.agentAudit.judgments.length > 0 || report.agentAudit.divergences.length > 0 ? (
+          <ol className="teacher-agent-audit__list">
+            {report.agentAudit.judgments.map((item) => (
+              <li data-kind="judgment" key={item.eventId}>
+                <span className="teacher-node-id">{item.nodeId}</span>
+                <div>
+                  <strong>Agent {agentVerdictLabels[item.verdict]}</strong>
+                  <p>{item.rationale}</p>
+                  <small>{item.caseTitle} · 回合 {item.turnId}</small>
+                </div>
+                <time dateTime={item.occurredAt}>{displayTime(item.occurredAt)}</time>
+              </li>
+            ))}
+            {report.agentAudit.divergences.map((item) => (
+              <li
+                data-kind="divergence"
+                data-unresolved={item.unresolved || undefined}
+                key={item.eventId}
+              >
+                <AlertTriangle aria-hidden="true" />
+                <div>
+                  <strong>
+                    Agent {agentVerdictLabels[item.agentVerdict]} · 判分引擎 {
+                      agentVerdictLabels[item.shadowVerdict]
+                    }
+                  </strong>
+                  <p>{item.status === 'detected' ? '检测到双轨分歧' : '双轨分歧已解决'}</p>
+                  <small>{item.nodeId} · {item.comparisonPolicyVersion}</small>
+                </div>
+                <time dateTime={item.occurredAt}>{displayTime(item.occurredAt)}</time>
+              </li>
+            ))}
+          </ol>
+        ) : <p className="teacher-empty">本会话暂无 Agent 判断或分歧记录。</p>}
+      </section>
+
       <div className="teacher-two-column">
         <section className="teacher-section" aria-labelledby="teacher-scaffold-title">
           <header className="teacher-section__heading">
@@ -231,14 +283,42 @@ function StudentEvidence({ session }: { session: StudentSession }) {
         <section className="teacher-section teacher-review-section" aria-labelledby="teacher-review-title">
           <header className="teacher-section__heading">
             <div><span>人工判定入口</span><h2 id="teacher-review-title">待复核清单</h2></div>
-            <ClipboardCheck aria-hidden="true" />
+            <span className="teacher-review-section__status">
+              {report.agentAudit.unresolvedCount > 0 ? (
+                <span
+                  aria-label={`${report.agentAudit.unresolvedCount} 条 Agent 分歧待复核`}
+                  className="teacher-review-dot"
+                  role="status"
+                >
+                  <i aria-hidden="true" />
+                  {report.agentAudit.unresolvedCount}
+                </span>
+              ) : null}
+              <ClipboardCheck aria-hidden="true" />
+            </span>
           </header>
           {report.needsReview.length > 0 ? (
             <ul className="teacher-review-list">
               {report.needsReview.map((item) => (
                 <li key={item.sequence}>
                   <AlertTriangle aria-hidden="true" />
-                  <div><strong>{item.nodeId} · {item.rubricId}</strong><p>{item.reason}</p><mark>{item.originalAnswer}</mark></div>
+                  {item.kind === 'divergence' ? (
+                    <div>
+                      <strong>{item.nodeId} · 双轨分歧</strong>
+                      <p>{item.reason}</p>
+                      <mark>
+                        Agent {agentVerdictLabels[item.agentVerdict]} · 判分引擎 {
+                          agentVerdictLabels[item.shadowVerdict]
+                        }
+                      </mark>
+                    </div>
+                  ) : (
+                    <div>
+                      <strong>{item.nodeId} · {item.rubricId}</strong>
+                      <p>{item.reason}</p>
+                      <mark>{item.originalAnswer}</mark>
+                    </div>
+                  )}
                 </li>
               ))}
             </ul>

@@ -7,7 +7,7 @@ import type { StudentSession } from '../../shared/session/schema';
 interface SessionControlsProps {
   session: StudentSession;
   historicalSessions?: readonly StudentSession[];
-  onImport: (session: StudentSession) => void;
+  onImport: (session: StudentSession) => void | Promise<void>;
 }
 
 function downloadSession(session: StudentSession, prefix: string) {
@@ -83,7 +83,7 @@ export function SessionControls({
           if (!file) return;
           try {
             const imported = importSession(await file.text());
-            onImport(imported);
+            await onImport(imported);
             setMessage('会话已导入');
           } catch (error) {
             setMessage(error instanceof Error ? error.message : '会话导入失败');

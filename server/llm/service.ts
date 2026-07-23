@@ -296,15 +296,21 @@ export class LLMService {
     const recorded = parseAgentTurnAdapterResult(value);
     const actions: NormalizedAgentAction[] = [];
     for (const action of recorded.orderedActions) {
-      const execution = request.executeTool
+      let execution = request.executeTool
         ? await request.executeTool(action)
         : { accepted: true, action, content: '{"ok":true}' };
+      if (!execution.accepted && request.executeTool) {
+        execution = await request.executeTool(action);
+      }
       if (!execution.accepted) {
         throw new Error(
           `Recorded agent action is no longer executable: ${
             execution.errorCategory ?? 'tool-rejected'
           }`,
         );
+      }
+      if (JSON.stringify(execution.action) !== JSON.stringify(action)) {
+        throw new Error('Recorded agent action now repairs to a different trace');
       }
       actions.push(execution.action);
     }

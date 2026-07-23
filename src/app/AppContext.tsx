@@ -11,6 +11,11 @@ export interface AppContextValue {
   runtime: AppRuntime;
   session: StudentSession;
   setSession: Dispatch<SetStateAction<StudentSession>>;
+  hydrateSession?: (
+    session: StudentSession,
+    reason?: 'startup' | 'import' | 'recovery',
+  ) => Promise<StudentSession>;
+  sessionSyncError?: string | null;
   persistenceError: string | null;
   historicalSessions: StudentSession[];
   pretestComplete: boolean;

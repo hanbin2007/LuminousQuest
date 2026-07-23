@@ -1,6 +1,6 @@
 import { Clapperboard, GraduationCap, MoreHorizontal } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import { NavLink, useLocation, useNavigate } from 'react-router-dom';
+import { NavLink, useNavigate } from 'react-router-dom';
 
 import { buildLearnerProfile } from '../../shared/scoring/profile';
 import { SessionControls } from '../session/SessionControls';
@@ -8,11 +8,11 @@ import { useAppContext } from './AppContext';
 
 export function AppUtilityMenu() {
   const navigate = useNavigate();
-  const { pathname } = useLocation();
   const {
     config,
     session,
     setSession,
+    hydrateSession,
     persistenceError,
     historicalSessions,
     executionMode,
@@ -20,20 +20,18 @@ export function AppUtilityMenu() {
     demoModeError,
     toggleDemoMode,
   } = useAppContext();
-  const [openPath, setOpenPath] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const popoverId = 'app-utility-menu-popover';
-  const open = openPath === pathname;
-
   useEffect(() => {
     if (!open) return undefined;
     const dismiss = (event: PointerEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) setOpenPath(null);
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
     };
     const escape = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
-      setOpenPath(null);
+      setOpen(false);
       triggerRef.current?.focus();
     };
     window.addEventListener('pointerdown', dismiss);
@@ -57,7 +55,7 @@ export function AppUtilityMenu() {
         aria-haspopup="dialog"
         aria-label="课程与会话工具"
         className="app-utility-menu__trigger"
-        onClick={() => setOpenPath((current) => current === pathname ? null : pathname)}
+        onClick={() => setOpen((current) => !current)}
         ref={triggerRef}
         title="课程与会话工具"
         type="button"
@@ -78,7 +76,7 @@ export function AppUtilityMenu() {
           <SessionControls
             session={session}
             historicalSessions={historicalSessions}
-            onImport={(imported) => {
+            onImport={async (imported) => {
               if (JSON.stringify(imported.configVersions) !== JSON.stringify(session.configVersions)) {
                 throw new Error('导入会话与当前配置版本不匹配');
               }
@@ -88,6 +86,7 @@ export function AppUtilityMenu() {
                 throw new Error('会话内容未通过深度校验，请确认文件未损坏或篡改。');
               }
               setSession(imported);
+              await hydrateSession?.(imported, 'import');
             }}
           />
           <div className="demo-mode-control">
@@ -100,7 +99,7 @@ export function AppUtilityMenu() {
                 try {
                   const mode = await toggleDemoMode();
                   if (mode === 'demo') {
-                    setOpenPath(null);
+                    setOpen(false);
                     navigate('/training');
                   }
                 } catch {
@@ -117,7 +116,7 @@ export function AppUtilityMenu() {
             {executionMode === 'demo' ? <small>executionMode=demo</small> : null}
             {demoModeError ? <small className="demo-mode-error" role="alert">{demoModeError}</small> : null}
           </div>
-          <NavLink className="teacher-link" to="/teacher">
+          <NavLink className="teacher-link" onClick={() => setOpen(false)} to="/teacher">
             <GraduationCap aria-hidden="true" />教师视图
           </NavLink>
           {persistenceError ? (
