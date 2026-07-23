@@ -13,4 +13,5 @@
 - 引用的 `quote/start/end` 必须与原文逐字对应。空答时保留空事实槽位，不伪造引用。
 - `response` 仅为模型观察值，服务端会按空字符串/敷衍词表重新判定并覆盖；不得靠该字段改变判分。
 - 只要声明 `terminology=colloquial`、`syllabus=beyond`、`contradiction=true` 或 `typo!=none`，必须在 `classificationEvidence` 的同名字段附上直接支持该声明的原文引用；无不利声明时对应字段省略。
+- 化学式、元素符号与离子记号（如 K、O₂、K⁺、Cu₂O）本身不构成错别字；仅当汉字明显写错（如「负级」）才声明 typo。
 - 禁止输出 `logicalOutcome`、`objectiveOutcome`、`following`、`score`、`hit/partial/miss` 或任何等价判分判断。极性正确性、跟随性与最终 mastery outcome 全部由确定性 policy/rubric 引擎计算。

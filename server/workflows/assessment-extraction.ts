@@ -25,7 +25,7 @@ function objectProperties(schema: JsonSchema) {
 
 function closedFactSlotsSchema(
   baseSlots: JsonSchema,
-  requirements: readonly { id: string; valueDomain?: readonly string[] }[],
+  requirements: readonly { id: string; valueDomain?: readonly string[]; hint?: string }[],
 ) {
   const baseItem = baseSlots.items as JsonSchema;
   return {
@@ -38,6 +38,9 @@ function closedFactSlotsSchema(
         // 判断型槽位:取值域闭集(含错误取值,如 true/false),实体槽保持开放以转录学生原话
         if (requirement.valueDomain && requirement.valueDomain.length > 0) {
           objectProperties(branch).value = { type: 'string', enum: [...requirement.valueDomain] };
+        }
+        if (requirement.hint) {
+          branch.description = requirement.hint;
         }
         return branch;
       }),

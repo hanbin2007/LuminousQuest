@@ -510,6 +510,7 @@ const textQuestionSchema = z
                     id: idSchema,
                     acceptedValues: z.array(z.string().trim().min(1)).min(1),
                     valueDomain: z.array(z.string().trim().min(1)).min(1).optional(),
+                    hint: z.string().trim().min(1).optional(),
                   })
                   .strict()
                   .superRefine((value, context) => {
