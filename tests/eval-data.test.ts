@@ -37,7 +37,7 @@ describe('eval golden data', () => {
     });
 
     expect(cases.length).toBeGreaterThanOrEqual(50);
-    expect(cases.every((evalCase) => evalCase.source === 'synthetic')).toBe(true);
+    expect(cases.every((evalCase) => ['synthetic', 'human'].includes(evalCase.source))).toBe(true);
     expect(cases.every((evalCase) =>
       evalCase.reviewStatus === 'reviewed'
       && evalCase.annotator !== evalCase.reviewer

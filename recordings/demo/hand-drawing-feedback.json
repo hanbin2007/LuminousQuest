@@ -2,7 +2,7 @@
   "version": "llm-recording.v2",
   "recordedAt": "2026-07-16T01:04:00.000Z",
   "metadata": {
-    "configVersion": "sha256:c7c84d5e10fbddb643eb86238d562b854e84cb4c34a9f3b10b7e3b17bf89c62d",
+    "configVersion": "sha256:232ee9642276dcee29788bde41945c8082ba560ded29d5638e2a4a1a62ac7a6b",
     "schemaVersion": "hand-drawing-feedback.v1",
     "prompt": {
       "id": "hand-drawing-feedback",
@@ -20,7 +20,7 @@
       "text": "recorded outside the distributable artifact"
     },
     "schemaVersion": "hand-drawing-feedback.v1",
-    "configVersion": "sha256:c7c84d5e10fbddb643eb86238d562b854e84cb4c34a9f3b10b7e3b17bf89c62d",
+    "configVersion": "sha256:232ee9642276dcee29788bde41945c8082ba560ded29d5638e2a4a1a62ac7a6b",
     "input": { "step": "scripted drawing review" },
     "images": [],
     "schema": {

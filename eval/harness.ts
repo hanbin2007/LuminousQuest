@@ -200,7 +200,7 @@ export async function runEvalHarness(options: EvalHarnessOptions) {
         answer: {
           id: `answer-${evalCase.id}-${variant}-${iteration}`,
           occurredAt: timestamp,
-          caseId: evalCase.questionRef.caseId,
+          caseId: evalCase.questionRef.caseId!,
           stageId: 'eval-equation',
           attemptId: `${variant}-${iteration}`,
           questionId: `${evalCase.questionRef.caseId}:${evalCase.questionRef.equationSetId}`,
@@ -270,6 +270,15 @@ export async function runEvalHarness(options: EvalHarnessOptions) {
       recordings: new RecordingStore(options.contentRoot),
       logger: { error() {}, warn() {} },
     });
+    const question = evalCase.questionRef.questionId
+      ? productionConfig.pretest.questions.find((entry) =>
+          entry.id === evalCase.questionRef.questionId && entry.type === 'text')
+      : undefined;
+    if (evalCase.questionRef.questionId && (!question || question.type !== 'text')) {
+      throw new Error(`Eval case ${evalCase.id} references unknown text question ${evalCase.questionRef.questionId}`);
+    }
+    const referenceCaseId = evalCase.questionRef.caseId
+      ?? (question && question.type === 'text' ? question.referenceEquations[0]!.caseId : '');
     const started = performance.now();
     const result = await runAssessmentExtraction({
       service,
@@ -277,8 +286,11 @@ export async function runEvalHarness(options: EvalHarnessOptions) {
       config: productionConfig,
       prompt,
       answer: evalCase.studentAnswer,
-      caseId: evalCase.questionRef.caseId,
+      caseId: referenceCaseId,
       targetNodeIds: [evalCase.questionRef.nodeId],
+      ...(question && question.type === 'text' && question.evidence
+        ? { questionEvidence: question.evidence }
+        : {}),
       assistance: { kind: 'none', rounds: 0 },
       executionMode: 'live',
       provider: tracking.id,
@@ -295,10 +307,11 @@ export async function runEvalHarness(options: EvalHarnessOptions) {
     const answer = {
       id: `answer-${evalCase.id}-${variant}-${iteration}`,
       occurredAt: timestamp,
-      caseId: evalCase.questionRef.caseId,
+      caseId: evalCase.questionRef.questionId ? 'pretest' : evalCase.questionRef.caseId!,
       stageId: 'eval',
       attemptId: `${variant}-${iteration}`,
-      questionId: `${evalCase.questionRef.caseId}:${evalCase.questionRef.nodeId}`,
+      questionId: evalCase.questionRef.questionId
+        ?? `${evalCase.questionRef.caseId}:${evalCase.questionRef.nodeId}`,
       value: evalCase.studentAnswer,
     };
     const provenance = {
@@ -316,6 +329,10 @@ export async function runEvalHarness(options: EvalHarnessOptions) {
           provenance,
           assessmentEventIdPrefix: `assessment-${evalCase.id}-${variant}-${iteration}`,
           assessedAt: timestamp,
+          ...(evalCase.questionRef.questionId ? { referenceCaseId } : {}),
+          ...(question && question.type === 'text' && question.evidence
+            ? { questionEvidence: question.evidence }
+            : {}),
         })
       : recordNeedsReviewTextAssessment({
           session,

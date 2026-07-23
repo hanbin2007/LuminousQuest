@@ -283,7 +283,7 @@ describe('M1a external teaching configuration', () => {
     expect(config.scaffoldPolicy.extraction.factValueAliases.false)
       .toEqual(expect.arrayContaining(['否', '不能']));
     expect(config.scaffoldPolicy.extraction.factValueAliases['prevent-direct-reaction'])
-      .toEqual(['直接反应', '直接接触', '不接触', '发生反应', '防止']);
+      .toEqual(['直接反应', '直接接触', '不接触', '发生反应', '防止', '直接与']);
   });
 
   it('states the complete alkaline aluminum-air OH- process and drops unsupported E3 targeting', async () => {

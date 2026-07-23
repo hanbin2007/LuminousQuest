@@ -1,0 +1,2158 @@
+[
+  {
+    "version": "eval-case.v2",
+    "evaluationPath": "structured-assessment",
+    "annotationStatus": "labeled",
+    "studentAnswer": "不能，O₂ 会与 K 发生反应。",
+    "annotator": "fable-5",
+    "rubricVersion": "rubrics.v1.2",
+    "source": "human",
+    "runs": 3,
+    "reviewer": "zhb-authorized",
+    "reviewStatus": "reviewed",
+    "adjudicationVersion": "adjudication-table.v1.1",
+    "expectedDisagreement": false,
+    "metamorphicReview": {
+      "reviewer": "zhb-authorized",
+      "status": "approved",
+      "variants": {
+        "paraphrase": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        },
+        "noise": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        },
+        "rename-person": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        }
+      }
+    },
+    "id": "human-exam1-membrane-s02-d3",
+    "questionRef": {
+      "questionId": "pretest-exam1-membrane",
+      "nodeId": "D3"
+    },
+    "expectedExtraction": {
+      "anchors": [],
+      "response": "substantive",
+      "terminology": "model",
+      "syllabus": "within",
+      "contradiction": false,
+      "typo": "none",
+      "errorIds": [],
+      "slots": [
+        {
+          "id": "o2-passes",
+          "value": "false",
+          "evidenceQuote": "不能"
+        }
+      ],
+      "evidenceQuotes": [
+        "不能"
+      ]
+    },
+    "expectedScore": "hit",
+    "misconceptionIds": [],
+    "tags": [
+      "human",
+      "exam1",
+      "membrane",
+      "d3"
+    ],
+    "seriousMisjudgmentOpportunity": false,
+    "rationale": {
+      "rubricRefs": [
+        "d3-hit"
+      ],
+      "adjudicationRefs": [
+        "§1"
+      ],
+      "text": "结论「不能」正确，o2-passes=false 命中。标注 Fable 5；张涵彬授权按建议先行（2026-07-22），K⁺-only 判 miss 与 S20 弱表述判 hit 两点待陆老师终审可改判。"
+    }
+  },
+  {
+    "version": "eval-case.v2",
+    "evaluationPath": "structured-assessment",
+    "annotationStatus": "labeled",
+    "studentAnswer": "不能，O₂ 会与 K 发生反应。",
+    "annotator": "fable-5",
+    "rubricVersion": "rubrics.v1.2",
+    "source": "human",
+    "runs": 3,
+    "reviewer": "zhb-authorized",
+    "reviewStatus": "reviewed",
+    "adjudicationVersion": "adjudication-table.v1.1",
+    "expectedDisagreement": false,
+    "metamorphicReview": {
+      "reviewer": "zhb-authorized",
+      "status": "approved",
+      "variants": {
+        "paraphrase": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        },
+        "noise": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        },
+        "rename-person": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        }
+      }
+    },
+    "id": "human-exam1-membrane-s02-p1",
+    "questionRef": {
+      "questionId": "pretest-exam1-membrane",
+      "nodeId": "P1"
+    },
+    "expectedScore": "hit",
+    "misconceptionIds": [],
+    "tags": [
+      "human",
+      "exam1",
+      "membrane",
+      "p1"
+    ],
+    "seriousMisjudgmentOpportunity": false,
+    "expectedExtraction": {
+      "anchors": [],
+      "response": "substantive",
+      "terminology": "model",
+      "syllabus": "within",
+      "contradiction": false,
+      "typo": "none",
+      "errorIds": [],
+      "slots": [
+        {
+          "id": "separation-purpose",
+          "value": "prevent-direct-reaction",
+          "evidenceQuote": "O₂ 会与 K 发生反应"
+        }
+      ],
+      "evidenceQuotes": [
+        "O₂ 会与 K 发生反应"
+      ]
+    },
+    "rationale": {
+      "rubricRefs": [
+        "p1-hit"
+      ],
+      "adjudicationRefs": [
+        "§1"
+      ],
+      "text": "理由表达了防止直接反应/分隔（引用：O₂ 会与 K 发生反应）。标注 Fable 5；张涵彬授权按建议先行（2026-07-22），K⁺-only 判 miss 与 S20 弱表述判 hit 两点待陆老师终审可改判。"
+    }
+  },
+  {
+    "version": "eval-case.v2",
+    "evaluationPath": "structured-assessment",
+    "annotationStatus": "labeled",
+    "studentAnswer": "不能。若 O₂ 可以通过隔膜，则会与单质 K 板直接反应，无法放电。",
+    "annotator": "fable-5",
+    "rubricVersion": "rubrics.v1.2",
+    "source": "human",
+    "runs": 3,
+    "reviewer": "zhb-authorized",
+    "reviewStatus": "reviewed",
+    "adjudicationVersion": "adjudication-table.v1.1",
+    "expectedDisagreement": false,
+    "metamorphicReview": {
+      "reviewer": "zhb-authorized",
+      "status": "approved",
+      "variants": {
+        "paraphrase": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        },
+        "noise": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        },
+        "rename-person": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        }
+      }
+    },
+    "id": "human-exam1-membrane-s04-d3",
+    "questionRef": {
+      "questionId": "pretest-exam1-membrane",
+      "nodeId": "D3"
+    },
+    "expectedExtraction": {
+      "anchors": [],
+      "response": "substantive",
+      "terminology": "model",
+      "syllabus": "within",
+      "contradiction": false,
+      "typo": "none",
+      "errorIds": [],
+      "slots": [
+        {
+          "id": "o2-passes",
+          "value": "false",
+          "evidenceQuote": "不能"
+        }
+      ],
+      "evidenceQuotes": [
+        "不能"
+      ]
+    },
+    "expectedScore": "hit",
+    "misconceptionIds": [],
+    "tags": [
+      "human",
+      "exam1",
+      "membrane",
+      "d3"
+    ],
+    "seriousMisjudgmentOpportunity": false,
+    "rationale": {
+      "rubricRefs": [
+        "d3-hit"
+      ],
+      "adjudicationRefs": [
+        "§1"
+      ],
+      "text": "结论「不能」正确，o2-passes=false 命中。标注 Fable 5；张涵彬授权按建议先行（2026-07-22），K⁺-only 判 miss 与 S20 弱表述判 hit 两点待陆老师终审可改判。"
+    }
+  },
+  {
+    "version": "eval-case.v2",
+    "evaluationPath": "structured-assessment",
+    "annotationStatus": "labeled",
+    "studentAnswer": "不能。若 O₂ 可以通过隔膜，则会与单质 K 板直接反应，无法放电。",
+    "annotator": "fable-5",
+    "rubricVersion": "rubrics.v1.2",
+    "source": "human",
+    "runs": 3,
+    "reviewer": "zhb-authorized",
+    "reviewStatus": "reviewed",
+    "adjudicationVersion": "adjudication-table.v1.1",
+    "expectedDisagreement": false,
+    "metamorphicReview": {
+      "reviewer": "zhb-authorized",
+      "status": "approved",
+      "variants": {
+        "paraphrase": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        },
+        "noise": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        },
+        "rename-person": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        }
+      }
+    },
+    "id": "human-exam1-membrane-s04-p1",
+    "questionRef": {
+      "questionId": "pretest-exam1-membrane",
+      "nodeId": "P1"
+    },
+    "expectedScore": "hit",
+    "misconceptionIds": [],
+    "tags": [
+      "human",
+      "exam1",
+      "membrane",
+      "p1"
+    ],
+    "seriousMisjudgmentOpportunity": false,
+    "expectedExtraction": {
+      "anchors": [],
+      "response": "substantive",
+      "terminology": "model",
+      "syllabus": "within",
+      "contradiction": false,
+      "typo": "none",
+      "errorIds": [],
+      "slots": [
+        {
+          "id": "separation-purpose",
+          "value": "prevent-direct-reaction",
+          "evidenceQuote": "会与单质 K 板直接反应"
+        }
+      ],
+      "evidenceQuotes": [
+        "会与单质 K 板直接反应"
+      ]
+    },
+    "rationale": {
+      "rubricRefs": [
+        "p1-hit"
+      ],
+      "adjudicationRefs": [
+        "§1"
+      ],
+      "text": "理由表达了防止直接反应/分隔（引用：会与单质 K 板直接反应）。标注 Fable 5；张涵彬授权按建议先行（2026-07-22），K⁺-only 判 miss 与 S20 弱表述判 hit 两点待陆老师终审可改判。"
+    }
+  },
+  {
+    "version": "eval-case.v2",
+    "evaluationPath": "structured-assessment",
+    "annotationStatus": "labeled",
+    "studentAnswer": "不能，如果 O₂ 通过则无法构成电池回路",
+    "annotator": "fable-5",
+    "rubricVersion": "rubrics.v1.2",
+    "source": "human",
+    "runs": 3,
+    "reviewer": "zhb-authorized",
+    "reviewStatus": "reviewed",
+    "adjudicationVersion": "adjudication-table.v1.1",
+    "expectedDisagreement": false,
+    "metamorphicReview": {
+      "reviewer": "zhb-authorized",
+      "status": "approved",
+      "variants": {
+        "paraphrase": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        },
+        "noise": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        },
+        "rename-person": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        }
+      }
+    },
+    "id": "human-exam1-membrane-s05-d3",
+    "questionRef": {
+      "questionId": "pretest-exam1-membrane",
+      "nodeId": "D3"
+    },
+    "expectedExtraction": {
+      "anchors": [],
+      "response": "substantive",
+      "terminology": "model",
+      "syllabus": "within",
+      "contradiction": false,
+      "typo": "none",
+      "errorIds": [],
+      "slots": [
+        {
+          "id": "o2-passes",
+          "value": "false",
+          "evidenceQuote": "不能"
+        }
+      ],
+      "evidenceQuotes": [
+        "不能"
+      ]
+    },
+    "expectedScore": "hit",
+    "misconceptionIds": [],
+    "tags": [
+      "human",
+      "exam1",
+      "membrane",
+      "d3"
+    ],
+    "seriousMisjudgmentOpportunity": false,
+    "rationale": {
+      "rubricRefs": [
+        "d3-hit"
+      ],
+      "adjudicationRefs": [
+        "§1"
+      ],
+      "text": "结论「不能」正确，o2-passes=false 命中。标注 Fable 5；张涵彬授权按建议先行（2026-07-22），K⁺-only 判 miss 与 S20 弱表述判 hit 两点待陆老师终审可改判。"
+    }
+  },
+  {
+    "version": "eval-case.v2",
+    "evaluationPath": "structured-assessment",
+    "annotationStatus": "labeled",
+    "studentAnswer": "不能，如果 O₂ 通过则无法构成电池回路",
+    "annotator": "fable-5",
+    "rubricVersion": "rubrics.v1.2",
+    "source": "human",
+    "runs": 3,
+    "reviewer": "zhb-authorized",
+    "reviewStatus": "reviewed",
+    "adjudicationVersion": "adjudication-table.v1.1",
+    "expectedDisagreement": false,
+    "metamorphicReview": {
+      "reviewer": "zhb-authorized",
+      "status": "approved",
+      "variants": {
+        "paraphrase": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        },
+        "noise": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        },
+        "rename-person": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        }
+      }
+    },
+    "id": "human-exam1-membrane-s05-p1",
+    "questionRef": {
+      "questionId": "pretest-exam1-membrane",
+      "nodeId": "P1"
+    },
+    "expectedScore": "miss",
+    "misconceptionIds": [],
+    "tags": [
+      "human",
+      "exam1",
+      "membrane",
+      "p1"
+    ],
+    "seriousMisjudgmentOpportunity": true,
+    "expectedExtraction": {
+      "anchors": [],
+      "response": "substantive",
+      "terminology": "model",
+      "syllabus": "within",
+      "contradiction": false,
+      "typo": "none",
+      "errorIds": [],
+      "slots": [],
+      "evidenceQuotes": []
+    },
+    "rationale": {
+      "rubricRefs": [
+        "p1-miss"
+      ],
+      "adjudicationRefs": [
+        "§1"
+      ],
+      "text": "作答未表达半反应分隔理由（K⁺-only/电路/电中性类论证不计入 P1）。标注 Fable 5；张涵彬授权按建议先行（2026-07-22），K⁺-only 判 miss 与 S20 弱表述判 hit 两点待陆老师终审可改判。"
+    }
+  },
+  {
+    "version": "eval-case.v2",
+    "evaluationPath": "structured-assessment",
+    "annotationStatus": "labeled",
+    "studentAnswer": "不能，隔膜为正（阳）离子交换膜，只允许 K⁺ 通过。",
+    "annotator": "fable-5",
+    "rubricVersion": "rubrics.v1.2",
+    "source": "human",
+    "runs": 3,
+    "reviewer": "zhb-authorized",
+    "reviewStatus": "reviewed",
+    "adjudicationVersion": "adjudication-table.v1.1",
+    "expectedDisagreement": false,
+    "metamorphicReview": {
+      "reviewer": "zhb-authorized",
+      "status": "approved",
+      "variants": {
+        "paraphrase": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        },
+        "noise": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        },
+        "rename-person": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        }
+      }
+    },
+    "id": "human-exam1-membrane-s06-d3",
+    "questionRef": {
+      "questionId": "pretest-exam1-membrane",
+      "nodeId": "D3"
+    },
+    "expectedExtraction": {
+      "anchors": [],
+      "response": "substantive",
+      "terminology": "model",
+      "syllabus": "within",
+      "contradiction": false,
+      "typo": "none",
+      "errorIds": [],
+      "slots": [
+        {
+          "id": "o2-passes",
+          "value": "false",
+          "evidenceQuote": "不能"
+        }
+      ],
+      "evidenceQuotes": [
+        "不能"
+      ]
+    },
+    "expectedScore": "hit",
+    "misconceptionIds": [],
+    "tags": [
+      "human",
+      "exam1",
+      "membrane",
+      "d3"
+    ],
+    "seriousMisjudgmentOpportunity": false,
+    "rationale": {
+      "rubricRefs": [
+        "d3-hit"
+      ],
+      "adjudicationRefs": [
+        "§1"
+      ],
+      "text": "结论「不能」正确，o2-passes=false 命中。标注 Fable 5；张涵彬授权按建议先行（2026-07-22），K⁺-only 判 miss 与 S20 弱表述判 hit 两点待陆老师终审可改判。"
+    }
+  },
+  {
+    "version": "eval-case.v2",
+    "evaluationPath": "structured-assessment",
+    "annotationStatus": "labeled",
+    "studentAnswer": "不能，隔膜为正（阳）离子交换膜，只允许 K⁺ 通过。",
+    "annotator": "fable-5",
+    "rubricVersion": "rubrics.v1.2",
+    "source": "human",
+    "runs": 3,
+    "reviewer": "zhb-authorized",
+    "reviewStatus": "reviewed",
+    "adjudicationVersion": "adjudication-table.v1.1",
+    "expectedDisagreement": false,
+    "metamorphicReview": {
+      "reviewer": "zhb-authorized",
+      "status": "approved",
+      "variants": {
+        "paraphrase": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        },
+        "noise": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        },
+        "rename-person": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        }
+      }
+    },
+    "id": "human-exam1-membrane-s06-p1",
+    "questionRef": {
+      "questionId": "pretest-exam1-membrane",
+      "nodeId": "P1"
+    },
+    "expectedScore": "miss",
+    "misconceptionIds": [],
+    "tags": [
+      "human",
+      "exam1",
+      "membrane",
+      "p1"
+    ],
+    "seriousMisjudgmentOpportunity": true,
+    "expectedExtraction": {
+      "anchors": [],
+      "response": "substantive",
+      "terminology": "model",
+      "syllabus": "within",
+      "contradiction": false,
+      "typo": "none",
+      "errorIds": [],
+      "slots": [],
+      "evidenceQuotes": []
+    },
+    "rationale": {
+      "rubricRefs": [
+        "p1-miss"
+      ],
+      "adjudicationRefs": [
+        "§1"
+      ],
+      "text": "作答未表达半反应分隔理由（K⁺-only/电路/电中性类论证不计入 P1）。标注 Fable 5；张涵彬授权按建议先行（2026-07-22），K⁺-only 判 miss 与 S20 弱表述判 hit 两点待陆老师终审可改判。"
+    }
+  },
+  {
+    "version": "eval-case.v2",
+    "evaluationPath": "structured-assessment",
+    "annotationStatus": "labeled",
+    "studentAnswer": "不能。O₂ 在正极与 K⁺ 结合形成 KO₂，负极为 K，变成 K⁺ 通过隔膜到 b，所以不通过 O₂。",
+    "annotator": "fable-5",
+    "rubricVersion": "rubrics.v1.2",
+    "source": "human",
+    "runs": 3,
+    "reviewer": "zhb-authorized",
+    "reviewStatus": "reviewed",
+    "adjudicationVersion": "adjudication-table.v1.1",
+    "expectedDisagreement": false,
+    "metamorphicReview": {
+      "reviewer": "zhb-authorized",
+      "status": "approved",
+      "variants": {
+        "paraphrase": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        },
+        "noise": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        },
+        "rename-person": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        }
+      }
+    },
+    "id": "human-exam1-membrane-s07-d3",
+    "questionRef": {
+      "questionId": "pretest-exam1-membrane",
+      "nodeId": "D3"
+    },
+    "expectedExtraction": {
+      "anchors": [],
+      "response": "substantive",
+      "terminology": "model",
+      "syllabus": "within",
+      "contradiction": false,
+      "typo": "none",
+      "errorIds": [],
+      "slots": [
+        {
+          "id": "o2-passes",
+          "value": "false",
+          "evidenceQuote": "不能"
+        }
+      ],
+      "evidenceQuotes": [
+        "不能"
+      ]
+    },
+    "expectedScore": "hit",
+    "misconceptionIds": [],
+    "tags": [
+      "human",
+      "exam1",
+      "membrane",
+      "d3"
+    ],
+    "seriousMisjudgmentOpportunity": false,
+    "rationale": {
+      "rubricRefs": [
+        "d3-hit"
+      ],
+      "adjudicationRefs": [
+        "§1"
+      ],
+      "text": "结论「不能」正确，o2-passes=false 命中。标注 Fable 5；张涵彬授权按建议先行（2026-07-22），K⁺-only 判 miss 与 S20 弱表述判 hit 两点待陆老师终审可改判。"
+    }
+  },
+  {
+    "version": "eval-case.v2",
+    "evaluationPath": "structured-assessment",
+    "annotationStatus": "labeled",
+    "studentAnswer": "不能。O₂ 在正极与 K⁺ 结合形成 KO₂，负极为 K，变成 K⁺ 通过隔膜到 b，所以不通过 O₂。",
+    "annotator": "fable-5",
+    "rubricVersion": "rubrics.v1.2",
+    "source": "human",
+    "runs": 3,
+    "reviewer": "zhb-authorized",
+    "reviewStatus": "reviewed",
+    "adjudicationVersion": "adjudication-table.v1.1",
+    "expectedDisagreement": false,
+    "metamorphicReview": {
+      "reviewer": "zhb-authorized",
+      "status": "approved",
+      "variants": {
+        "paraphrase": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        },
+        "noise": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        },
+        "rename-person": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        }
+      }
+    },
+    "id": "human-exam1-membrane-s07-p1",
+    "questionRef": {
+      "questionId": "pretest-exam1-membrane",
+      "nodeId": "P1"
+    },
+    "expectedScore": "miss",
+    "misconceptionIds": [],
+    "tags": [
+      "human",
+      "exam1",
+      "membrane",
+      "p1"
+    ],
+    "seriousMisjudgmentOpportunity": true,
+    "expectedExtraction": {
+      "anchors": [],
+      "response": "substantive",
+      "terminology": "model",
+      "syllabus": "within",
+      "contradiction": false,
+      "typo": "none",
+      "errorIds": [],
+      "slots": [],
+      "evidenceQuotes": []
+    },
+    "rationale": {
+      "rubricRefs": [
+        "p1-miss"
+      ],
+      "adjudicationRefs": [
+        "§1"
+      ],
+      "text": "作答未表达半反应分隔理由（K⁺-only/电路/电中性类论证不计入 P1）。标注 Fable 5；张涵彬授权按建议先行（2026-07-22），K⁺-only 判 miss 与 S20 弱表述判 hit 两点待陆老师终审可改判。"
+    }
+  },
+  {
+    "version": "eval-case.v2",
+    "evaluationPath": "structured-assessment",
+    "annotationStatus": "labeled",
+    "studentAnswer": "不能。如果有 O₂ 通过，O₂ 会直接与 K 发生氧化还原反应，会有更少电子流经外电路。",
+    "annotator": "fable-5",
+    "rubricVersion": "rubrics.v1.2",
+    "source": "human",
+    "runs": 3,
+    "reviewer": "zhb-authorized",
+    "reviewStatus": "reviewed",
+    "adjudicationVersion": "adjudication-table.v1.1",
+    "expectedDisagreement": false,
+    "metamorphicReview": {
+      "reviewer": "zhb-authorized",
+      "status": "approved",
+      "variants": {
+        "paraphrase": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        },
+        "noise": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        },
+        "rename-person": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        }
+      }
+    },
+    "id": "human-exam1-membrane-s09-d3",
+    "questionRef": {
+      "questionId": "pretest-exam1-membrane",
+      "nodeId": "D3"
+    },
+    "expectedExtraction": {
+      "anchors": [],
+      "response": "substantive",
+      "terminology": "model",
+      "syllabus": "within",
+      "contradiction": false,
+      "typo": "none",
+      "errorIds": [],
+      "slots": [
+        {
+          "id": "o2-passes",
+          "value": "false",
+          "evidenceQuote": "不能"
+        }
+      ],
+      "evidenceQuotes": [
+        "不能"
+      ]
+    },
+    "expectedScore": "hit",
+    "misconceptionIds": [],
+    "tags": [
+      "human",
+      "exam1",
+      "membrane",
+      "d3"
+    ],
+    "seriousMisjudgmentOpportunity": false,
+    "rationale": {
+      "rubricRefs": [
+        "d3-hit"
+      ],
+      "adjudicationRefs": [
+        "§1"
+      ],
+      "text": "结论「不能」正确，o2-passes=false 命中。标注 Fable 5；张涵彬授权按建议先行（2026-07-22），K⁺-only 判 miss 与 S20 弱表述判 hit 两点待陆老师终审可改判。"
+    }
+  },
+  {
+    "version": "eval-case.v2",
+    "evaluationPath": "structured-assessment",
+    "annotationStatus": "labeled",
+    "studentAnswer": "不能。如果有 O₂ 通过，O₂ 会直接与 K 发生氧化还原反应，会有更少电子流经外电路。",
+    "annotator": "fable-5",
+    "rubricVersion": "rubrics.v1.2",
+    "source": "human",
+    "runs": 3,
+    "reviewer": "zhb-authorized",
+    "reviewStatus": "reviewed",
+    "adjudicationVersion": "adjudication-table.v1.1",
+    "expectedDisagreement": false,
+    "metamorphicReview": {
+      "reviewer": "zhb-authorized",
+      "status": "approved",
+      "variants": {
+        "paraphrase": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        },
+        "noise": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        },
+        "rename-person": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        }
+      }
+    },
+    "id": "human-exam1-membrane-s09-p1",
+    "questionRef": {
+      "questionId": "pretest-exam1-membrane",
+      "nodeId": "P1"
+    },
+    "expectedScore": "hit",
+    "misconceptionIds": [],
+    "tags": [
+      "human",
+      "exam1",
+      "membrane",
+      "p1"
+    ],
+    "seriousMisjudgmentOpportunity": false,
+    "expectedExtraction": {
+      "anchors": [],
+      "response": "substantive",
+      "terminology": "model",
+      "syllabus": "within",
+      "contradiction": false,
+      "typo": "none",
+      "errorIds": [],
+      "slots": [
+        {
+          "id": "separation-purpose",
+          "value": "prevent-direct-reaction",
+          "evidenceQuote": "O₂ 会直接与 K 发生氧化还原反应"
+        }
+      ],
+      "evidenceQuotes": [
+        "O₂ 会直接与 K 发生氧化还原反应"
+      ]
+    },
+    "rationale": {
+      "rubricRefs": [
+        "p1-hit"
+      ],
+      "adjudicationRefs": [
+        "§1"
+      ],
+      "text": "理由表达了防止直接反应/分隔（引用：O₂ 会直接与 K 发生氧化还原反应）。标注 Fable 5；张涵彬授权按建议先行（2026-07-22），K⁺-only 判 miss 与 S20 弱表述判 hit 两点待陆老师终审可改判。"
+    }
+  },
+  {
+    "version": "eval-case.v2",
+    "evaluationPath": "structured-assessment",
+    "annotationStatus": "labeled",
+    "studentAnswer": "否，O₂ 不带电，即使存在电势差也不会定向移动。",
+    "annotator": "fable-5",
+    "rubricVersion": "rubrics.v1.2",
+    "source": "human",
+    "runs": 3,
+    "reviewer": "zhb-authorized",
+    "reviewStatus": "reviewed",
+    "adjudicationVersion": "adjudication-table.v1.1",
+    "expectedDisagreement": false,
+    "metamorphicReview": {
+      "reviewer": "zhb-authorized",
+      "status": "approved",
+      "variants": {
+        "paraphrase": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        },
+        "noise": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        },
+        "rename-person": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        }
+      }
+    },
+    "id": "human-exam1-membrane-s11-d3",
+    "questionRef": {
+      "questionId": "pretest-exam1-membrane",
+      "nodeId": "D3"
+    },
+    "expectedExtraction": {
+      "anchors": [],
+      "response": "substantive",
+      "terminology": "model",
+      "syllabus": "within",
+      "contradiction": false,
+      "typo": "none",
+      "errorIds": [],
+      "slots": [
+        {
+          "id": "o2-passes",
+          "value": "false",
+          "evidenceQuote": "否"
+        }
+      ],
+      "evidenceQuotes": [
+        "否"
+      ]
+    },
+    "expectedScore": "hit",
+    "misconceptionIds": [],
+    "tags": [
+      "human",
+      "exam1",
+      "membrane",
+      "d3"
+    ],
+    "seriousMisjudgmentOpportunity": false,
+    "rationale": {
+      "rubricRefs": [
+        "d3-hit"
+      ],
+      "adjudicationRefs": [
+        "§1"
+      ],
+      "text": "结论「否」正确，o2-passes=false 命中。标注 Fable 5；张涵彬授权按建议先行（2026-07-22），K⁺-only 判 miss 与 S20 弱表述判 hit 两点待陆老师终审可改判。"
+    }
+  },
+  {
+    "version": "eval-case.v2",
+    "evaluationPath": "structured-assessment",
+    "annotationStatus": "labeled",
+    "studentAnswer": "否，O₂ 不带电，即使存在电势差也不会定向移动。",
+    "annotator": "fable-5",
+    "rubricVersion": "rubrics.v1.2",
+    "source": "human",
+    "runs": 3,
+    "reviewer": "zhb-authorized",
+    "reviewStatus": "reviewed",
+    "adjudicationVersion": "adjudication-table.v1.1",
+    "expectedDisagreement": false,
+    "metamorphicReview": {
+      "reviewer": "zhb-authorized",
+      "status": "approved",
+      "variants": {
+        "paraphrase": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        },
+        "noise": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        },
+        "rename-person": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        }
+      }
+    },
+    "id": "human-exam1-membrane-s11-p1",
+    "questionRef": {
+      "questionId": "pretest-exam1-membrane",
+      "nodeId": "P1"
+    },
+    "expectedScore": "miss",
+    "misconceptionIds": [],
+    "tags": [
+      "human",
+      "exam1",
+      "membrane",
+      "p1"
+    ],
+    "seriousMisjudgmentOpportunity": true,
+    "expectedExtraction": {
+      "anchors": [],
+      "response": "substantive",
+      "terminology": "model",
+      "syllabus": "within",
+      "contradiction": false,
+      "typo": "none",
+      "errorIds": [],
+      "slots": [],
+      "evidenceQuotes": []
+    },
+    "rationale": {
+      "rubricRefs": [
+        "p1-miss"
+      ],
+      "adjudicationRefs": [
+        "§1"
+      ],
+      "text": "作答未表达半反应分隔理由（K⁺-only/电路/电中性类论证不计入 P1）。标注 Fable 5；张涵彬授权按建议先行（2026-07-22），K⁺-only 判 miss 与 S20 弱表述判 hit 两点待陆老师终审可改判。"
+    }
+  },
+  {
+    "version": "eval-case.v2",
+    "evaluationPath": "structured-assessment",
+    "annotationStatus": "labeled",
+    "studentAnswer": "不能。若能通过 O₂，则 O₂ 会迁移至 a 极放电生成 O²⁻，生成 K₂O 而不是 KO₂。",
+    "annotator": "fable-5",
+    "rubricVersion": "rubrics.v1.2",
+    "source": "human",
+    "runs": 3,
+    "reviewer": "zhb-authorized",
+    "reviewStatus": "reviewed",
+    "adjudicationVersion": "adjudication-table.v1.1",
+    "expectedDisagreement": false,
+    "metamorphicReview": {
+      "reviewer": "zhb-authorized",
+      "status": "approved",
+      "variants": {
+        "paraphrase": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        },
+        "noise": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        },
+        "rename-person": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        }
+      }
+    },
+    "id": "human-exam1-membrane-s12-d3",
+    "questionRef": {
+      "questionId": "pretest-exam1-membrane",
+      "nodeId": "D3"
+    },
+    "expectedExtraction": {
+      "anchors": [],
+      "response": "substantive",
+      "terminology": "model",
+      "syllabus": "within",
+      "contradiction": false,
+      "typo": "none",
+      "errorIds": [],
+      "slots": [
+        {
+          "id": "o2-passes",
+          "value": "false",
+          "evidenceQuote": "不能"
+        }
+      ],
+      "evidenceQuotes": [
+        "不能"
+      ]
+    },
+    "expectedScore": "hit",
+    "misconceptionIds": [],
+    "tags": [
+      "human",
+      "exam1",
+      "membrane",
+      "d3"
+    ],
+    "seriousMisjudgmentOpportunity": false,
+    "rationale": {
+      "rubricRefs": [
+        "d3-hit"
+      ],
+      "adjudicationRefs": [
+        "§1"
+      ],
+      "text": "结论「不能」正确，o2-passes=false 命中。标注 Fable 5；张涵彬授权按建议先行（2026-07-22），K⁺-only 判 miss 与 S20 弱表述判 hit 两点待陆老师终审可改判。"
+    }
+  },
+  {
+    "version": "eval-case.v2",
+    "evaluationPath": "structured-assessment",
+    "annotationStatus": "labeled",
+    "studentAnswer": "不能。若能通过 O₂，则 O₂ 会迁移至 a 极放电生成 O²⁻，生成 K₂O 而不是 KO₂。",
+    "annotator": "fable-5",
+    "rubricVersion": "rubrics.v1.2",
+    "source": "human",
+    "runs": 3,
+    "reviewer": "zhb-authorized",
+    "reviewStatus": "reviewed",
+    "adjudicationVersion": "adjudication-table.v1.1",
+    "expectedDisagreement": false,
+    "metamorphicReview": {
+      "reviewer": "zhb-authorized",
+      "status": "approved",
+      "variants": {
+        "paraphrase": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        },
+        "noise": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        },
+        "rename-person": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        }
+      }
+    },
+    "id": "human-exam1-membrane-s12-p1",
+    "questionRef": {
+      "questionId": "pretest-exam1-membrane",
+      "nodeId": "P1"
+    },
+    "expectedScore": "hit",
+    "misconceptionIds": [],
+    "tags": [
+      "human",
+      "exam1",
+      "membrane",
+      "p1"
+    ],
+    "seriousMisjudgmentOpportunity": false,
+    "expectedExtraction": {
+      "anchors": [],
+      "response": "substantive",
+      "terminology": "model",
+      "syllabus": "within",
+      "contradiction": false,
+      "typo": "none",
+      "errorIds": [],
+      "slots": [
+        {
+          "id": "separation-purpose",
+          "value": "prevent-direct-reaction",
+          "evidenceQuote": "O₂ 会迁移至 a 极放电生成 O²⁻，生成 K₂O 而不是 KO₂"
+        }
+      ],
+      "evidenceQuotes": [
+        "O₂ 会迁移至 a 极放电生成 O²⁻，生成 K₂O 而不是 KO₂"
+      ]
+    },
+    "rationale": {
+      "rubricRefs": [
+        "p1-hit"
+      ],
+      "adjudicationRefs": [
+        "§1"
+      ],
+      "text": "理由表达了防止直接反应/分隔（引用：O₂ 会迁移至 a 极放电生成 O²⁻，生成 K₂O 而不是 KO₂）。标注 Fable 5；张涵彬授权按建议先行（2026-07-22），K⁺-only 判 miss 与 S20 弱表述判 hit 两点待陆老师终审可改判。"
+    }
+  },
+  {
+    "version": "eval-case.v2",
+    "evaluationPath": "structured-assessment",
+    "annotationStatus": "labeled",
+    "studentAnswer": "不能，只允许通过 K⁺",
+    "annotator": "fable-5",
+    "rubricVersion": "rubrics.v1.2",
+    "source": "human",
+    "runs": 3,
+    "reviewer": "zhb-authorized",
+    "reviewStatus": "reviewed",
+    "adjudicationVersion": "adjudication-table.v1.1",
+    "expectedDisagreement": false,
+    "metamorphicReview": {
+      "reviewer": "zhb-authorized",
+      "status": "approved",
+      "variants": {
+        "paraphrase": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        },
+        "noise": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        },
+        "rename-person": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        }
+      }
+    },
+    "id": "human-exam1-membrane-s13-d3",
+    "questionRef": {
+      "questionId": "pretest-exam1-membrane",
+      "nodeId": "D3"
+    },
+    "expectedExtraction": {
+      "anchors": [],
+      "response": "substantive",
+      "terminology": "model",
+      "syllabus": "within",
+      "contradiction": false,
+      "typo": "none",
+      "errorIds": [],
+      "slots": [
+        {
+          "id": "o2-passes",
+          "value": "false",
+          "evidenceQuote": "不能"
+        }
+      ],
+      "evidenceQuotes": [
+        "不能"
+      ]
+    },
+    "expectedScore": "hit",
+    "misconceptionIds": [],
+    "tags": [
+      "human",
+      "exam1",
+      "membrane",
+      "d3"
+    ],
+    "seriousMisjudgmentOpportunity": false,
+    "rationale": {
+      "rubricRefs": [
+        "d3-hit"
+      ],
+      "adjudicationRefs": [
+        "§1"
+      ],
+      "text": "结论「不能」正确，o2-passes=false 命中。标注 Fable 5；张涵彬授权按建议先行（2026-07-22），K⁺-only 判 miss 与 S20 弱表述判 hit 两点待陆老师终审可改判。"
+    }
+  },
+  {
+    "version": "eval-case.v2",
+    "evaluationPath": "structured-assessment",
+    "annotationStatus": "labeled",
+    "studentAnswer": "不能，只允许通过 K⁺",
+    "annotator": "fable-5",
+    "rubricVersion": "rubrics.v1.2",
+    "source": "human",
+    "runs": 3,
+    "reviewer": "zhb-authorized",
+    "reviewStatus": "reviewed",
+    "adjudicationVersion": "adjudication-table.v1.1",
+    "expectedDisagreement": false,
+    "metamorphicReview": {
+      "reviewer": "zhb-authorized",
+      "status": "approved",
+      "variants": {
+        "paraphrase": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        },
+        "noise": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        },
+        "rename-person": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        }
+      }
+    },
+    "id": "human-exam1-membrane-s13-p1",
+    "questionRef": {
+      "questionId": "pretest-exam1-membrane",
+      "nodeId": "P1"
+    },
+    "expectedScore": "miss",
+    "misconceptionIds": [],
+    "tags": [
+      "human",
+      "exam1",
+      "membrane",
+      "p1"
+    ],
+    "seriousMisjudgmentOpportunity": true,
+    "expectedExtraction": {
+      "anchors": [],
+      "response": "substantive",
+      "terminology": "model",
+      "syllabus": "within",
+      "contradiction": false,
+      "typo": "none",
+      "errorIds": [],
+      "slots": [],
+      "evidenceQuotes": []
+    },
+    "rationale": {
+      "rubricRefs": [
+        "p1-miss"
+      ],
+      "adjudicationRefs": [
+        "§1"
+      ],
+      "text": "作答未表达半反应分隔理由（K⁺-only/电路/电中性类论证不计入 P1）。标注 Fable 5；张涵彬授权按建议先行（2026-07-22），K⁺-only 判 miss 与 S20 弱表述判 hit 两点待陆老师终审可改判。"
+    }
+  },
+  {
+    "version": "eval-case.v2",
+    "evaluationPath": "structured-assessment",
+    "annotationStatus": "labeled",
+    "studentAnswer": "不能。隔膜是钾离子交换膜，使氧气与钾离子反应，不接触单质钾。",
+    "annotator": "fable-5",
+    "rubricVersion": "rubrics.v1.2",
+    "source": "human",
+    "runs": 3,
+    "reviewer": "zhb-authorized",
+    "reviewStatus": "reviewed",
+    "adjudicationVersion": "adjudication-table.v1.1",
+    "expectedDisagreement": false,
+    "metamorphicReview": {
+      "reviewer": "zhb-authorized",
+      "status": "approved",
+      "variants": {
+        "paraphrase": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        },
+        "noise": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        },
+        "rename-person": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        }
+      }
+    },
+    "id": "human-exam1-membrane-s14-d3",
+    "questionRef": {
+      "questionId": "pretest-exam1-membrane",
+      "nodeId": "D3"
+    },
+    "expectedExtraction": {
+      "anchors": [],
+      "response": "substantive",
+      "terminology": "model",
+      "syllabus": "within",
+      "contradiction": false,
+      "typo": "none",
+      "errorIds": [],
+      "slots": [
+        {
+          "id": "o2-passes",
+          "value": "false",
+          "evidenceQuote": "不能"
+        }
+      ],
+      "evidenceQuotes": [
+        "不能"
+      ]
+    },
+    "expectedScore": "hit",
+    "misconceptionIds": [],
+    "tags": [
+      "human",
+      "exam1",
+      "membrane",
+      "d3"
+    ],
+    "seriousMisjudgmentOpportunity": false,
+    "rationale": {
+      "rubricRefs": [
+        "d3-hit"
+      ],
+      "adjudicationRefs": [
+        "§1"
+      ],
+      "text": "结论「不能」正确，o2-passes=false 命中。标注 Fable 5；张涵彬授权按建议先行（2026-07-22），K⁺-only 判 miss 与 S20 弱表述判 hit 两点待陆老师终审可改判。"
+    }
+  },
+  {
+    "version": "eval-case.v2",
+    "evaluationPath": "structured-assessment",
+    "annotationStatus": "labeled",
+    "studentAnswer": "不能。隔膜是钾离子交换膜，使氧气与钾离子反应，不接触单质钾。",
+    "annotator": "fable-5",
+    "rubricVersion": "rubrics.v1.2",
+    "source": "human",
+    "runs": 3,
+    "reviewer": "zhb-authorized",
+    "reviewStatus": "reviewed",
+    "adjudicationVersion": "adjudication-table.v1.1",
+    "expectedDisagreement": false,
+    "metamorphicReview": {
+      "reviewer": "zhb-authorized",
+      "status": "approved",
+      "variants": {
+        "paraphrase": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        },
+        "noise": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        },
+        "rename-person": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        }
+      }
+    },
+    "id": "human-exam1-membrane-s14-p1",
+    "questionRef": {
+      "questionId": "pretest-exam1-membrane",
+      "nodeId": "P1"
+    },
+    "expectedScore": "hit",
+    "misconceptionIds": [],
+    "tags": [
+      "human",
+      "exam1",
+      "membrane",
+      "p1"
+    ],
+    "seriousMisjudgmentOpportunity": false,
+    "expectedExtraction": {
+      "anchors": [],
+      "response": "substantive",
+      "terminology": "model",
+      "syllabus": "within",
+      "contradiction": false,
+      "typo": "none",
+      "errorIds": [],
+      "slots": [
+        {
+          "id": "separation-purpose",
+          "value": "prevent-direct-reaction",
+          "evidenceQuote": "不接触单质钾"
+        }
+      ],
+      "evidenceQuotes": [
+        "不接触单质钾"
+      ]
+    },
+    "rationale": {
+      "rubricRefs": [
+        "p1-hit"
+      ],
+      "adjudicationRefs": [
+        "§1"
+      ],
+      "text": "理由表达了防止直接反应/分隔（引用：不接触单质钾）。标注 Fable 5；张涵彬授权按建议先行（2026-07-22），K⁺-only 判 miss 与 S20 弱表述判 hit 两点待陆老师终审可改判。"
+    }
+  },
+  {
+    "version": "eval-case.v2",
+    "evaluationPath": "structured-assessment",
+    "annotationStatus": "labeled",
+    "studentAnswer": "不，无法构成原电池回路",
+    "annotator": "fable-5",
+    "rubricVersion": "rubrics.v1.2",
+    "source": "human",
+    "runs": 3,
+    "reviewer": "zhb-authorized",
+    "reviewStatus": "reviewed",
+    "adjudicationVersion": "adjudication-table.v1.1",
+    "expectedDisagreement": false,
+    "metamorphicReview": {
+      "reviewer": "zhb-authorized",
+      "status": "approved",
+      "variants": {
+        "paraphrase": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        },
+        "noise": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        },
+        "rename-person": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        }
+      }
+    },
+    "id": "human-exam1-membrane-s15-d3",
+    "questionRef": {
+      "questionId": "pretest-exam1-membrane",
+      "nodeId": "D3"
+    },
+    "expectedExtraction": {
+      "anchors": [],
+      "response": "substantive",
+      "terminology": "model",
+      "syllabus": "within",
+      "contradiction": false,
+      "typo": "none",
+      "errorIds": [],
+      "slots": [
+        {
+          "id": "o2-passes",
+          "value": "false",
+          "evidenceQuote": "不"
+        }
+      ],
+      "evidenceQuotes": [
+        "不"
+      ]
+    },
+    "expectedScore": "hit",
+    "misconceptionIds": [],
+    "tags": [
+      "human",
+      "exam1",
+      "membrane",
+      "d3"
+    ],
+    "seriousMisjudgmentOpportunity": false,
+    "rationale": {
+      "rubricRefs": [
+        "d3-hit"
+      ],
+      "adjudicationRefs": [
+        "§1"
+      ],
+      "text": "结论「不」正确，o2-passes=false 命中。标注 Fable 5；张涵彬授权按建议先行（2026-07-22），K⁺-only 判 miss 与 S20 弱表述判 hit 两点待陆老师终审可改判。"
+    }
+  },
+  {
+    "version": "eval-case.v2",
+    "evaluationPath": "structured-assessment",
+    "annotationStatus": "labeled",
+    "studentAnswer": "不，无法构成原电池回路",
+    "annotator": "fable-5",
+    "rubricVersion": "rubrics.v1.2",
+    "source": "human",
+    "runs": 3,
+    "reviewer": "zhb-authorized",
+    "reviewStatus": "reviewed",
+    "adjudicationVersion": "adjudication-table.v1.1",
+    "expectedDisagreement": false,
+    "metamorphicReview": {
+      "reviewer": "zhb-authorized",
+      "status": "approved",
+      "variants": {
+        "paraphrase": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        },
+        "noise": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        },
+        "rename-person": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        }
+      }
+    },
+    "id": "human-exam1-membrane-s15-p1",
+    "questionRef": {
+      "questionId": "pretest-exam1-membrane",
+      "nodeId": "P1"
+    },
+    "expectedScore": "miss",
+    "misconceptionIds": [],
+    "tags": [
+      "human",
+      "exam1",
+      "membrane",
+      "p1"
+    ],
+    "seriousMisjudgmentOpportunity": true,
+    "expectedExtraction": {
+      "anchors": [],
+      "response": "substantive",
+      "terminology": "model",
+      "syllabus": "within",
+      "contradiction": false,
+      "typo": "none",
+      "errorIds": [],
+      "slots": [],
+      "evidenceQuotes": []
+    },
+    "rationale": {
+      "rubricRefs": [
+        "p1-miss"
+      ],
+      "adjudicationRefs": [
+        "§1"
+      ],
+      "text": "作答未表达半反应分隔理由（K⁺-only/电路/电中性类论证不计入 P1）。标注 Fable 5；张涵彬授权按建议先行（2026-07-22），K⁺-only 判 miss 与 S20 弱表述判 hit 两点待陆老师终审可改判。"
+    }
+  },
+  {
+    "version": "eval-case.v2",
+    "evaluationPath": "structured-assessment",
+    "annotationStatus": "labeled",
+    "studentAnswer": "不能，O₂ 无电性，",
+    "annotator": "fable-5",
+    "rubricVersion": "rubrics.v1.2",
+    "source": "human",
+    "runs": 3,
+    "reviewer": "zhb-authorized",
+    "reviewStatus": "reviewed",
+    "adjudicationVersion": "adjudication-table.v1.1",
+    "expectedDisagreement": false,
+    "metamorphicReview": {
+      "reviewer": "zhb-authorized",
+      "status": "approved",
+      "variants": {
+        "paraphrase": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        },
+        "noise": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        },
+        "rename-person": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        }
+      }
+    },
+    "id": "human-exam1-membrane-s16-d3",
+    "questionRef": {
+      "questionId": "pretest-exam1-membrane",
+      "nodeId": "D3"
+    },
+    "expectedExtraction": {
+      "anchors": [],
+      "response": "substantive",
+      "terminology": "model",
+      "syllabus": "within",
+      "contradiction": false,
+      "typo": "none",
+      "errorIds": [],
+      "slots": [
+        {
+          "id": "o2-passes",
+          "value": "false",
+          "evidenceQuote": "不能"
+        }
+      ],
+      "evidenceQuotes": [
+        "不能"
+      ]
+    },
+    "expectedScore": "hit",
+    "misconceptionIds": [],
+    "tags": [
+      "human",
+      "exam1",
+      "membrane",
+      "d3"
+    ],
+    "seriousMisjudgmentOpportunity": false,
+    "rationale": {
+      "rubricRefs": [
+        "d3-hit"
+      ],
+      "adjudicationRefs": [
+        "§1"
+      ],
+      "text": "结论「不能」正确，o2-passes=false 命中。标注 Fable 5；张涵彬授权按建议先行（2026-07-22），K⁺-only 判 miss 与 S20 弱表述判 hit 两点待陆老师终审可改判。"
+    }
+  },
+  {
+    "version": "eval-case.v2",
+    "evaluationPath": "structured-assessment",
+    "annotationStatus": "labeled",
+    "studentAnswer": "不能，O₂ 无电性，",
+    "annotator": "fable-5",
+    "rubricVersion": "rubrics.v1.2",
+    "source": "human",
+    "runs": 3,
+    "reviewer": "zhb-authorized",
+    "reviewStatus": "reviewed",
+    "adjudicationVersion": "adjudication-table.v1.1",
+    "expectedDisagreement": false,
+    "metamorphicReview": {
+      "reviewer": "zhb-authorized",
+      "status": "approved",
+      "variants": {
+        "paraphrase": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        },
+        "noise": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        },
+        "rename-person": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        }
+      }
+    },
+    "id": "human-exam1-membrane-s16-p1",
+    "questionRef": {
+      "questionId": "pretest-exam1-membrane",
+      "nodeId": "P1"
+    },
+    "expectedScore": "miss",
+    "misconceptionIds": [],
+    "tags": [
+      "human",
+      "exam1",
+      "membrane",
+      "p1"
+    ],
+    "seriousMisjudgmentOpportunity": true,
+    "expectedExtraction": {
+      "anchors": [],
+      "response": "substantive",
+      "terminology": "model",
+      "syllabus": "within",
+      "contradiction": false,
+      "typo": "none",
+      "errorIds": [],
+      "slots": [],
+      "evidenceQuotes": []
+    },
+    "rationale": {
+      "rubricRefs": [
+        "p1-miss"
+      ],
+      "adjudicationRefs": [
+        "§1"
+      ],
+      "text": "作答未表达半反应分隔理由（K⁺-only/电路/电中性类论证不计入 P1）。标注 Fable 5；张涵彬授权按建议先行（2026-07-22），K⁺-only 判 miss 与 S20 弱表述判 hit 两点待陆老师终审可改判。"
+    }
+  },
+  {
+    "version": "eval-case.v2",
+    "evaluationPath": "structured-assessment",
+    "annotationStatus": "labeled",
+    "studentAnswer": "不能，因为隔膜是只 K⁺ 通过的电解质。",
+    "annotator": "fable-5",
+    "rubricVersion": "rubrics.v1.2",
+    "source": "human",
+    "runs": 3,
+    "reviewer": "zhb-authorized",
+    "reviewStatus": "reviewed",
+    "adjudicationVersion": "adjudication-table.v1.1",
+    "expectedDisagreement": false,
+    "metamorphicReview": {
+      "reviewer": "zhb-authorized",
+      "status": "approved",
+      "variants": {
+        "paraphrase": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        },
+        "noise": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        },
+        "rename-person": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        }
+      }
+    },
+    "id": "human-exam1-membrane-s17-d3",
+    "questionRef": {
+      "questionId": "pretest-exam1-membrane",
+      "nodeId": "D3"
+    },
+    "expectedExtraction": {
+      "anchors": [],
+      "response": "substantive",
+      "terminology": "model",
+      "syllabus": "within",
+      "contradiction": false,
+      "typo": "none",
+      "errorIds": [],
+      "slots": [
+        {
+          "id": "o2-passes",
+          "value": "false",
+          "evidenceQuote": "不能"
+        }
+      ],
+      "evidenceQuotes": [
+        "不能"
+      ]
+    },
+    "expectedScore": "hit",
+    "misconceptionIds": [],
+    "tags": [
+      "human",
+      "exam1",
+      "membrane",
+      "d3"
+    ],
+    "seriousMisjudgmentOpportunity": false,
+    "rationale": {
+      "rubricRefs": [
+        "d3-hit"
+      ],
+      "adjudicationRefs": [
+        "§1"
+      ],
+      "text": "结论「不能」正确，o2-passes=false 命中。标注 Fable 5；张涵彬授权按建议先行（2026-07-22），K⁺-only 判 miss 与 S20 弱表述判 hit 两点待陆老师终审可改判。"
+    }
+  },
+  {
+    "version": "eval-case.v2",
+    "evaluationPath": "structured-assessment",
+    "annotationStatus": "labeled",
+    "studentAnswer": "不能，因为隔膜是只 K⁺ 通过的电解质。",
+    "annotator": "fable-5",
+    "rubricVersion": "rubrics.v1.2",
+    "source": "human",
+    "runs": 3,
+    "reviewer": "zhb-authorized",
+    "reviewStatus": "reviewed",
+    "adjudicationVersion": "adjudication-table.v1.1",
+    "expectedDisagreement": false,
+    "metamorphicReview": {
+      "reviewer": "zhb-authorized",
+      "status": "approved",
+      "variants": {
+        "paraphrase": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        },
+        "noise": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        },
+        "rename-person": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        }
+      }
+    },
+    "id": "human-exam1-membrane-s17-p1",
+    "questionRef": {
+      "questionId": "pretest-exam1-membrane",
+      "nodeId": "P1"
+    },
+    "expectedScore": "miss",
+    "misconceptionIds": [],
+    "tags": [
+      "human",
+      "exam1",
+      "membrane",
+      "p1"
+    ],
+    "seriousMisjudgmentOpportunity": true,
+    "expectedExtraction": {
+      "anchors": [],
+      "response": "substantive",
+      "terminology": "model",
+      "syllabus": "within",
+      "contradiction": false,
+      "typo": "none",
+      "errorIds": [],
+      "slots": [],
+      "evidenceQuotes": []
+    },
+    "rationale": {
+      "rubricRefs": [
+        "p1-miss"
+      ],
+      "adjudicationRefs": [
+        "§1"
+      ],
+      "text": "作答未表达半反应分隔理由（K⁺-only/电路/电中性类论证不计入 P1）。标注 Fable 5；张涵彬授权按建议先行（2026-07-22），K⁺-only 判 miss 与 S20 弱表述判 hit 两点待陆老师终审可改判。"
+    }
+  },
+  {
+    "version": "eval-case.v2",
+    "evaluationPath": "structured-assessment",
+    "annotationStatus": "labeled",
+    "studentAnswer": "不能，防止 O₂ 与 a 极 钾片反应",
+    "annotator": "fable-5",
+    "rubricVersion": "rubrics.v1.2",
+    "source": "human",
+    "runs": 3,
+    "reviewer": "zhb-authorized",
+    "reviewStatus": "reviewed",
+    "adjudicationVersion": "adjudication-table.v1.1",
+    "expectedDisagreement": false,
+    "metamorphicReview": {
+      "reviewer": "zhb-authorized",
+      "status": "approved",
+      "variants": {
+        "paraphrase": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        },
+        "noise": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        },
+        "rename-person": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        }
+      }
+    },
+    "id": "human-exam1-membrane-s18-d3",
+    "questionRef": {
+      "questionId": "pretest-exam1-membrane",
+      "nodeId": "D3"
+    },
+    "expectedExtraction": {
+      "anchors": [],
+      "response": "substantive",
+      "terminology": "model",
+      "syllabus": "within",
+      "contradiction": false,
+      "typo": "none",
+      "errorIds": [],
+      "slots": [
+        {
+          "id": "o2-passes",
+          "value": "false",
+          "evidenceQuote": "不能"
+        }
+      ],
+      "evidenceQuotes": [
+        "不能"
+      ]
+    },
+    "expectedScore": "hit",
+    "misconceptionIds": [],
+    "tags": [
+      "human",
+      "exam1",
+      "membrane",
+      "d3"
+    ],
+    "seriousMisjudgmentOpportunity": false,
+    "rationale": {
+      "rubricRefs": [
+        "d3-hit"
+      ],
+      "adjudicationRefs": [
+        "§1"
+      ],
+      "text": "结论「不能」正确，o2-passes=false 命中。标注 Fable 5；张涵彬授权按建议先行（2026-07-22），K⁺-only 判 miss 与 S20 弱表述判 hit 两点待陆老师终审可改判。"
+    }
+  },
+  {
+    "version": "eval-case.v2",
+    "evaluationPath": "structured-assessment",
+    "annotationStatus": "labeled",
+    "studentAnswer": "不能，防止 O₂ 与 a 极 钾片反应",
+    "annotator": "fable-5",
+    "rubricVersion": "rubrics.v1.2",
+    "source": "human",
+    "runs": 3,
+    "reviewer": "zhb-authorized",
+    "reviewStatus": "reviewed",
+    "adjudicationVersion": "adjudication-table.v1.1",
+    "expectedDisagreement": false,
+    "metamorphicReview": {
+      "reviewer": "zhb-authorized",
+      "status": "approved",
+      "variants": {
+        "paraphrase": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        },
+        "noise": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        },
+        "rename-person": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        }
+      }
+    },
+    "id": "human-exam1-membrane-s18-p1",
+    "questionRef": {
+      "questionId": "pretest-exam1-membrane",
+      "nodeId": "P1"
+    },
+    "expectedScore": "hit",
+    "misconceptionIds": [],
+    "tags": [
+      "human",
+      "exam1",
+      "membrane",
+      "p1"
+    ],
+    "seriousMisjudgmentOpportunity": false,
+    "expectedExtraction": {
+      "anchors": [],
+      "response": "substantive",
+      "terminology": "model",
+      "syllabus": "within",
+      "contradiction": false,
+      "typo": "none",
+      "errorIds": [],
+      "slots": [
+        {
+          "id": "separation-purpose",
+          "value": "prevent-direct-reaction",
+          "evidenceQuote": "防止 O₂ 与 a 极 钾片反应"
+        }
+      ],
+      "evidenceQuotes": [
+        "防止 O₂ 与 a 极 钾片反应"
+      ]
+    },
+    "rationale": {
+      "rubricRefs": [
+        "p1-hit"
+      ],
+      "adjudicationRefs": [
+        "§1"
+      ],
+      "text": "理由表达了防止直接反应/分隔（引用：防止 O₂ 与 a 极 钾片反应）。标注 Fable 5；张涵彬授权按建议先行（2026-07-22），K⁺-only 判 miss 与 S20 弱表述判 hit 两点待陆老师终审可改判。"
+    }
+  },
+  {
+    "version": "eval-case.v2",
+    "evaluationPath": "structured-assessment",
+    "annotationStatus": "labeled",
+    "studentAnswer": "不能，通过后会与负极发生反应。",
+    "annotator": "fable-5",
+    "rubricVersion": "rubrics.v1.2",
+    "source": "human",
+    "runs": 3,
+    "reviewer": "zhb-authorized",
+    "reviewStatus": "reviewed",
+    "adjudicationVersion": "adjudication-table.v1.1",
+    "expectedDisagreement": false,
+    "metamorphicReview": {
+      "reviewer": "zhb-authorized",
+      "status": "approved",
+      "variants": {
+        "paraphrase": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        },
+        "noise": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        },
+        "rename-person": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        }
+      }
+    },
+    "id": "human-exam1-membrane-s20-d3",
+    "questionRef": {
+      "questionId": "pretest-exam1-membrane",
+      "nodeId": "D3"
+    },
+    "expectedExtraction": {
+      "anchors": [],
+      "response": "substantive",
+      "terminology": "model",
+      "syllabus": "within",
+      "contradiction": false,
+      "typo": "none",
+      "errorIds": [],
+      "slots": [
+        {
+          "id": "o2-passes",
+          "value": "false",
+          "evidenceQuote": "不能"
+        }
+      ],
+      "evidenceQuotes": [
+        "不能"
+      ]
+    },
+    "expectedScore": "hit",
+    "misconceptionIds": [],
+    "tags": [
+      "human",
+      "exam1",
+      "membrane",
+      "d3"
+    ],
+    "seriousMisjudgmentOpportunity": false,
+    "rationale": {
+      "rubricRefs": [
+        "d3-hit"
+      ],
+      "adjudicationRefs": [
+        "§1"
+      ],
+      "text": "结论「不能」正确，o2-passes=false 命中。标注 Fable 5；张涵彬授权按建议先行（2026-07-22），K⁺-only 判 miss 与 S20 弱表述判 hit 两点待陆老师终审可改判。"
+    }
+  },
+  {
+    "version": "eval-case.v2",
+    "evaluationPath": "structured-assessment",
+    "annotationStatus": "labeled",
+    "studentAnswer": "不能，通过后会与负极发生反应。",
+    "annotator": "fable-5",
+    "rubricVersion": "rubrics.v1.2",
+    "source": "human",
+    "runs": 3,
+    "reviewer": "zhb-authorized",
+    "reviewStatus": "reviewed",
+    "adjudicationVersion": "adjudication-table.v1.1",
+    "expectedDisagreement": false,
+    "metamorphicReview": {
+      "reviewer": "zhb-authorized",
+      "status": "approved",
+      "variants": {
+        "paraphrase": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        },
+        "noise": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        },
+        "rename-person": {
+          "status": "approved",
+          "rationale": "改写/加噪/换称谓不改变结论与理由要点。"
+        }
+      }
+    },
+    "id": "human-exam1-membrane-s20-p1",
+    "questionRef": {
+      "questionId": "pretest-exam1-membrane",
+      "nodeId": "P1"
+    },
+    "expectedScore": "hit",
+    "misconceptionIds": [],
+    "tags": [
+      "human",
+      "exam1",
+      "membrane",
+      "p1"
+    ],
+    "seriousMisjudgmentOpportunity": false,
+    "expectedExtraction": {
+      "anchors": [],
+      "response": "substantive",
+      "terminology": "model",
+      "syllabus": "within",
+      "contradiction": false,
+      "typo": "none",
+      "errorIds": [],
+      "slots": [
+        {
+          "id": "separation-purpose",
+          "value": "prevent-direct-reaction",
+          "evidenceQuote": "会与负极发生反应"
+        }
+      ],
+      "evidenceQuotes": [
+        "会与负极发生反应"
+      ]
+    },
+    "rationale": {
+      "rubricRefs": [
+        "p1-hit"
+      ],
+      "adjudicationRefs": [
+        "§1"
+      ],
+      "text": "理由表达了防止直接反应/分隔（引用：会与负极发生反应）。标注 Fable 5；张涵彬授权按建议先行（2026-07-22），K⁺-only 判 miss 与 S20 弱表述判 hit 两点待陆老师终审可改判。"
+    }
+  }
+]

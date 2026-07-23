@@ -16,11 +16,28 @@ export const metamorphicVariantSchema = z.enum([
 
 const questionReferenceSchema = z
   .object({
-    caseId: z.string().trim().min(1),
+    caseId: z.string().trim().min(1).optional(),
+    questionId: z.string().trim().min(1).optional(),
     nodeId: z.string().trim().min(1),
     equationSetId: z.string().trim().min(1).optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    if (!value.caseId === !value.questionId) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['caseId'],
+        message: 'exactly one of caseId or questionId is required',
+      });
+    }
+    if (value.equationSetId && !value.caseId) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['equationSetId'],
+        message: 'equationSetId requires caseId',
+      });
+    }
+  });
 
 const expectedExtractionSchema = z
   .object({

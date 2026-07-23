@@ -242,15 +242,36 @@ export function inspectEvalCoverage(input: {
   const issues: string[] = [];
 
   for (const evalCase of input.cases) {
-    const trainingCase = input.productionConfig.cases.find((entry) =>
-      entry.id === evalCase.questionRef.caseId);
     const node = input.productionConfig.knowledgeModel.nodes.find((entry) =>
       entry.id === evalCase.questionRef.nodeId);
+    if (!node) issues.push(`${evalCase.id}: unknown node ${evalCase.questionRef.nodeId}`);
+    if (evalCase.questionRef.questionId) {
+      const question = input.productionConfig.pretest.questions.find((entry) =>
+        entry.id === evalCase.questionRef.questionId);
+      if (!question || question.type !== 'text') {
+        issues.push(`${evalCase.id}: unknown text question ${evalCase.questionRef.questionId}`);
+      } else {
+        if (!question.targetNodeIds.includes(evalCase.questionRef.nodeId)) {
+          issues.push(`${evalCase.id}: node ${evalCase.questionRef.nodeId} is not targeted by ${question.id}`);
+        }
+        const referenceCase = input.productionConfig.cases.find((entry) =>
+          entry.id === question.referenceEquations[0]!.caseId);
+        const hasQuestionEvidence = question.evidence?.some((entry) =>
+          entry.nodeId === evalCase.questionRef.nodeId);
+        const hasCaseEvidence = referenceCase?.evidencePaths.some((entry) =>
+          entry.source === 'answer' && entry.nodeId === evalCase.questionRef.nodeId);
+        if (!hasQuestionEvidence && !hasCaseEvidence) {
+          issues.push(`${evalCase.id}: node ${evalCase.questionRef.nodeId} has no answer evidence for ${question.id}`);
+        }
+      }
+      continue;
+    }
+    const trainingCase = input.productionConfig.cases.find((entry) =>
+      entry.id === evalCase.questionRef.caseId);
     const expectedSource = evalCase.evaluationPath === 'equation' ? 'equation' : 'answer';
     const evidencePath = trainingCase?.evidencePaths.find((entry) =>
       entry.source === expectedSource && entry.nodeId === evalCase.questionRef.nodeId);
     if (!trainingCase) issues.push(`${evalCase.id}: unknown case ${evalCase.questionRef.caseId}`);
-    if (!node) issues.push(`${evalCase.id}: unknown node ${evalCase.questionRef.nodeId}`);
     if (trainingCase && !evidencePath) {
       issues.push(`${evalCase.id}: node ${evalCase.questionRef.nodeId} is not on the production ${expectedSource} path`);
     }
