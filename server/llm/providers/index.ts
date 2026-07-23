@@ -1,6 +1,7 @@
 import type { LLMProvider } from '../types';
 import { createDeepSeekProvider } from './deepseek';
 import { MockProvider } from './mock';
+import { createModelverseProvider } from './modelverse';
 import { createTongyiProvider } from './tongyi';
 import { createZhipuProvider } from './zhipu';
 
@@ -48,6 +49,9 @@ export function createProviderRegistry(environment: NodeJS.ProcessEnv = process.
   }
   if (environment.ZHIPU_API_KEY) {
     providers.set('zhipu', createZhipuProvider(environment.ZHIPU_API_KEY));
+  }
+  if (environment.MODELVERSE_API_KEY) {
+    providers.set('modelverse', createModelverseProvider(environment.MODELVERSE_API_KEY));
   }
 
   return providers;

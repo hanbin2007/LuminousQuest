@@ -165,6 +165,7 @@ export interface EvalHarnessOptions {
   recordingsRoot?: string;
   recordingPolicy?: 'replayable' | 'none';
   runOverride?: number;
+  concurrency?: number;
   includeMetamorphic?: boolean;
   evaluationScope?: 'pilot' | 'full';
   caseVisibility?: 'detailed' | 'aggregate-only';
@@ -268,7 +269,10 @@ export async function runEvalHarness(options: EvalHarnessOptions) {
     const service = new LLMService({
       providers: new Map([[tracking.id, tracking]]),
       recordings: new RecordingStore(options.contentRoot),
-      logger: { error() {}, warn() {} },
+      logger: {
+        error: (message: string) => console.error(`[eval:${evalCase.id}] ${message}`),
+        warn() {},
+      },
     });
     const question = evalCase.questionRef.questionId
       ? productionConfig.pretest.questions.find((entry) =>
@@ -411,10 +415,11 @@ export async function runEvalHarness(options: EvalHarnessOptions) {
     }
   };
 
+  const tasks: Array<() => Promise<void>> = [];
   for (const evalCase of options.cases) {
     const runs = options.runOverride ?? evalCase.runs ?? options.config.defaultRuns;
     for (let iteration = 1; iteration <= runs; iteration += 1) {
-      await runOnce(evalCase, 'base', iteration);
+      tasks.push(() => runOnce(evalCase, 'base', iteration));
     }
   }
 
@@ -423,10 +428,26 @@ export async function runEvalHarness(options: EvalHarnessOptions) {
     for (const evalCase of options.cases) {
       for (const generated of generateMetamorphicVariants(evalCase)) {
         if (options.config.metamorphic.variants.includes(generated.variant)) {
-          await runOnce(generated.case, generated.variant, 1);
+          tasks.push(() => runOnce(generated.case, generated.variant, 1));
         }
       }
     }
+  }
+
+  const concurrency = Math.max(1, Math.floor(options.concurrency ?? 1));
+  if (concurrency <= 1) {
+    for (const task of tasks) await task();
+  } else {
+    let nextTaskIndex = 0;
+    await Promise.all(
+      Array.from({ length: Math.min(concurrency, tasks.length) }, async () => {
+        while (nextTaskIndex < tasks.length) {
+          const index = nextTaskIndex;
+          nextTaskIndex += 1;
+          await tasks[index]();
+        }
+      }),
+    );
   }
 
   const evaluationScope = options.evaluationScope ?? 'full';

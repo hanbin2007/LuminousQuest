@@ -104,7 +104,8 @@ export class ClaudeAgentProvider implements LLMProvider {
   }
 
   private timeoutMilliseconds(requestTimeout?: number) {
-    return requestTimeout ?? 60_000;
+    const configured = Number(requestTimeout ?? process.env.LLM_TIMEOUT_MS ?? 60_000);
+    return Number.isFinite(configured) && configured > 0 ? configured : 60_000;
   }
 }
 

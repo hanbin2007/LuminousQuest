@@ -20,6 +20,7 @@ const keyByProvider: Record<string, string> = {
   deepseek: 'DEEPSEEK_API_KEY',
   tongyi: 'TONGYI_API_KEY',
   zhipu: 'ZHIPU_API_KEY',
+  modelverse: 'MODELVERSE_API_KEY',
 };
 
 export function selectEvalCasesForRun(input: {
@@ -85,6 +86,12 @@ function parseArguments(argv: readonly string[]) {
   if (!['pilot', 'full'].includes(liveStage)) {
     throw new Error('--live-stage must be pilot or full');
   }
+  const concurrencyText = values.get('--concurrency');
+  const concurrency = concurrencyText === undefined ? undefined : Number(concurrencyText);
+  if (concurrency !== undefined
+    && (!Number.isInteger(concurrency) || concurrency < 1 || concurrency > 16)) {
+    throw new Error('--concurrency must be an integer from 1 to 16');
+  }
   return {
     mode: mode as EvalMode,
     provider: values.get('--provider'),
@@ -92,6 +99,7 @@ function parseArguments(argv: readonly string[]) {
     report: values.get('--report'),
     recordings: values.get('--recordings'),
     runs,
+    concurrency,
     liveStage: liveStage as 'pilot' | 'full',
   };
 }
@@ -149,6 +157,7 @@ export async function runEvalCli(input: {
       evaluationScope,
       caseVisibility: args.mode === 'holdout' ? 'aggregate-only' : 'detailed',
       ...(args.runs ? { runOverride: args.runs } : {}),
+      ...(args.concurrency ? { concurrency: args.concurrency } : {}),
     });
     const report = renderEvalMarkdownReport({
       metrics: result.metrics,
