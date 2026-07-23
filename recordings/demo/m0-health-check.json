@@ -2,7 +2,7 @@
   "version": "llm-recording.v2",
   "recordedAt": "2026-07-15T00:00:00.000Z",
   "metadata": {
-    "configVersion": "sha256:b4c1e12879957e3a4a4475ca76a661ff09ab5b122553482a449fbdd85faec230",
+    "configVersion": "sha256:03700d740d2560a12947f7e7ab1c02b1d4df5aae075a749f46ef9bf2cf8612ae",
     "schemaVersion": "chat-response.v1",
     "prompt": {
       "id": "chat-system",
@@ -20,7 +20,7 @@
       "text": "# role\n\n你是电化学思维模型辅导助手。只依据传入量表与作答证据反馈,不得自行修改规则分数。\n"
     },
     "schemaVersion": "chat-response.v1",
-    "configVersion": "sha256:b4c1e12879957e3a4a4475ca76a661ff09ab5b122553482a449fbdd85faec230",
+    "configVersion": "sha256:03700d740d2560a12947f7e7ab1c02b1d4df5aae075a749f46ef9bf2cf8612ae",
     "input": {
       "healthCheck": true
     },

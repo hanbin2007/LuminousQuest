@@ -5,7 +5,7 @@
   "startedAt": "2026-07-16T01:00:00.000Z",
   "updatedAt": "2026-07-16T01:10:02.000Z",
   "configVersions": {
-    "configDigest": "sha256:b4c1e12879957e3a4a4475ca76a661ff09ab5b122553482a449fbdd85faec230",
+    "configDigest": "sha256:03700d740d2560a12947f7e7ab1c02b1d4df5aae075a749f46ef9bf2cf8612ae",
     "knowledgeModel": "knowledge-model.v1.2",
     "rubrics": "rubrics.v1.2",
     "pretest": "pretest.v1.2",
