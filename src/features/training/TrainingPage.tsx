@@ -37,6 +37,7 @@ import {
   upsertScaffoldHistory,
   type ScaffoldViewState,
 } from './scaffold-adapter';
+import { latestAgentFocus } from '../model/agent-focus';
 import { LiveModelPanel } from './LiveModelPanel';
 import { mediumLabel, visibleCaseMaterials } from './materials';
 import { TransferRadarComparison } from './TransferRadarComparison';
@@ -608,6 +609,16 @@ export function TrainingPage() {
   const [focusNodeId, setFocusNodeId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const submissionIds = useRef(new Map<string, string>());
+
+  // agent 的 focus_node 非权威聚焦:新提示到达才应用一次,学生点选可随时覆盖
+  const agentFocus = useMemo(() => latestAgentFocus(session), [session]);
+  const appliedAgentFocusSequence = useRef(0);
+  useEffect(() => {
+    if (agentFocus && agentFocus.sequence > appliedAgentFocusSequence.current) {
+      appliedAgentFocusSequence.current = agentFocus.sequence;
+      setFocusNodeId(agentFocus.nodeId);
+    }
+  }, [agentFocus]);
 
   const routedCaseId = resolveTrainingCaseId(config, pathname);
   const activeCaseId = routedCaseId ?? draft.activeCaseId;

@@ -3,7 +3,7 @@ import { Suspense, lazy, memo, useEffect, useMemo, useRef, useState } from 'reac
 import type { CaseConfig, LoadedConfig } from '../../../shared/config/schemas';
 import type { StudentSession } from '../../../shared/session';
 import { useReducedMotion } from '../../app/useReducedMotion';
-import { buildLiveCellState, liveNodeById } from '../model/live-cell';
+import { buildDimensionProgress, buildLiveCellState, liveNodeById } from '../model/live-cell';
 import { STAGE } from '../model/stage-tokens';
 
 // three.js 场景按需加载:无 WebGL 或未进入训练页时不下载/解析 3D chunk
@@ -69,6 +69,7 @@ export const LiveModelPanel = memo(function LiveModelPanel({
   }, [state.litSignature]);
 
   const focused = liveNodeById(state, focusNodeId);
+  const dimensionProgress = useMemo(() => buildDimensionProgress(state), [state]);
 
   // 冷迁移后测:不提供任何即时对错信号,面板冻结为静态说明
   if (trainingCase.caseType === 'transfer') {
@@ -93,6 +94,33 @@ export const LiveModelPanel = memo(function LiveModelPanel({
           已点亮 {state.litCount} / {state.totalCount}
         </p>
       </header>
+
+      <div className="live-model__dimensions" role="group" aria-label="量表维度进度">
+        {dimensionProgress.map((progress) => {
+          const group = DIMENSION_GROUPS.find((entry) => entry.id === progress.dimensionId)!;
+          return (
+            <div
+              className={`dim-progress ${progress.complete ? 'dim-progress--complete' : ''}`}
+              key={progress.dimensionId}
+            >
+              <span className="dim-progress__label">{group.label}</span>
+              <span className="dim-progress__track" aria-hidden>
+                <span
+                  className="dim-progress__fill"
+                  style={{ transform: `scaleX(${progress.ratio})` }}
+                />
+              </span>
+              <span
+                className="dim-progress__count"
+                aria-label={`${group.label}维度 已点亮 ${progress.litCount}，共 ${progress.totalCount} 个节点`}
+              >
+                {progress.litCount}
+                {progress.halfCount > 0 ? `+${progress.halfCount}半` : ''}/{progress.totalCount}
+              </span>
+            </div>
+          );
+        })}
+      </div>
 
       <div className="live-model__canvas" aria-hidden={hasWebgl}>
         {hasWebgl ? (

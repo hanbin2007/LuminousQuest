@@ -157,3 +157,36 @@ export function liveNodeById(state: LiveCellState, id: string | null) {
   if (!id) return null;
   return state.nodes.find((node) => node.id === id) ?? null;
 }
+
+export interface DimensionProgress {
+  dimensionId: LiveCellNode['dimensionId'];
+  /** 全亮节点数(hit/hit-with-help)。 */
+  litCount: number;
+  /** 半亮节点数(partial),进度条以半权重计。 */
+  halfCount: number;
+  totalCount: number;
+  /** 0..1,half 计 0.5;维度进度条的填充比例。 */
+  ratio: number;
+  /** 全部节点全亮 → 维度点亮时刻。 */
+  complete: boolean;
+}
+
+/** 量表维度进度:与灯态同源(只从判分事件派生),agent 无法影响。 */
+export function buildDimensionProgress(state: LiveCellState): DimensionProgress[] {
+  const order: LiveCellNode['dimensionId'][] = ['device', 'principle', 'energy'];
+  return order.map((dimensionId) => {
+    const nodes = state.nodes.filter((node) => node.dimensionId === dimensionId);
+    const litCount = nodes.filter((node) => node.light === 'full-lit').length;
+    const halfCount = nodes.filter((node) => node.light === 'half-lit').length;
+    const totalCount = nodes.length;
+    const ratio = totalCount === 0 ? 0 : (litCount + halfCount * 0.5) / totalCount;
+    return {
+      dimensionId,
+      litCount,
+      halfCount,
+      totalCount,
+      ratio,
+      complete: totalCount > 0 && litCount === totalCount,
+    };
+  });
+}
