@@ -714,6 +714,9 @@ export function createServerApp(options: ServerAppOptions) {
           config,
           answer,
           referenceCaseId,
+          referenceEquationSetIds: question?.referenceEquations
+            .filter((reference) => reference.caseId === referenceCaseId)
+            .map((reference) => reference.equationSetId),
           targetNodeIds: equationTargetNodeIds,
           assessmentEventIdPrefix: `assessment-${operationId}-equation`,
           assessedAt: occurredAt,

@@ -106,6 +106,12 @@ describe('M4 demo execution mode', () => {
         'pretest-exam1-electron-flow',
         'pretest-exam1-stoichiometry',
         'pretest-exam1-membrane',
+        'pretest-exam4-polarity',
+        'pretest-exam4-cathode-equation',
+        'pretest-exam4-material',
+        'pretest-exam4-electron-loser',
+        'pretest-exam4-process',
+        'pretest-exam4-stoichiometry',
       ]);
 
     const tutor = await app.request('/api/tutor/turn', {

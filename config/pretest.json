@@ -1,5 +1,5 @@
 {
-  "version": "pretest.v1.2",
+  "version": "pretest.v1.3",
   "builder": {
     "prompt": "不用具体金属名称，搭建一个能持续工作的原电池通用模型，并标出电子、阳离子和阴离子的运动方向。",
     "components": [
@@ -338,6 +338,170 @@
       ],
       "referenceEquations": [
         { "caseId": "zinc-copper", "equationSetId": "zinc-negative", "equation": "Zn - 2e⁻ = Zn²⁺" }
+      ]
+    },
+    {
+      "id": "pretest-exam4-polarity",
+      "type": "choice",
+      "prompt": "该电池中，电极 a、b 分别为什么极？",
+      "dimensionId": "device",
+      "rubricIds": ["rubric-d1", "rubric-d4"],
+      "targetNodeIds": ["D1", "D4"],
+      "evidencePath": "选择项 -> 电极极性、氧化还原反应场所",
+      "group": {
+        "id": "exam-q4-glucose",
+        "title": "高考真题",
+        "stimulus": "【高考真题】一种可植入体内的微型电池工作原理如图所示，通过 CuO 催化消耗血糖发电，从而控制血糖浓度。当传感器检测到血糖浓度高于标准，电池启动；血糖浓度下降至标准，电池停止工作。（血糖浓度以葡萄糖浓度计）",
+        "figure": "assets/exam/q4-glucose-implant.png"
+      },
+      "options": [
+        { "id": "A", "text": "正｜负", "correct": true, "misconceptionIds": [] },
+        { "id": "B", "text": "负｜正", "correct": false, "misconceptionIds": ["D1-M1", "D4-M2"] },
+        { "id": "C", "text": "正｜正", "correct": false, "misconceptionIds": ["D1-M1"] },
+        { "id": "D", "text": "其他作答", "correct": false, "misconceptionIds": [] }
+      ]
+    },
+    {
+      "id": "pretest-exam4-cathode-equation",
+      "type": "text",
+      "prompt": "写出该电池正极的电极反应式。",
+      "dimensionId": "principle",
+      "rubricIds": ["rubric-p6"],
+      "targetNodeIds": ["P6"],
+      "evidencePath": "电极反应式 -> 正极氧还原半反应",
+      "group": {
+        "id": "exam-q4-glucose",
+        "title": "高考真题",
+        "stimulus": "【高考真题】一种可植入体内的微型电池工作原理如图所示，通过 CuO 催化消耗血糖发电，从而控制血糖浓度。当传感器检测到血糖浓度高于标准，电池启动；血糖浓度下降至标准，电池停止工作。（血糖浓度以葡萄糖浓度计）",
+        "figure": "assets/exam/q4-glucose-implant.png"
+      },
+      "answerGuidance": [
+        "O₂ + 2H₂O + 4e⁻ = 4OH⁻（血液近中性，按碱性式书写，产物为 OH⁻）。"
+      ],
+      "referenceEquations": [
+        { "caseId": "aluminum-air", "equationSetId": "oxygen-positive", "equation": "O₂ + 2H₂O + 4e⁻ = 4OH⁻" }
+      ]
+    },
+    {
+      "id": "pretest-exam4-material",
+      "type": "choice",
+      "prompt": "b 电极的电极材料是什么？",
+      "dimensionId": "device",
+      "rubricIds": ["rubric-d5", "rubric-d1"],
+      "targetNodeIds": ["D5", "D1"],
+      "evidencePath": "选择项 -> 电极材料与参与反应物质的区分",
+      "group": {
+        "id": "exam-q4-glucose",
+        "title": "高考真题",
+        "stimulus": "【高考真题】一种可植入体内的微型电池工作原理如图所示，通过 CuO 催化消耗血糖发电，从而控制血糖浓度。当传感器检测到血糖浓度高于标准，电池启动；血糖浓度下降至标准，电池停止工作。（血糖浓度以葡萄糖浓度计）",
+        "figure": "assets/exam/q4-glucose-implant.png"
+      },
+      "options": [
+        { "id": "A", "text": "纳米 CuO/导电聚合物（CuO）", "correct": true, "misconceptionIds": [] },
+        { "id": "B", "text": "Cu₂O/氧化亚铜", "correct": false, "misconceptionIds": ["D5-M1"] },
+        { "id": "C", "text": "石墨", "correct": false, "misconceptionIds": ["D5-M2"] },
+        { "id": "D", "text": "葡萄糖/C₆H₁₂O₆", "correct": false, "misconceptionIds": ["D5-M1"] },
+        { "id": "E", "text": "其他作答", "correct": false, "misconceptionIds": [] }
+      ]
+    },
+    {
+      "id": "pretest-exam4-electron-loser",
+      "type": "choice",
+      "prompt": "在 b 电极上，实际失电子的物质是什么？",
+      "dimensionId": "device",
+      "rubricIds": ["rubric-d5"],
+      "targetNodeIds": ["D5"],
+      "evidencePath": "选择项 -> 实际失电子物质与催化剂循环",
+      "group": {
+        "id": "exam-q4-glucose",
+        "title": "高考真题",
+        "stimulus": "【高考真题】一种可植入体内的微型电池工作原理如图所示，通过 CuO 催化消耗血糖发电，从而控制血糖浓度。当传感器检测到血糖浓度高于标准，电池启动；血糖浓度下降至标准，电池停止工作。（血糖浓度以葡萄糖浓度计）",
+        "figure": "assets/exam/q4-glucose-implant.png"
+      },
+      "options": [
+        { "id": "A", "text": "Cu₂O/氧化亚铜", "correct": true, "misconceptionIds": [] },
+        { "id": "B", "text": "葡萄糖/C₆H₁₂O₆", "correct": false, "misconceptionIds": ["D5-M2"] },
+        { "id": "C", "text": "CuO/氧化铜", "correct": false, "misconceptionIds": ["D5-M1"] },
+        { "id": "D", "text": "葡萄糖酸/C₆H₁₂O₇", "correct": false, "misconceptionIds": ["D5-M2"] },
+        { "id": "E", "text": "其他作答", "correct": false, "misconceptionIds": [] }
+      ]
+    },
+    {
+      "id": "pretest-exam4-process",
+      "type": "text",
+      "prompt": "请简单描述 CuO 在 b 电极上参与反应的完整过程，并说明 CuO 在该过程中所起的作用。",
+      "dimensionId": "device",
+      "rubricIds": ["rubric-d5", "rubric-p2"],
+      "targetNodeIds": ["D5", "P2"],
+      "evidencePath": "简答原文 -> CuO 角色、再生循环与葡萄糖氧化关系",
+      "group": {
+        "id": "exam-q4-glucose",
+        "title": "高考真题",
+        "stimulus": "【高考真题】一种可植入体内的微型电池工作原理如图所示，通过 CuO 催化消耗血糖发电，从而控制血糖浓度。当传感器检测到血糖浓度高于标准，电池启动；血糖浓度下降至标准，电池停止工作。（血糖浓度以葡萄糖浓度计）",
+        "figure": "assets/exam/q4-glucose-implant.png"
+      },
+      "evidence": [
+        {
+          "nodeId": "D5",
+          "description": "CuO 的角色定性与再生循环。",
+          "referenceAnswerPoints": ["CuO 氧化葡萄糖后被还原为 Cu₂O，Cu₂O 在电极失电子再生成 CuO，CuO 起催化作用。"],
+          "factRequirements": [
+            {
+              "id": "cuo-role",
+              "acceptedValues": ["catalyst"],
+              "valueDomain": ["catalyst", "intermediate", "oxidant"],
+              "hint": "学生对 CuO 作用的定性：说催化剂/催化作用取 catalyst；说中间产物取 intermediate；只说氧化剂取 oxidant；未定性不建槽。"
+            },
+            {
+              "id": "cuo-regenerated",
+              "acceptedValues": ["cuo-regenerated"],
+              "valueDomain": ["cuo-regenerated"],
+              "hint": "是否描述了 Cu₂O 失电子重新生成 CuO 的再生/循环过程；描述了才建槽并引用该句。"
+            }
+          ]
+        },
+        {
+          "nodeId": "P2",
+          "description": "氧化关系：CuO 将葡萄糖氧化（葡萄糖为还原剂被氧化）。",
+          "referenceAnswerPoints": ["CuO 将葡萄糖氧化为葡萄糖酸。"],
+          "factRequirements": [
+            {
+              "id": "glucose-oxidized",
+              "acceptedValues": ["glucose-oxidized"],
+              "valueDomain": ["glucose-oxidized"],
+              "hint": "是否表达了 CuO 将葡萄糖氧化（葡萄糖被氧化为葡萄糖酸）；表达了才建槽并引用该句。"
+            }
+          ]
+        }
+      ],
+      "answerGuidance": [
+        "CuO 将葡萄糖氧化为葡萄糖酸，自身被还原为 Cu₂O；Cu₂O 在 b 电极失电子又生成 CuO；CuO 起催化作用。",
+        "只定性催化未描述再生循环 → D5 partial；把 CuO 说成中间产物/仅氧化剂 → 照实转录后按规则层判。"
+      ],
+      "referenceEquations": [
+        { "caseId": "zinc-copper", "equationSetId": "zinc-negative", "equation": "Zn - 2e⁻ = Zn²⁺" }
+      ]
+    },
+    {
+      "id": "pretest-exam4-stoichiometry",
+      "type": "choice",
+      "prompt": "消耗 18 mg 葡萄糖（C₆H₁₂O₆，M=180 g/mol）时，理论上 a 电极有多少 mmol 电子流入？",
+      "dimensionId": "principle",
+      "rubricIds": ["rubric-p6"],
+      "targetNodeIds": ["P6"],
+      "evidencePath": "选择项 -> 葡萄糖氧化电子转移与物质的量计算",
+      "group": {
+        "id": "exam-q4-glucose",
+        "title": "高考真题",
+        "stimulus": "【高考真题】一种可植入体内的微型电池工作原理如图所示，通过 CuO 催化消耗血糖发电，从而控制血糖浓度。当传感器检测到血糖浓度高于标准，电池启动；血糖浓度下降至标准，电池停止工作。（血糖浓度以葡萄糖浓度计）",
+        "figure": "assets/exam/q4-glucose-implant.png"
+      },
+      "options": [
+        { "id": "A", "text": "0.2", "correct": true, "misconceptionIds": [] },
+        { "id": "B", "text": "0.1", "correct": false, "misconceptionIds": ["P6-M2"] },
+        { "id": "C", "text": "0.02/2×10⁻²", "correct": false, "misconceptionIds": ["P6-M1"] },
+        { "id": "D", "text": "2/200", "correct": false, "misconceptionIds": ["P6-M1"] },
+        { "id": "E", "text": "其他作答", "correct": false, "misconceptionIds": [] }
       ]
     }
   ]

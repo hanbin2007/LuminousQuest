@@ -440,7 +440,6 @@ export async function validateReferences(
     }
   });
 
-  const referencedCases = new Map<string, Set<string>>();
   config.pretest.questions.forEach((question, questionIndex) => {
     if (question.type !== 'text') return;
     question.referenceEquations.forEach((reference, referenceIndex) => {
@@ -460,21 +459,7 @@ export async function validateReferences(
           'official reference equation must be accepted by its configured grammar corpus',
         );
       }
-      const ids = referencedCases.get(reference.caseId) ?? new Set<string>();
-      ids.add(reference.equationSetId);
-      referencedCases.set(reference.caseId, ids);
     });
-  });
-  referencedCases.forEach((referencedIds, caseId) => {
-    const expectedIds = config.cases.find((entry) => entry.id === caseId)!.equationSets
-      .map((entry) => entry.id);
-    if (expectedIds.some((id) => !referencedIds.has(id)) || referencedIds.size !== expectedIds.length) {
-      throw new ConfigValidationError(
-        'config/pretest.json',
-        'questions.referenceEquations',
-        `official references and ${caseId} equation sets must cover each other`,
-      );
-    }
   });
 
   if (contentRoot) {

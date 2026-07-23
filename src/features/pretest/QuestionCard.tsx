@@ -69,6 +69,46 @@ function OriginalExamFill({
     );
   }
 
+  if (kind === 'substance') {
+    const isMaterial = questionId === 'pretest-exam4-material';
+    return (
+      <label className="exam-fill exam-fill--substance">
+        <span>{isMaterial ? '电极材料' : '失电子物质'}</span>
+        <span className="exam-fill__control ds-control">
+          <input
+            aria-label={isMaterial ? 'b 电极的电极材料' : 'b 电极实际失电子的物质'}
+            autoComplete="off"
+            inputMode="text"
+            maxLength={32}
+            onChange={(event) => onChange(event.target.value)}
+            placeholder="物质名称或化学式"
+            value={displayAnswer}
+          />
+        </span>
+      </label>
+    );
+  }
+
+  if (kind === 'amount') {
+    return (
+      <label className="exam-fill exam-fill--ratio">
+        <span>n(e⁻)</span>
+        <span className="exam-fill__control ds-control">
+          <input
+            aria-label="a 电极流入电子的物质的量"
+            autoComplete="off"
+            inputMode="decimal"
+            maxLength={16}
+            onChange={(event) => onChange(event.target.value)}
+            placeholder="mmol"
+            value={displayAnswer}
+          />
+        </span>
+        <span>mmol</span>
+      </label>
+    );
+  }
+
   const [first, second] = splitFillAnswer(displayAnswer);
   const isPolarity = kind === 'polarity';
 

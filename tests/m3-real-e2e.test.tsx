@@ -93,6 +93,37 @@ function assessmentProvider(root: string, requests: LLMRequest[]): LLMProvider {
       const config = await loadAllConfig(root);
       const trainingCase = config.cases.find((entry) => entry.id === input.caseId)!;
       const assessments = input.targetNodeIds.map((nodeId) => {
+        if (input.answer.includes('CuO 将葡萄糖氧化')) {
+          const q4Slots = {
+            D5: [
+              { id: 'cuo-role', value: 'catalyst', evidence: evidence(input.answer, '催化作用') },
+              {
+                id: 'cuo-regenerated',
+                value: 'cuo-regenerated',
+                evidence: evidence(input.answer, '又生成'),
+              },
+            ],
+            P2: [{
+              id: 'glucose-oxidized',
+              value: 'glucose-oxidized',
+              evidence: evidence(input.answer, '将葡萄糖氧化'),
+            }],
+          } as const;
+          return {
+            nodeId,
+            errorIds: [],
+            facts: {
+              response: 'substantive',
+              terminology: 'model',
+              syllabus: 'within',
+              contradiction: false,
+              typo: 'none',
+              slots: q4Slots[nodeId as keyof typeof q4Slots],
+            },
+            evidence: [{ quote: input.answer, start: 0, end: input.answer.length }],
+            assistance: input.assistance,
+          };
+        }
         const pathConfig = trainingCase.evidencePaths.find((entry) =>
           entry.nodeId === nodeId && entry.source === 'answer')!;
         return {
@@ -225,6 +256,49 @@ describe('real M3 route chain', () => {
     fireEvent.change(await screen.findByLabelText('简答作答', {}, routeTransitionTimeout), {
       target: { value: '不能。防止 K 与 O₂ 直接反应，两个半反应必须分隔在两个场所。' },
     });
+    fireEvent.click(screen.getByRole('button', { name: '提交作答' }));
+
+    fireEvent.change(await screen.findByLabelText(
+      '电极 a 的极性',
+      {},
+      routeTransitionTimeout,
+    ), { target: { value: '正' } });
+    fireEvent.change(screen.getByLabelText('电极 b 的极性'), {
+      target: { value: '负' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '提交作答' }));
+
+    fireEvent.change(await screen.findByLabelText('简答作答', {}, routeTransitionTimeout), {
+      target: { value: 'O₂ + 2H₂O + 4e⁻ = 4OH⁻' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '提交作答' }));
+
+    fireEvent.change(await screen.findByLabelText(
+      'b 电极的电极材料',
+      {},
+      routeTransitionTimeout,
+    ), { target: { value: 'CuO' } });
+    fireEvent.click(screen.getByRole('button', { name: '提交作答' }));
+
+    fireEvent.change(await screen.findByLabelText(
+      'b 电极实际失电子的物质',
+      {},
+      routeTransitionTimeout,
+    ), { target: { value: 'Cu₂O' } });
+    fireEvent.click(screen.getByRole('button', { name: '提交作答' }));
+
+    fireEvent.change(await screen.findByLabelText('简答作答', {}, routeTransitionTimeout), {
+      target: {
+        value: 'CuO 将葡萄糖氧化为葡萄糖酸，自身被还原为 Cu₂O；Cu₂O 在 b 电极失电子又生成 CuO；CuO 起催化作用。',
+      },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '提交作答' }));
+
+    fireEvent.change(await screen.findByLabelText(
+      'a 电极流入电子的物质的量',
+      {},
+      routeTransitionTimeout,
+    ), { target: { value: '2×10⁻¹' } });
     fireEvent.click(screen.getByRole('button', { name: '提交作答' }));
     await user.click(await screen.findByRole(
       'button',

@@ -124,7 +124,7 @@ describe('M1a external teaching configuration', () => {
     }
     expect(config.cases.find((trainingCase) => trainingCase.id === 'zinc-copper')?.materials)
       .toHaveLength(1);
-    expect(config.pretest.questions).toHaveLength(7);
+    expect(config.pretest.questions).toHaveLength(13);
     expect(config.pretest.questions.map((question: any) => question.dimensionId)).toEqual([
       'principle',
       'principle',
@@ -133,6 +133,12 @@ describe('M1a external teaching configuration', () => {
       'principle',
       'principle',
       'device',
+      'device',
+      'principle',
+      'device',
+      'device',
+      'device',
+      'principle',
     ]);
   });
 
@@ -169,7 +175,7 @@ describe('M1a external teaching configuration', () => {
 
     expect(config.knowledgeModel.version).toBe('knowledge-model.v1.2');
     expect(config.rubrics.version).toBe('rubrics.v1.2');
-    expect(config.pretest.version).toBe('pretest.v1.2');
+    expect(config.pretest.version).toBe('pretest.v1.3');
     expect(config.scaffoldPolicy.version).toBe('scaffold-policy.v1.5');
     expect(config.scaffoldPolicy.extraction.temperature).toBe(0.1);
     expect(config.cases.every((entry) => entry.version === 'case.v1.5')).toBe(true);
@@ -284,6 +290,148 @@ describe('M1a external teaching configuration', () => {
       .toEqual(expect.arrayContaining(['否', '不能']));
     expect(config.scaffoldPolicy.extraction.factValueAliases['prevent-direct-reaction'])
       .toEqual(['直接反应', '直接接触', '不接触', '发生反应', '防止', '直接与', 'K反应']);
+  });
+
+  it('transcribes the six glucose-cell exam questions and their shared group exactly', async () => {
+    const config = await loadAllConfig(process.cwd());
+    const exam = config.pretest.questions.filter((question) =>
+      question.group?.id === 'exam-q4-glucose');
+    const group = {
+      id: 'exam-q4-glucose',
+      title: '高考真题',
+      stimulus: '【高考真题】一种可植入体内的微型电池工作原理如图所示，通过 CuO 催化消耗血糖发电，从而控制血糖浓度。当传感器检测到血糖浓度高于标准，电池启动；血糖浓度下降至标准，电池停止工作。（血糖浓度以葡萄糖浓度计）',
+      figure: 'assets/exam/q4-glucose-implant.png',
+    };
+
+    expect(exam).toHaveLength(6);
+    expect(exam.every((question) =>
+      JSON.stringify(question.group) === JSON.stringify(group))).toBe(true);
+    expect(exam[0]).toMatchObject({
+      id: 'pretest-exam4-polarity',
+      type: 'choice',
+      prompt: '该电池中，电极 a、b 分别为什么极？',
+      dimensionId: 'device',
+      targetNodeIds: ['D1', 'D4'],
+      rubricIds: ['rubric-d1', 'rubric-d4'],
+      options: [
+        { id: 'A', text: '正｜负', correct: true, misconceptionIds: [] },
+        { id: 'B', text: '负｜正', correct: false, misconceptionIds: ['D1-M1', 'D4-M2'] },
+        { id: 'C', text: '正｜正', correct: false, misconceptionIds: ['D1-M1'] },
+        { id: 'D', text: '其他作答', correct: false, misconceptionIds: [] },
+      ],
+    });
+    expect(exam[1]).toMatchObject({
+      id: 'pretest-exam4-cathode-equation',
+      type: 'text',
+      prompt: '写出该电池正极的电极反应式。',
+      dimensionId: 'principle',
+      targetNodeIds: ['P6'],
+      rubricIds: ['rubric-p6'],
+      answerGuidance: ['O₂ + 2H₂O + 4e⁻ = 4OH⁻（血液近中性，按碱性式书写，产物为 OH⁻）。'],
+      referenceEquations: [{
+        caseId: 'aluminum-air',
+        equationSetId: 'oxygen-positive',
+        equation: 'O₂ + 2H₂O + 4e⁻ = 4OH⁻',
+      }],
+    });
+    expect(exam[2]).toMatchObject({
+      id: 'pretest-exam4-material',
+      type: 'choice',
+      prompt: 'b 电极的电极材料是什么？',
+      dimensionId: 'device',
+      targetNodeIds: ['D5', 'D1'],
+      rubricIds: ['rubric-d5', 'rubric-d1'],
+      options: [
+        { id: 'A', text: '纳米 CuO/导电聚合物（CuO）', correct: true, misconceptionIds: [] },
+        { id: 'B', text: 'Cu₂O/氧化亚铜', correct: false, misconceptionIds: ['D5-M1'] },
+        { id: 'C', text: '石墨', correct: false, misconceptionIds: ['D5-M2'] },
+        { id: 'D', text: '葡萄糖/C₆H₁₂O₆', correct: false, misconceptionIds: ['D5-M1'] },
+        { id: 'E', text: '其他作答', correct: false, misconceptionIds: [] },
+      ],
+    });
+    expect(exam[3]).toMatchObject({
+      id: 'pretest-exam4-electron-loser',
+      type: 'choice',
+      prompt: '在 b 电极上，实际失电子的物质是什么？',
+      dimensionId: 'device',
+      targetNodeIds: ['D5'],
+      rubricIds: ['rubric-d5'],
+      options: [
+        { id: 'A', text: 'Cu₂O/氧化亚铜', correct: true, misconceptionIds: [] },
+        { id: 'B', text: '葡萄糖/C₆H₁₂O₆', correct: false, misconceptionIds: ['D5-M2'] },
+        { id: 'C', text: 'CuO/氧化铜', correct: false, misconceptionIds: ['D5-M1'] },
+        { id: 'D', text: '葡萄糖酸/C₆H₁₂O₇', correct: false, misconceptionIds: ['D5-M2'] },
+        { id: 'E', text: '其他作答', correct: false, misconceptionIds: [] },
+      ],
+    });
+    expect(exam[4]).toMatchObject({
+      id: 'pretest-exam4-process',
+      type: 'text',
+      prompt: '请简单描述 CuO 在 b 电极上参与反应的完整过程，并说明 CuO 在该过程中所起的作用。',
+      dimensionId: 'device',
+      targetNodeIds: ['D5', 'P2'],
+      rubricIds: ['rubric-d5', 'rubric-p2'],
+      evidence: [
+        {
+          nodeId: 'D5',
+          description: 'CuO 的角色定性与再生循环。',
+          referenceAnswerPoints: ['CuO 氧化葡萄糖后被还原为 Cu₂O，Cu₂O 在电极失电子再生成 CuO，CuO 起催化作用。'],
+          factRequirements: [
+            {
+              id: 'cuo-role',
+              acceptedValues: ['catalyst'],
+              valueDomain: ['catalyst', 'intermediate', 'oxidant'],
+            },
+            {
+              id: 'cuo-regenerated',
+              acceptedValues: ['cuo-regenerated'],
+              valueDomain: ['cuo-regenerated'],
+            },
+          ],
+        },
+        {
+          nodeId: 'P2',
+          description: '氧化关系：CuO 将葡萄糖氧化（葡萄糖为还原剂被氧化）。',
+          referenceAnswerPoints: ['CuO 将葡萄糖氧化为葡萄糖酸。'],
+          factRequirements: [{
+            id: 'glucose-oxidized',
+            acceptedValues: ['glucose-oxidized'],
+            valueDomain: ['glucose-oxidized'],
+          }],
+        },
+      ],
+      answerGuidance: [
+        'CuO 将葡萄糖氧化为葡萄糖酸，自身被还原为 Cu₂O；Cu₂O 在 b 电极失电子又生成 CuO；CuO 起催化作用。',
+        '只定性催化未描述再生循环 → D5 partial；把 CuO 说成中间产物/仅氧化剂 → 照实转录后按规则层判。',
+      ],
+      referenceEquations: [{
+        caseId: 'zinc-copper',
+        equationSetId: 'zinc-negative',
+        equation: 'Zn - 2e⁻ = Zn²⁺',
+      }],
+    });
+    expect(exam[5]).toMatchObject({
+      id: 'pretest-exam4-stoichiometry',
+      type: 'choice',
+      prompt: '消耗 18 mg 葡萄糖（C₆H₁₂O₆，M=180 g/mol）时，理论上 a 电极有多少 mmol 电子流入？',
+      dimensionId: 'principle',
+      targetNodeIds: ['P6'],
+      rubricIds: ['rubric-p6'],
+      options: [
+        { id: 'A', text: '0.2', correct: true, misconceptionIds: [] },
+        { id: 'B', text: '0.1', correct: false, misconceptionIds: ['P6-M2'] },
+        { id: 'C', text: '0.02/2×10⁻²', correct: false, misconceptionIds: ['P6-M1'] },
+        { id: 'D', text: '2/200', correct: false, misconceptionIds: ['P6-M1'] },
+        { id: 'E', text: '其他作答', correct: false, misconceptionIds: [] },
+      ],
+    });
+    expect(config.scaffoldPolicy.extraction.factValueAliases).toMatchObject({
+      catalyst: ['催化剂', '催化作用', '催化'],
+      intermediate: ['中间产物'],
+      oxidant: ['氧化剂'],
+      'cuo-regenerated': ['再生', '又生成', '变回', '重新生成', '回到'],
+      'glucose-oxidized': ['氧化葡萄糖', '葡萄糖氧化', '将葡萄糖氧化', '葡萄糖被氧化'],
+    });
   });
 
   it('states the complete alkaline aluminum-air OH- process and drops unsupported E3 targeting', async () => {

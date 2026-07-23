@@ -51,6 +51,7 @@ export function recordPretestEquationAssessments(input: {
     value: string;
   };
   referenceCaseId: string;
+  referenceEquationSetIds?: readonly string[];
   targetNodeIds: readonly string[];
   assessmentEventIdPrefix: string;
   assessedAt: string;
@@ -79,11 +80,15 @@ export function recordPretestEquationAssessments(input: {
   input.targetNodeIds.forEach((nodeId, nodeIndex) => {
     const rubric = input.config.rubrics.rubrics.find((entry) => entry.nodeId === nodeId);
     if (!rubric) throw new Error(`No rubric configured for node ${nodeId}`);
-    const equationSets = trainingCase.equationSets.filter((set) => {
+    const nodeEquationSets = trainingCase.equationSets.filter((set) => {
       if (nodeId === 'P7') return set.electrode === 'overall';
       if (nodeId === 'P3' || nodeId === 'P6') return set.electrode !== 'overall';
       return true;
     });
+    const referenceEquationSetIds = input.referenceEquationSetIds;
+    const equationSets = referenceEquationSetIds
+      ? nodeEquationSets.filter((set) => referenceEquationSetIds.includes(set.id))
+      : nodeEquationSets;
     if (equationSets.length === 0) {
       throw new Error(`No equation set is configured for pretest node ${nodeId}`);
     }

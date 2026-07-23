@@ -23,11 +23,13 @@ export async function writeValidContentTree(
   const assetsRoot = path.join(root, 'assets');
   const examAssetsRoot = path.join(assetsRoot, 'exam');
   const zincAssetsRoot = path.join(assetsRoot, 'cases', 'zinc-copper');
+  const aluminumAssetsRoot = path.join(assetsRoot, 'cases', 'aluminum-air');
   const methaneAssetsRoot = path.join(assetsRoot, 'cases', 'methane-fuel');
   await mkdir(casesRoot, { recursive: true });
   await mkdir(promptsRoot, { recursive: true });
   await mkdir(examAssetsRoot, { recursive: true });
   await mkdir(zincAssetsRoot, { recursive: true });
+  await mkdir(aluminumAssetsRoot, { recursive: true });
   if (options.includeTransfer) await mkdir(methaneAssetsRoot, { recursive: true });
 
   await Promise.all([
@@ -39,12 +41,28 @@ export async function writeValidContentTree(
       path.join(casesRoot, 'zinc-copper.json'),
     ),
     copyRepositoryFile(
+      path.join('config', 'cases', 'aluminum-air.json'),
+      path.join(casesRoot, 'aluminum-air.json'),
+    ),
+    copyRepositoryFile(
       path.join('assets', 'cases', 'zinc-copper', 'schematic.png'),
       path.join(zincAssetsRoot, 'schematic.png'),
     ),
     copyRepositoryFile(
       path.join('assets', 'exam', 'q1-k-o2.png'),
       path.join(examAssetsRoot, 'q1-k-o2.png'),
+    ),
+    copyRepositoryFile(
+      path.join('assets', 'exam', 'q4-glucose-implant.png'),
+      path.join(examAssetsRoot, 'q4-glucose-implant.png'),
+    ),
+    copyRepositoryFile(
+      path.join('assets', 'cases', 'aluminum-air', 'schematic.png'),
+      path.join(aluminumAssetsRoot, 'schematic.png'),
+    ),
+    copyRepositoryFile(
+      path.join('assets', 'cases', 'aluminum-air', 'cross-section.png'),
+      path.join(aluminumAssetsRoot, 'cross-section.png'),
     ),
     ...(options.includeTransfer ? [
       copyRepositoryFile(

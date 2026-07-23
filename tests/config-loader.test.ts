@@ -15,10 +15,29 @@ describe('configuration loading', () => {
     const loaded = await loadAllConfig(root);
 
     expect(loaded.knowledgeModel.version).toBe('knowledge-model.v1.2');
-    expect(loaded.pretest.version).toBe('pretest.v1.2');
-    expect(loaded.pretest.questions).toHaveLength(7);
-    expect(loaded.cases).toHaveLength(1);
+    expect(loaded.pretest.version).toBe('pretest.v1.3');
+    expect(loaded.pretest.questions).toHaveLength(13);
+    expect(loaded.cases).toHaveLength(2);
     expect(loaded.configVersion).toMatch(/^sha256:[a-f0-9]{64}$/);
+  });
+
+  it('loads a pure-equation pretest question without answer evidence', async () => {
+    const root = await createTemporaryDirectory();
+    await writeValidContentTree(root);
+
+    const loaded = await loadAllConfig(root);
+    const question = loaded.pretest.questions.find((entry) =>
+      entry.id === 'pretest-exam4-cathode-equation');
+
+    expect(question).toMatchObject({
+      type: 'text',
+      targetNodeIds: ['P6'],
+      referenceEquations: [{
+        caseId: 'aluminum-air',
+        equationSetId: 'oxygen-positive',
+      }],
+    });
+    expect(question?.type === 'text' ? question.evidence : undefined).toBeUndefined();
   });
 
   it('warns about normalized fact alias collisions without rejecting the config', async () => {

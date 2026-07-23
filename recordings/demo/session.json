@@ -3,12 +3,12 @@
   "id": "demo-primary-session",
   "anonymousStudentId": "anon-DEMO0001",
   "startedAt": "2026-07-16T01:00:00.000Z",
-  "updatedAt": "2026-07-16T01:03:03.000Z",
+  "updatedAt": "2026-07-16T01:03:09.000Z",
   "configVersions": {
-    "configDigest": "sha256:03700d740d2560a12947f7e7ab1c02b1d4df5aae075a749f46ef9bf2cf8612ae",
+    "configDigest": "sha256:1b5e265dd6deae61770ef6c0b058fd518776d2d984f12b6a6d94d6c9a0d00997",
     "knowledgeModel": "knowledge-model.v1.2",
     "rubrics": "rubrics.v1.2",
-    "pretest": "pretest.v1.2",
+    "pretest": "pretest.v1.3",
     "scaffoldPolicy": "scaffold-policy.v1.5",
     "cases": {
       "zinc-copper": "case.v1.5",
@@ -169,6 +169,84 @@
       "pipelineStage": "answer",
       "questionId": "pretest-exam1-membrane",
       "answer": { "format": "text", "value": "不能。防止 K 与 O₂ 直接反应（两个半反应必须分隔在两个场所）。" }
+    },
+    {
+      "schemaVersion": "event.v2",
+      "id": "demo-answer-exam4-polarity",
+      "sequence": 8,
+      "occurredAt": "2026-07-16T01:03:04.000Z",
+      "caseId": "pretest",
+      "stageId": "assessment",
+      "attemptId": "demo-exam4-polarity-1",
+      "kind": "answer.submitted",
+      "pipelineStage": "answer",
+      "questionId": "pretest-exam4-polarity",
+      "answer": { "format": "text", "value": "正｜负" }
+    },
+    {
+      "schemaVersion": "event.v2",
+      "id": "demo-answer-exam4-cathode-equation",
+      "sequence": 9,
+      "occurredAt": "2026-07-16T01:03:05.000Z",
+      "caseId": "pretest",
+      "stageId": "assessment",
+      "attemptId": "demo-exam4-cathode-equation-1",
+      "kind": "answer.submitted",
+      "pipelineStage": "answer",
+      "questionId": "pretest-exam4-cathode-equation",
+      "answer": { "format": "text", "value": "O₂ + 2H₂O + 4e⁻ = 4OH⁻" }
+    },
+    {
+      "schemaVersion": "event.v2",
+      "id": "demo-answer-exam4-material",
+      "sequence": 10,
+      "occurredAt": "2026-07-16T01:03:06.000Z",
+      "caseId": "pretest",
+      "stageId": "assessment",
+      "attemptId": "demo-exam4-material-1",
+      "kind": "answer.submitted",
+      "pipelineStage": "answer",
+      "questionId": "pretest-exam4-material",
+      "answer": { "format": "text", "value": "纳米 CuO/导电聚合物（CuO）" }
+    },
+    {
+      "schemaVersion": "event.v2",
+      "id": "demo-answer-exam4-electron-loser",
+      "sequence": 11,
+      "occurredAt": "2026-07-16T01:03:07.000Z",
+      "caseId": "pretest",
+      "stageId": "assessment",
+      "attemptId": "demo-exam4-electron-loser-1",
+      "kind": "answer.submitted",
+      "pipelineStage": "answer",
+      "questionId": "pretest-exam4-electron-loser",
+      "answer": { "format": "text", "value": "Cu₂O/氧化亚铜" }
+    },
+    {
+      "schemaVersion": "event.v2",
+      "id": "demo-answer-exam4-process",
+      "sequence": 12,
+      "occurredAt": "2026-07-16T01:03:08.000Z",
+      "caseId": "pretest",
+      "stageId": "assessment",
+      "attemptId": "demo-exam4-process-1",
+      "kind": "answer.submitted",
+      "pipelineStage": "answer",
+      "questionId": "pretest-exam4-process",
+      "answer": { "format": "text", "value": "CuO 将葡萄糖氧化为葡萄糖酸，自身被还原为 Cu₂O；Cu₂O 在 b 电极失电子又生成 CuO；CuO 起催化作用。" }
+    },
+    {
+      "schemaVersion": "event.v2",
+      "id": "demo-answer-exam4-stoichiometry",
+      "sequence": 13,
+      "occurredAt": "2026-07-16T01:03:09.000Z",
+      "caseId": "pretest",
+      "stageId": "assessment",
+      "attemptId": "demo-exam4-stoichiometry-1",
+      "kind": "answer.submitted",
+      "pipelineStage": "answer",
+      "questionId": "pretest-exam4-stoichiometry",
+      "answer": { "format": "text", "value": "0.2" }
     }
   ]
 }

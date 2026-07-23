@@ -67,7 +67,8 @@ describe('Hono server responsibilities', () => {
 
     expect(response.headers.get('x-lq-api-token')).toBe(apiToken);
     expect(payload).not.toHaveProperty('prompts');
-    expect(payload.cases.map((trainingCase) => trainingCase.id)).toEqual(['zinc-copper', 'methane-fuel']);
+    expect(payload.cases.map((trainingCase) => trainingCase.id))
+      .toEqual(['zinc-copper', 'aluminum-air', 'methane-fuel']);
     expect(payload.cases[0]?.materials).toEqual([
       expect.objectContaining({
         kind: 'apparatus-diagram',
@@ -137,6 +138,15 @@ describe('Hono server responsibilities', () => {
       .toHaveProperty('answerGuidance');
     expect(full.pretest.questions.find((question) => question.id === 'pretest-exam1-membrane'))
       .toHaveProperty('evidence');
+    const q4Choice = payload.pretest.questions.find((question) =>
+      question.id === 'pretest-exam4-material') as { options: Array<Record<string, unknown>> };
+    const q4Text = payload.pretest.questions.find((question) =>
+      question.id === 'pretest-exam4-process')!;
+    expect(q4Choice.options.every((option) =>
+      !Object.hasOwn(option, 'correct') && !Object.hasOwn(option, 'misconceptionIds'))).toBe(true);
+    expect(q4Text).not.toHaveProperty('answerGuidance');
+    expect(q4Text).not.toHaveProperty('evidence');
+    expect(q4Text).not.toHaveProperty('referenceEquations');
   });
 
   it('provides a no-key mock LLM flow through the proxy route', async () => {

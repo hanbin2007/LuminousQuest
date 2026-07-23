@@ -191,6 +191,42 @@ describe('M2 pretest route', () => {
     expect(screen.queryByRole('radio')).not.toBeInTheDocument();
   });
 
+  it('renders the Q4 choice-backed questions as polarity, substance, and amount blanks', async () => {
+    const config = await loadAllConfig(process.cwd());
+    const renderQuestion = (questionId: string) => {
+      const question = config.pretest.questions.find((entry) => entry.id === questionId);
+      if (!question) throw new Error(`Expected ${questionId}`);
+      return render(
+        <QuestionCard
+          question={question}
+          dimensionLabel={question.dimensionId === 'device' ? '装置' : '原理'}
+          onAnswerChange={() => undefined}
+          onSubmit={() => undefined}
+        />,
+      );
+    };
+
+    const polarity = renderQuestion('pretest-exam4-polarity');
+    expect(screen.getByRole('heading', { name: '血糖微型电池' })).toBeInTheDocument();
+    expect(screen.getByLabelText('电极 a 的极性')).toBeInTheDocument();
+    expect(screen.getByLabelText('电极 b 的极性')).toBeInTheDocument();
+    expect(screen.queryByRole('radio')).not.toBeInTheDocument();
+    polarity.unmount();
+
+    const material = renderQuestion('pretest-exam4-material');
+    expect(screen.getByLabelText('b 电极的电极材料')).toBeInTheDocument();
+    expect(screen.queryByRole('radio')).not.toBeInTheDocument();
+    material.unmount();
+
+    renderQuestion('pretest-exam4-electron-loser');
+    expect(screen.getByLabelText('b 电极实际失电子的物质')).toBeInTheDocument();
+    cleanup();
+
+    renderQuestion('pretest-exam4-stoichiometry');
+    expect(screen.getByLabelText('a 电极流入电子的物质的量')).toBeInTheDocument();
+    expect(screen.queryByRole('radio')).not.toBeInTheDocument();
+  });
+
   it.each([
     ['pretest-exam1-polarity', 'B', ['D1-M1', 'D4-M2']],
     ['pretest-exam1-electron-flow', 'C', ['P4-M2', 'D3-M1']],
@@ -266,7 +302,7 @@ describe('M2 pretest route', () => {
     }));
   });
 
-  it('completes builder, seven configured questions, and reaches traceable diagnosis under a mock runtime', async () => {
+  it('completes builder, thirteen configured questions, and reaches traceable diagnosis under a mock runtime', async () => {
     const user = userEvent.setup();
     const config = await loadAllConfig(process.cwd());
     const runtime: AppRuntime = {
@@ -335,6 +371,56 @@ describe('M2 pretest route', () => {
     expect(runtime.extractAssessment).toHaveBeenLastCalledWith(expect.objectContaining({
       questionId: 'pretest-exam1-membrane',
       targetNodeIds: ['D3', 'P1'],
+    }));
+
+    await user.type(await screen.findByLabelText('电极 a 的极性'), '正');
+    await user.type(screen.getByLabelText('电极 b 的极性'), '负');
+    await user.click(screen.getByRole('button', { name: '提交作答' }));
+    expect(runtime.assessChoice).toHaveBeenLastCalledWith(expect.objectContaining({
+      questionId: 'pretest-exam4-polarity',
+      optionId: 'A',
+    }));
+
+    const cathodeEquation = await screen.findByLabelText('简答作答');
+    await user.type(cathodeEquation, 'O₂ + 2H₂O + 4e⁻ = 4OH⁻');
+    await user.click(screen.getByRole('button', { name: '提交作答' }));
+    expect(runtime.extractAssessment).toHaveBeenCalledTimes(3);
+    expect(runtime.extractAssessment).toHaveBeenLastCalledWith(expect.objectContaining({
+      questionId: 'pretest-exam4-cathode-equation',
+      targetNodeIds: ['P6'],
+    }));
+
+    await user.type(await screen.findByLabelText('b 电极的电极材料'), 'CuO');
+    await user.click(screen.getByRole('button', { name: '提交作答' }));
+    expect(runtime.assessChoice).toHaveBeenLastCalledWith(expect.objectContaining({
+      questionId: 'pretest-exam4-material',
+      optionId: 'A',
+    }));
+
+    await user.type(await screen.findByLabelText('b 电极实际失电子的物质'), 'Cu₂O');
+    await user.click(screen.getByRole('button', { name: '提交作答' }));
+    expect(runtime.assessChoice).toHaveBeenLastCalledWith(expect.objectContaining({
+      questionId: 'pretest-exam4-electron-loser',
+      optionId: 'A',
+    }));
+
+    const processAnswer = await screen.findByLabelText('简答作答');
+    await user.type(
+      processAnswer,
+      'CuO 将葡萄糖氧化为葡萄糖酸，Cu₂O 失电子又生成 CuO，CuO 起催化作用。',
+    );
+    await user.click(screen.getByRole('button', { name: '提交作答' }));
+    expect(runtime.extractAssessment).toHaveBeenCalledTimes(4);
+    expect(runtime.extractAssessment).toHaveBeenLastCalledWith(expect.objectContaining({
+      questionId: 'pretest-exam4-process',
+      targetNodeIds: ['D5', 'P2'],
+    }));
+
+    await user.type(await screen.findByLabelText('a 电极流入电子的物质的量'), '.2');
+    await user.click(screen.getByRole('button', { name: '提交作答' }));
+    expect(runtime.assessChoice).toHaveBeenLastCalledWith(expect.objectContaining({
+      questionId: 'pretest-exam4-stoichiometry',
+      optionId: 'A',
     }));
     await user.click(await screen.findByRole('button', { name: '跳过手绘，查看诊断' }));
 

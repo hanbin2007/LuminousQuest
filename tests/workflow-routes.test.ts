@@ -220,6 +220,154 @@ describe('server-owned assessment and tutor routes', () => {
     }
   });
 
+  it('scores the Q4 pure cathode equation without invoking answer extraction', async () => {
+    const root = await createTemporaryDirectory();
+    await writeValidContentTree(root);
+    const sessions = new TestSessionStore();
+    const app = createServerApp({
+      contentRoot: root,
+      clientRoot: path.join(root, 'client'),
+      apiToken,
+      sessions,
+    });
+
+    const response = await post(app, '/api/assessment/extract', {
+      sessionId: 'q4-cathode-equation-session',
+      questionId: 'pretest-exam4-cathode-equation',
+      targetNodeIds: ['P6'],
+      studentAnswer: 'O₂ + 2H₂O + 4e⁻ = 4OH⁻',
+      submissionId: 'q4-cathode-equation-1',
+    });
+    const payload = await response.json() as {
+      status: string;
+      session: StudentSession;
+    };
+    const assessment = payload.session.events.find((event): event is AssessmentCompletedEvent =>
+      event.kind === 'assessment.completed' && event.nodeId === 'P6');
+
+    expect(response.status).toBe(200);
+    expect(payload.status).toBe('deterministic');
+    expect(assessment).toMatchObject({
+      ruleDecision: { status: 'hit' },
+      score: { status: 'scored', outcome: 'hit' },
+    });
+  });
+
+  it('scores the Q4 CuO process from its question-level catalyst, regeneration, and oxidation slots', async () => {
+    const root = await createTemporaryDirectory();
+    await writeValidContentTree(root);
+    const sessions = new TestSessionStore();
+    const provider: LLMProvider = {
+      id: 'q4-process-provider',
+      async chat() { throw new Error('not used'); },
+      async vision() { throw new Error('not used'); },
+      async structured(request) {
+        const input = request.input as {
+          answer: string;
+          targetNodeIds: Array<'D5' | 'P2'>;
+          assistance: { kind: 'none'; rounds: 0 };
+        };
+        const slot = (id: string, value: string, quote: string) => ({
+          id,
+          value,
+          evidence: {
+            quote,
+            start: input.answer.indexOf(quote),
+            end: input.answer.indexOf(quote) + quote.length,
+          },
+        });
+        const role = input.answer.includes('催化作用')
+          ? [slot('cuo-role', 'catalyst', '催化作用')]
+          : input.answer.includes('中间产物')
+            ? [slot('cuo-role', 'intermediate', '中间产物')]
+            : [];
+        const regenerated = input.answer.includes('又生成')
+          ? [slot('cuo-regenerated', 'cuo-regenerated', '又生成')]
+          : [];
+        const oxidized = input.answer.includes('将葡萄糖氧化')
+          ? [slot('glucose-oxidized', 'glucose-oxidized', '将葡萄糖氧化')]
+          : [];
+        const slotsByNode = { D5: [...role, ...regenerated], P2: oxidized };
+        const assessments = input.targetNodeIds.map((nodeId) => ({
+          nodeId,
+          errorIds: [],
+          facts: {
+            response: 'substantive',
+            terminology: 'model',
+            syllabus: 'within',
+            contradiction: false,
+            typo: 'none',
+            slots: slotsByNode[nodeId],
+          },
+          evidence: slotsByNode[nodeId].map((entry) => entry.evidence),
+          assistance: input.assistance,
+        }));
+        const value = { anchors: [], assessments };
+        return { content: JSON.stringify(value), structured: value, model: 'q4-process.v1' };
+      },
+    };
+    const app = createServerApp({
+      contentRoot: root,
+      clientRoot: path.join(root, 'client'),
+      apiToken,
+      providers: new Map([[provider.id, provider]]),
+      sessions,
+      workflow: { executionMode: 'live', provider: provider.id, model: 'q4-process.v1' },
+    });
+    const cases = [
+      {
+        name: 'complete',
+        answer: 'CuO 将葡萄糖氧化为葡萄糖酸；Cu₂O 失电子又生成 CuO；CuO 起催化作用。',
+        expectedD5: 'hit',
+        expectedP2: 'hit',
+      },
+      {
+        name: 'catalyst-only',
+        answer: 'CuO 起催化作用。',
+        expectedD5: 'partial',
+        expectedP2: 'miss',
+      },
+      {
+        name: 'intermediate',
+        answer: 'CuO 是中间产物。',
+        expectedD5: 'miss',
+        expectedP2: 'miss',
+      },
+    ] as const;
+
+    for (const processCase of cases) {
+      const response = await post(app, '/api/assessment/extract', {
+        sessionId: `q4-process-${processCase.name}`,
+        questionId: 'pretest-exam4-process',
+        targetNodeIds: ['D5', 'P2'],
+        studentAnswer: processCase.answer,
+        submissionId: `q4-process-submission-${processCase.name}`,
+      });
+      const payload = await response.json() as {
+        extraction: {
+          assessments: Array<{
+            nodeId: string;
+            facts: { slots: Array<{ id: string; value: string }> };
+          }>;
+        };
+        session: StudentSession;
+      };
+      const assessments = payload.session.events.filter(
+        (event): event is AssessmentCompletedEvent => event.kind === 'assessment.completed',
+      );
+
+      expect(response.status).toBe(200);
+      expect(assessments.find((event) => event.nodeId === 'D5')?.ruleDecision.status)
+        .toBe(processCase.expectedD5);
+      expect(assessments.find((event) => event.nodeId === 'P2')?.ruleDecision.status)
+        .toBe(processCase.expectedP2);
+      if (processCase.name === 'intermediate') {
+        expect(payload.extraction.assessments.find((entry) => entry.nodeId === 'D5')?.facts.slots)
+          .toContainEqual(expect.objectContaining({ id: 'cuo-role', value: 'intermediate' }));
+      }
+    }
+  });
+
   it('scores a training equation through the server route and keeps retries idempotent', async () => {
     const root = await createTemporaryDirectory();
     await writeValidContentTree(root);
