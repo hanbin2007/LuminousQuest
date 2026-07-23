@@ -40,6 +40,7 @@ import {
 import { LiveModelPanel } from './LiveModelPanel';
 import { mediumLabel, visibleCaseMaterials } from './materials';
 import { TransferRadarComparison } from './TransferRadarComparison';
+import { TrainingGlassPanel } from './TrainingGlassPanel';
 import { buildTransferComparison, type TransferComparison } from './transfer-comparison';
 
 const levelNumerals: Record<number, string> = { 1: '一级', 2: '二级', 3: '三级' };
@@ -288,7 +289,12 @@ function MaterialPanel({
   useEffect(() => setMaterialId(null), [trainingCase.id]);
 
   return (
-    <section className="training-topic ds-frame" aria-labelledby="training-topic-title">
+    <TrainingGlassPanel
+      aria-labelledby="training-topic-title"
+      className="training-topic ds-frame"
+      role="region"
+      surfaceClassName="training-glass-panel--topic"
+    >
       <div className="training-topic__summary">
         <div className="training-topic__media">
           {material?.materialRef ? (
@@ -324,7 +330,7 @@ function MaterialPanel({
         </div>
       ) : null}
       <p>{topicDescription(trainingCase, level)}</p>
-    </section>
+    </TrainingGlassPanel>
   );
 }
 
@@ -384,7 +390,12 @@ function AnswerWorkspace({
   };
 
   return (
-    <section className="training-workspace ds-frame ds-frame--secondary" aria-labelledby="training-workspace-title">
+    <TrainingGlassPanel
+      aria-labelledby="training-workspace-title"
+      className="training-workspace ds-frame ds-frame--secondary"
+      role="region"
+      surfaceClassName="training-glass-panel--workspace"
+    >
       <header>
         <h2 id="training-workspace-title">AI 助教</h2>
         <span>在线</span>
@@ -573,7 +584,7 @@ function AnswerWorkspace({
           {busy ? <LoaderCircle className="training-spinner" aria-hidden="true" /> : <Send aria-hidden="true" />}
         </button>
       </footer>
-    </section>
+    </TrainingGlassPanel>
   );
 }
 
