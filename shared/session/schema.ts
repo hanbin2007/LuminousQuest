@@ -1,5 +1,17 @@
 import { z } from 'zod';
 
+import {
+  AGENT_CONTEXT_BUILDER_VERSION,
+  AGENT_CONTRACT_REVISION,
+  AGENT_TOOLSET_DIGEST,
+  agentEventProvenanceSchema,
+  agentRequestHashSchema,
+  agentVerdictSchema,
+  comparableAgentVerdictSchema,
+  normalizedAgentActionSchema,
+  terminalAgentActionNameSchema,
+  terminalAgentActionRefSchema,
+} from '../agent/contracts';
 import { functionalRoleSchema } from '../config/schemas';
 
 const timestampSchema = z.string().datetime({ offset: true });
@@ -19,7 +31,7 @@ const eventBaseShape = {
   ...workflowIdentityShape,
 };
 
-const answerPayloadSchema = z.discriminatedUnion('format', [
+export const answerPayloadSchema = z.discriminatedUnion('format', [
   z.object({ format: z.literal('text'), value: z.string() }).strict(),
   z
     .object({
@@ -74,6 +86,13 @@ const answerPayloadSchema = z.discriminatedUnion('format', [
     .strict(),
 ]);
 
+export const agentAnswerSubmissionSchema = z
+  .object({
+    turnId: identifierSchema,
+    answer: answerPayloadSchema,
+  })
+  .strict();
+
 export const answerSubmittedEventSchema = z
   .object({
     ...eventBaseShape,
@@ -81,8 +100,21 @@ export const answerSubmittedEventSchema = z
     pipelineStage: z.literal('answer'),
     questionId: identifierSchema,
     answer: answerPayloadSchema,
+    responseToAgentTurnId: identifierSchema.optional(),
+    responseContractId: identifierSchema.optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((event, context) => {
+    if ((event.responseToAgentTurnId === undefined) !== (event.responseContractId === undefined)) {
+      context.addIssue({
+        code: 'custom',
+        path: event.responseToAgentTurnId === undefined
+          ? ['responseToAgentTurnId']
+          : ['responseContractId'],
+        message: 'agent response turn and response contract must be recorded together',
+      });
+    }
+  });
 
 const extractionProvenanceSchema = z
   .object({
@@ -393,6 +425,131 @@ export const tutorCycleTerminalEventSchema = z
   })
   .strict();
 
+const agentEventIdentityShape = {
+  ...eventBaseShape,
+  pipelineStage: z.literal('agent'),
+};
+
+export const agentTurnCompletedEventSchema = z
+  .object({
+    ...agentEventIdentityShape,
+    kind: z.literal('agent.turn.completed'),
+    turnId: identifierSchema,
+    triggerEventId: identifierSchema,
+    contextThroughSequence: z.number().int().nonnegative(),
+    requestHash: agentRequestHashSchema,
+    source: z.enum(['provider', 'development-cache', 'demo-recording', 'fallback']),
+    model: identifierSchema,
+    orderedActions: z.array(normalizedAgentActionSchema).min(1).max(8),
+    terminalAction: terminalAgentActionRefSchema,
+    provenance: agentEventProvenanceSchema,
+  })
+  .strict()
+  .superRefine((event, context) => {
+    const seenCallIds = new Set<string>();
+    const terminalActions = event.orderedActions.filter((action) =>
+      terminalAgentActionNameSchema.safeParse(action.name).success);
+    const continuationActions = event.orderedActions.length - terminalActions.length;
+    const judgedNodeIds = new Set<string>();
+
+    event.orderedActions.forEach((action, index) => {
+      if (seenCallIds.has(action.callId)) {
+        context.addIssue({
+          code: 'custom',
+          path: ['orderedActions', index, 'callId'],
+          message: `duplicate tool call id ${action.callId}`,
+        });
+      }
+      seenCallIds.add(action.callId);
+      if (action.name === 'conclude_node') {
+        if (judgedNodeIds.has(action.arguments.nodeId)) {
+          context.addIssue({
+            code: 'custom',
+            path: ['orderedActions', index, 'arguments', 'nodeId'],
+            message: 'a node can be judged at most once per turn',
+          });
+        }
+        judgedNodeIds.add(action.arguments.nodeId);
+      }
+    });
+
+    if (continuationActions > 6) {
+      context.addIssue({
+        code: 'custom',
+        path: ['orderedActions'],
+        message: 'a turn can contain at most 6 continuation actions',
+      });
+    }
+    if (terminalActions.length !== 1) {
+      context.addIssue({
+        code: 'custom',
+        path: ['terminalAction'],
+        message: 'a completed agent turn requires exactly one terminal action',
+      });
+      return;
+    }
+    const terminal = terminalActions[0];
+    const last = event.orderedActions.at(-1);
+    if (
+      terminal.callId !== event.terminalAction.callId
+      || terminal.name !== event.terminalAction.name
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['terminalAction'],
+        message: 'terminalAction must identify the terminal action in orderedActions',
+      });
+    }
+    if (last?.callId !== terminal.callId) {
+      context.addIssue({
+        code: 'custom',
+        path: ['orderedActions'],
+        message: 'the terminal action must be the final ordered action',
+      });
+    }
+  });
+
+export const agentJudgmentRecordedEventSchema = z
+  .object({
+    ...agentEventIdentityShape,
+    kind: z.literal('agent.judgment.recorded'),
+    turnId: identifierSchema,
+    nodeId: identifierSchema,
+    verdict: agentVerdictSchema,
+    rationale: z.string().trim().min(1),
+    basisThroughSequence: z.number().int().nonnegative(),
+    basisEventIds: z.array(identifierSchema).min(1),
+    supersedesEventId: identifierSchema.optional(),
+    provenance: agentEventProvenanceSchema,
+  })
+  .strict()
+  .superRefine((event, context) => {
+    const seen = new Set<string>();
+    event.basisEventIds.forEach((eventId, index) => {
+      if (seen.has(eventId)) {
+        context.addIssue({
+          code: 'custom',
+          path: ['basisEventIds', index],
+          message: `duplicate basis event id ${eventId}`,
+        });
+      }
+      seen.add(eventId);
+    });
+  });
+
+export const agentDivergenceChangedEventSchema = z
+  .object({
+    ...agentEventIdentityShape,
+    kind: z.literal('agent.divergence.changed'),
+    judgmentEventId: identifierSchema,
+    shadowAssessmentEventId: identifierSchema,
+    agentVerdict: comparableAgentVerdictSchema,
+    shadowVerdict: comparableAgentVerdictSchema,
+    status: z.enum(['detected', 'resolved']),
+    comparisonPolicyVersion: identifierSchema,
+  })
+  .strict();
+
 export const sessionEventSchema = z.union([
   answerSubmittedEventSchema,
   polarityAssessedEventSchema,
@@ -400,6 +557,9 @@ export const sessionEventSchema = z.union([
   tutorCycleStartedEventSchema,
   tutorTurnCompletedEventSchema,
   tutorCycleTerminalEventSchema,
+  agentTurnCompletedEventSchema,
+  agentJudgmentRecordedEventSchema,
+  agentDivergenceChangedEventSchema,
 ]);
 
 const pipelineStageOrder = {
@@ -412,6 +572,13 @@ const pipelineStageOrder = {
 export const sessionSchema = z
   .object({
     schemaVersion: z.literal('session.v2'),
+    agentContractRevision: z
+      .literal(AGENT_CONTRACT_REVISION)
+      .default(AGENT_CONTRACT_REVISION),
+    toolsetDigest: z.literal(AGENT_TOOLSET_DIGEST).default(AGENT_TOOLSET_DIGEST),
+    contextBuilderVersion: z
+      .literal(AGENT_CONTEXT_BUILDER_VERSION)
+      .default(AGENT_CONTEXT_BUILDER_VERSION),
     id: identifierSchema,
     anonymousStudentId: z.string().regex(/^anon-[A-Z0-9]{8,}$/),
     startedAt: timestampSchema,
@@ -439,8 +606,12 @@ export const sessionSchema = z
   .strict()
   .superRefine((session, context) => {
     const eventIds = new Set<string>();
+    const eventsById = new Map<string, z.infer<typeof sessionEventSchema>>();
     const answers = new Map<string, z.infer<typeof answerSubmittedEventSchema>>();
     const assessments = new Map<string, z.infer<typeof assessmentCompletedEventSchema>>();
+    const agentTurns = new Map<string, z.infer<typeof agentTurnCompletedEventSchema>>();
+    const judgments = new Map<string, z.infer<typeof agentJudgmentRecordedEventSchema>>();
+    const judgmentKeys = new Set<string>();
     const answerWorkflows = new Set<string>();
     const progress = new Map<string, number>();
     const tutorCycles = new Map<string, {
@@ -465,8 +636,42 @@ export const sessionSchema = z
         });
       }
       eventIds.add(event.id);
+      eventsById.set(event.id, event);
 
       if (event.kind === 'answer.submitted') {
+        if (event.responseToAgentTurnId && event.responseContractId) {
+          const turn = agentTurns.get(event.responseToAgentTurnId);
+          if (!turn) {
+            context.addIssue({
+              code: 'custom',
+              path: ['events', index, 'responseToAgentTurnId'],
+              message: 'must reference an earlier completed agent turn',
+            });
+          } else {
+            for (const field of ['caseId', 'stageId', 'attemptId'] as const) {
+              if (event[field] !== turn[field]) {
+                context.addIssue({
+                  code: 'custom',
+                  path: ['events', index, field],
+                  message: `must match response agent turn ${field}`,
+                });
+              }
+            }
+            const terminal = turn.orderedActions.find((action) =>
+              action.callId === turn.terminalAction.callId);
+            const terminalContractId = terminal
+              && (terminal.name === 'ask_student' || terminal.name === 'present_question')
+              ? terminal.arguments.responseContractId
+              : undefined;
+            if (terminalContractId !== event.responseContractId) {
+              context.addIssue({
+                code: 'custom',
+                path: ['events', index, 'responseContractId'],
+                message: 'must match the response contract issued by the agent turn',
+              });
+            }
+          }
+        }
         const workflowKey = `${event.caseId}\u0000${event.stageId}\u0000${event.attemptId}`;
         if (answerWorkflows.has(workflowKey)) {
           context.addIssue({
@@ -477,6 +682,197 @@ export const sessionSchema = z
         }
         answerWorkflows.add(workflowKey);
         answers.set(event.id, event);
+        return;
+      }
+
+      if (event.kind === 'agent.turn.completed') {
+        const trigger = eventsById.get(event.triggerEventId);
+        if (
+          !trigger
+          || trigger.sequence >= event.sequence
+          || trigger.kind === 'agent.judgment.recorded'
+          || trigger.kind === 'agent.divergence.changed'
+        ) {
+          context.addIssue({
+            code: 'custom',
+            path: ['events', index, 'triggerEventId'],
+            message: 'must reference an earlier learner-visible trigger event',
+          });
+        } else if (event.contextThroughSequence < trigger.sequence) {
+          context.addIssue({
+            code: 'custom',
+            path: ['events', index, 'contextThroughSequence'],
+            message: 'must include the trigger event',
+          });
+        }
+        if (event.contextThroughSequence >= event.sequence) {
+          context.addIssue({
+            code: 'custom',
+            path: ['events', index, 'contextThroughSequence'],
+            message: 'must precede the completed turn event',
+          });
+        }
+        if (agentTurns.has(event.turnId)) {
+          context.addIssue({
+            code: 'custom',
+            path: ['events', index, 'turnId'],
+            message: `duplicate agent turn id ${event.turnId}`,
+          });
+        }
+        agentTurns.set(event.turnId, event);
+        return;
+      }
+
+      if (event.kind === 'agent.judgment.recorded') {
+        const turn = agentTurns.get(event.turnId);
+        if (!turn) {
+          context.addIssue({
+            code: 'custom',
+            path: ['events', index, 'turnId'],
+            message: 'must reference an earlier completed agent turn',
+          });
+        } else {
+          for (const field of ['caseId', 'stageId', 'attemptId'] as const) {
+            if (event[field] !== turn[field]) {
+              context.addIssue({
+                code: 'custom',
+                path: ['events', index, field],
+                message: `must match source agent turn ${field}`,
+              });
+            }
+          }
+          const conclusion = turn.orderedActions.find(
+            (
+              action,
+            ): action is Extract<
+              (typeof turn.orderedActions)[number],
+              { name: 'conclude_node' }
+            > => action.name === 'conclude_node' && action.arguments.nodeId === event.nodeId,
+          );
+          if (
+            !conclusion
+            || conclusion.arguments.verdict !== event.verdict
+            || conclusion.arguments.rationale !== event.rationale
+          ) {
+            context.addIssue({
+              code: 'custom',
+              path: ['events', index, 'nodeId'],
+              message: 'judgment must match the turn conclude_node action',
+            });
+          }
+        }
+        const judgmentKey = `${event.turnId}\u0000${event.nodeId}`;
+        if (judgmentKeys.has(judgmentKey)) {
+          context.addIssue({
+            code: 'custom',
+            path: ['events', index, 'nodeId'],
+            message: 'a turn can record at most one judgment per node',
+          });
+        }
+        judgmentKeys.add(judgmentKey);
+        if (event.basisThroughSequence >= event.sequence) {
+          context.addIssue({
+            code: 'custom',
+            path: ['events', index, 'basisThroughSequence'],
+            message: 'judgment basis must precede the judgment event',
+          });
+        }
+        event.basisEventIds.forEach((basisEventId, basisIndex) => {
+          const basis = eventsById.get(basisEventId);
+          if (
+            !basis
+            || basis.sequence >= event.sequence
+            || basis.sequence > event.basisThroughSequence
+          ) {
+            context.addIssue({
+              code: 'custom',
+              path: ['events', index, 'basisEventIds', basisIndex],
+              message: 'basis event must exist at or before basisThroughSequence',
+            });
+          }
+        });
+        if (event.supersedesEventId) {
+          const superseded = judgments.get(event.supersedesEventId);
+          if (!superseded || superseded.nodeId !== event.nodeId) {
+            context.addIssue({
+              code: 'custom',
+              path: ['events', index, 'supersedesEventId'],
+              message: 'must reference an earlier judgment for the same node',
+            });
+          }
+        }
+        judgments.set(event.id, event);
+        return;
+      }
+
+      if (event.kind === 'agent.divergence.changed') {
+        const judgment = judgments.get(event.judgmentEventId);
+        if (!judgment) {
+          context.addIssue({
+            code: 'custom',
+            path: ['events', index, 'judgmentEventId'],
+            message: 'must reference an earlier agent judgment',
+          });
+        } else {
+          if (judgment.verdict === 'inconclusive' || judgment.verdict !== event.agentVerdict) {
+            context.addIssue({
+              code: 'custom',
+              path: ['events', index, 'agentVerdict'],
+              message: 'must match a comparable judgment verdict',
+            });
+          }
+        }
+        const shadow = assessments.get(event.shadowAssessmentEventId);
+        if (!shadow) {
+          context.addIssue({
+            code: 'custom',
+            path: ['events', index, 'shadowAssessmentEventId'],
+            message: 'must reference an earlier shadow assessment',
+          });
+        } else {
+          if (judgment && (
+            shadow.nodeId !== judgment.nodeId
+            || shadow.sequence > judgment.basisThroughSequence
+          )) {
+            context.addIssue({
+              code: 'custom',
+              path: ['events', index, 'shadowAssessmentEventId'],
+              message: 'shadow assessment must cover the judgment node within its basis',
+            });
+          }
+          const outcome = shadow.score.status === 'scored'
+            ? shadow.score.outcome ?? shadow.ruleDecision.status
+            : null;
+          const comparableOutcome = outcome === 'hit-with-help' ? 'hit' : outcome;
+          if (
+            comparableOutcome !== 'hit'
+            && comparableOutcome !== 'partial'
+            && comparableOutcome !== 'miss'
+          ) {
+            context.addIssue({
+              code: 'custom',
+              path: ['events', index, 'shadowAssessmentEventId'],
+              message: 'shadow assessment must have a comparable scored verdict',
+            });
+          } else if (comparableOutcome !== event.shadowVerdict) {
+            context.addIssue({
+              code: 'custom',
+              path: ['events', index, 'shadowVerdict'],
+              message: 'must match the normalized shadow assessment verdict',
+            });
+          }
+        }
+        const differs = event.agentVerdict !== event.shadowVerdict;
+        if (
+          (event.status === 'detected' && !differs)
+          || (event.status === 'resolved' && differs)
+        ) {
+          context.addIssue({
+            code: 'custom',
+            path: ['events', index, 'status'],
+            message: 'divergence status must match whether the verdicts differ',
+          });
+        }
         return;
       }
 
@@ -641,11 +1037,15 @@ export const sessionSchema = z
   });
 
 export type AnswerSubmittedEvent = z.infer<typeof answerSubmittedEventSchema>;
+export type AgentAnswerSubmission = z.infer<typeof agentAnswerSubmissionSchema>;
 export type AssessmentCompletedEvent = z.infer<typeof assessmentCompletedEventSchema>;
 export type PolarityAssessedEvent = z.infer<typeof polarityAssessedEventSchema>;
 export type TutorCycleStartedEvent = z.infer<typeof tutorCycleStartedEventSchema>;
 export type TutorTurnCompletedEvent = z.infer<typeof tutorTurnCompletedEventSchema>;
 export type TutorCycleTerminalEvent = z.infer<typeof tutorCycleTerminalEventSchema>;
+export type AgentTurnCompletedEvent = z.infer<typeof agentTurnCompletedEventSchema>;
+export type AgentJudgmentRecordedEvent = z.infer<typeof agentJudgmentRecordedEventSchema>;
+export type AgentDivergenceChangedEvent = z.infer<typeof agentDivergenceChangedEventSchema>;
 export type SessionEvent = z.infer<typeof sessionEventSchema>;
 export type StudentSession = z.infer<typeof sessionSchema>;
 
@@ -656,4 +1056,7 @@ export type SessionEventInput =
   | Omit<z.input<typeof assessmentCompletedEventSchema>, EventManagedFields>
   | Omit<z.input<typeof tutorCycleStartedEventSchema>, EventManagedFields>
   | Omit<z.input<typeof tutorTurnCompletedEventSchema>, EventManagedFields>
-  | Omit<z.input<typeof tutorCycleTerminalEventSchema>, EventManagedFields>;
+  | Omit<z.input<typeof tutorCycleTerminalEventSchema>, EventManagedFields>
+  | Omit<z.input<typeof agentTurnCompletedEventSchema>, EventManagedFields>
+  | Omit<z.input<typeof agentJudgmentRecordedEventSchema>, EventManagedFields>
+  | Omit<z.input<typeof agentDivergenceChangedEventSchema>, EventManagedFields>;

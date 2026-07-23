@@ -5,7 +5,16 @@ import {
   sessionSchema,
 } from './schema';
 import { z } from 'zod';
+import {
+  AGENT_CONTEXT_BUILDER_VERSION,
+  AGENT_CONTRACT_REVISION,
+  AGENT_TOOLSET_DIGEST,
+} from '../agent/contracts';
 import type { LoadedConfig } from '../config/schemas';
+import {
+  projectStudentSession,
+  projectTeacherAuditSession,
+} from './projections';
 
 export interface CreateSessionInput {
   id?: string;
@@ -37,6 +46,9 @@ export function createSession(input: CreateSessionInput): StudentSession {
   const now = input.now ?? new Date().toISOString();
   return sessionSchema.parse({
     schemaVersion: 'session.v2',
+    agentContractRevision: AGENT_CONTRACT_REVISION,
+    toolsetDigest: AGENT_TOOLSET_DIGEST,
+    contextBuilderVersion: AGENT_CONTEXT_BUILDER_VERSION,
     id: input.id ?? crypto.randomUUID(),
     anonymousStudentId: input.anonymousStudentId ?? createAnonymousStudentId(),
     startedAt: now,
@@ -65,8 +77,18 @@ export function appendSessionEvent(
   });
 }
 
-export function exportSession(session: StudentSession) {
-  return `${JSON.stringify(sessionSchema.parse(session), null, 2)}\n`;
+export function exportSession(
+  session: StudentSession,
+  options: { projection?: 'student' | 'teacher-audit' } = {},
+) {
+  const projected = options.projection === 'teacher-audit'
+    ? projectTeacherAuditSession(session)
+    : projectStudentSession(session);
+  return `${JSON.stringify(projected, null, 2)}\n`;
+}
+
+export function exportAuditSession(session: StudentSession) {
+  return exportSession(session, { projection: 'teacher-audit' });
 }
 
 export function importSession(source: string) {

@@ -62,6 +62,19 @@ export interface ChoiceAssessmentInput {
   submissionId: string;
 }
 
+export interface SessionSyncInput {
+  session: StudentSession;
+  expectedSequence: number;
+  idempotencyKey: string;
+}
+
+export interface SessionSyncResult {
+  status: 'hydrated' | 'already-current';
+  replayed: boolean;
+  sequence: number;
+  session: StudentSession;
+}
+
 export interface AppRuntime {
   loadConfig: () => Promise<LoadedConfig>;
   assessChoice: (input: ChoiceAssessmentInput) => Promise<{ session: StudentSession | null }>;
@@ -69,6 +82,7 @@ export interface AppRuntime {
   assessEquation: (input: EquationAssessmentInput) => Promise<{ session: StudentSession | null }>;
   tutorTurn: (input: TutorTurnInput) => Promise<TutorTurnResult>;
   reviewDrawing: (imageData: string) => Promise<string>;
+  syncSession?: (input: SessionSyncInput) => Promise<SessionSyncResult>;
   getRuntimeState?: () => Promise<{ executionMode: LLMExecutionMode; testNavigation?: boolean }>;
   activateDemo?: () => Promise<{
     executionMode: 'demo';
@@ -146,6 +160,15 @@ export const defaultRuntime: AppRuntime = {
       body: JSON.stringify({ executionMode }),
     });
     return jsonResponse<{ executionMode: LLMExecutionMode }>(response);
+  },
+
+  async syncSession(input) {
+    const response = await fetch('/api/session/sync', {
+      method: 'POST',
+      headers: protectedHeaders(),
+      body: JSON.stringify(input),
+    });
+    return jsonResponse<SessionSyncResult>(response);
   },
 
   async assessChoice(input) {

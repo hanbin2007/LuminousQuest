@@ -1,5 +1,5 @@
 import type { SessionEventInput, StudentSession } from './schema';
-import { appendSessionEvent, exportSession, importSession } from './session';
+import { appendSessionEvent, exportAuditSession, importSession } from './session';
 
 const latestSessionKey = 'luminous-quest:session.v2:latest';
 const suspendedSessionIdsKey = 'luminous-quest:session.v2:suspended';
@@ -54,7 +54,7 @@ export class LocalSessionStore {
   }
 
   save(session: StudentSession, options: { makeLatest?: boolean } = {}) {
-    const serialized = exportSession(session);
+    const serialized = exportAuditSession(session);
     const key = sessionKey(session.id);
     const previousSession = this.storage.getItem(key);
     const previousLatest = this.storage.getItem(latestSessionKey);

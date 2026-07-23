@@ -10,6 +10,8 @@ import { buildLearnerProfile } from '../shared/scoring/profile';
 import { demoStartStateSchema } from '../shared/demo/start-state';
 import type { AssessmentCompletedEvent } from '../shared/session/schema';
 import { sessionSchema } from '../shared/session/schema';
+import { projectStudentSession } from '../shared/session/projections';
+import { sessionSyncRequestSchema } from '../shared/session/sync';
 import {
   createSession,
   sessionConfigVersions,
@@ -32,7 +34,14 @@ import { createProviderRegistry } from './llm/providers';
 import { LLMService } from './llm/service';
 import type { LLMExecutionMode, LLMProvider, LLMRequest } from './llm/types';
 import { loadPrompt, PromptValidationError } from './prompts/loader';
-import { InMemorySessionStore, type ServerSessionStore } from './session/store';
+import {
+  coordinateSessionStore,
+  InMemorySessionStore,
+  SessionIdempotencyConflictError,
+  SessionPrefixConflictError,
+  SessionSequenceConflictError,
+  type ServerSessionStore,
+} from './session/store';
 import { loadExternalAsset, loadStaticAsset } from './static-assets';
 import {
   runAssessmentExtraction,
@@ -325,7 +334,7 @@ export function createServerApp(options: ServerAppOptions) {
   const maxRequestBodyBytes = options.maxRequestBodyBytes ?? 1_048_576;
   const recordings = new RecordingStore(options.contentRoot);
   const evalCandidates = new EvalCandidateStore(options.contentRoot);
-  const sessions = options.sessions ?? new InMemorySessionStore();
+  const sessions = coordinateSessionStore(options.sessions ?? new InMemorySessionStore());
   const lockDemo = options.lockDemo ?? demoLockEnabled(process.env.LQ_LOCK_DEMO);
   const workflow = configuredWorkflow(options, lockDemo);
   const startupWorkflow = { ...workflow };
@@ -390,6 +399,53 @@ export function createServerApp(options: ServerAppOptions) {
     });
   });
 
+  app.post('/api/session/sync', async (context) => {
+    const requestBody = await readProtectedJson(context, apiToken, maxRequestBodyBytes);
+    if (!requestBody.ok) return requestBody.response;
+    const parsed = sessionSyncRequestSchema.safeParse(requestBody.body);
+    if (!parsed.success) return invalidRequest(context, 'session sync', parsed.error);
+
+    try {
+      const config = await loadAllConfig(options.contentRoot);
+      if (parsed.data.session.configVersions.configDigest !== config.configVersion) {
+        return context.json({
+          error: 'session-config-digest-mismatch',
+          expectedConfigDigest: config.configVersion,
+          actualConfigDigest: parsed.data.session.configVersions.configDigest,
+        }, 409);
+      }
+      const result = await sessions.synchronize(parsed.data.session, {
+        expectedSequence: parsed.data.expectedSequence,
+        idempotencyKey: parsed.data.idempotencyKey,
+      });
+      return context.json({
+        ...result,
+        session: projectStudentSession(result.session),
+      });
+    } catch (error) {
+      if (error instanceof SessionSequenceConflictError) {
+        return context.json({
+          error: 'session-sequence-conflict',
+          expectedSequence: error.expectedSequence,
+          actualSequence: error.actualSequence,
+        }, 409);
+      }
+      if (error instanceof SessionPrefixConflictError) {
+        return context.json({
+          error: 'session-prefix-conflict',
+          ...(error.eventIndex === undefined ? {} : { eventIndex: error.eventIndex }),
+        }, 409);
+      }
+      if (error instanceof SessionIdempotencyConflictError) {
+        return context.json({
+          error: 'session-idempotency-conflict',
+          idempotencyKey: error.idempotencyKey,
+        }, 409);
+      }
+      throw error;
+    }
+  });
+
   app.get('/api/llm/health', async (context) => {
     context.header('cache-control', 'no-store');
     return context.json(await llmHealth.get());
@@ -443,7 +499,7 @@ export function createServerApp(options: ServerAppOptions) {
       workflow.tutorStepId = 'demo-tutor-p4';
       return context.json({
         executionMode: workflow.executionMode,
-        session: demoSession,
+        session: projectStudentSession(demoSession),
         progress: startState.progress,
         uiState: {
           version: startState.version,
@@ -529,7 +585,7 @@ export function createServerApp(options: ServerAppOptions) {
           && existing.answer.format === 'text'
           && existing.answer.value === option.text;
         return matches
-          ? context.json({ status: 'already-recorded', session })
+          ? context.json({ status: 'already-recorded', session: projectStudentSession(session) })
           : context.json({ error: 'Submission id was already used for different content' }, 409);
       }
 
@@ -547,7 +603,7 @@ export function createServerApp(options: ServerAppOptions) {
       });
       session = recorded.session;
       sessions.set(session);
-      return context.json({ status: 'recorded', session });
+      return context.json({ status: 'recorded', session: projectStudentSession(session) });
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
       console.error(`[choice-assessment] request failed: ${detail}`);
@@ -653,7 +709,7 @@ export function createServerApp(options: ServerAppOptions) {
           && existing.answer.format === 'text'
           && existing.answer.value === parsed.data.studentAnswer;
         return matches
-          ? context.json({ status: 'already-recorded', session })
+          ? context.json({ status: 'already-recorded', session: projectStudentSession(session) })
           : context.json({ error: 'Submission id was already used for different content' }, 409);
       }
       const assistanceByNode = answerTargetNodeIds.map((nodeId) =>
@@ -742,7 +798,7 @@ export function createServerApp(options: ServerAppOptions) {
       sessions.set(session);
       return context.json({
         ...(extractionResult ?? { status: 'deterministic' as const }),
-        session,
+        session: projectStudentSession(session),
         profile,
         recordingStatus: 'recorded',
       });
@@ -787,7 +843,7 @@ export function createServerApp(options: ServerAppOptions) {
           && existing.answer.format === 'text'
           && existing.answer.value === parsed.data.equation;
         return matches
-          ? context.json({ status: 'already-recorded', session })
+          ? context.json({ status: 'already-recorded', session: projectStudentSession(session) })
           : context.json({ error: 'Submission id was already used for different content' }, 409);
       }
 
@@ -814,7 +870,7 @@ export function createServerApp(options: ServerAppOptions) {
       sessions.set(session);
       return context.json({
         status: 'recorded',
-        session,
+        session: projectStudentSession(session),
         profile: recorded.profile,
         assessment: recorded.assessment,
       });
@@ -866,7 +922,10 @@ export function createServerApp(options: ServerAppOptions) {
         ...(workflow.tutorStepId ? { stepId: workflow.tutorStepId } : {}),
       });
       sessions.set(result.session);
-      return context.json(result);
+      return context.json({
+        ...result,
+        session: projectStudentSession(result.session),
+      });
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
       console.error(`[tutor] request failed: ${detail}`);
