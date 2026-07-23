@@ -13,6 +13,7 @@ const TrainingPage = lazy(async () => {
 });
 const TeacherPage = lazy(() => import('../features/teacher/TeacherPage'));
 const ModelPage = lazy(() => import('../features/model/ModelPage'));
+const GlassLabPage = lazy(() => import('../features/glass/GlassLabPage'));
 
 function ModelRoute() {
   return (
@@ -51,6 +52,7 @@ export function AppRoutes() {
         <Route path="training/:caseId" element={<TrainingPage />} />
         <Route path="model" element={<ModelRoute />} />
         <Route path="teacher" element={<TeacherPage />} />
+        <Route path="glass-lab" element={<GlassLabPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>
     </Routes>

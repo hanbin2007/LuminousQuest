@@ -86,6 +86,31 @@ describe('M2 pretest route', () => {
     expect(onSubmit).not.toHaveBeenCalled();
   });
 
+  it('keeps question geometry owned by LuminousQuest primitives', async () => {
+    const config = await loadAllConfig(process.cwd());
+    const question = config.pretest.questions.find((candidate) => candidate.type === 'choice');
+    if (!question || question.type !== 'choice') throw new Error('Expected a choice question');
+    const view = render(
+      <QuestionCard
+        question={question}
+        dimensionLabel="原理"
+        answer={question.options[0].id}
+        onAnswerChange={() => undefined}
+        onPrevious={() => undefined}
+        onSkip={() => undefined}
+        onSubmit={() => undefined}
+      />,
+    );
+
+    expect(screen.getByRole('article')).toHaveClass('ds-frame', 'ds-frame--paper');
+    expect(view.container.querySelector(
+      '[data-slot="glass-card"], [data-slot="glass-button"], [data-slot="glass-input"]',
+    )).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '上一题' })).toHaveClass('ds-control');
+    expect(screen.getByRole('button', { name: '跳过' })).toHaveClass('ds-control');
+    expect(screen.getByRole('button', { name: '提交作答' })).toHaveClass('ds-control');
+  });
+
   it('distinguishes answered questions and omits diagnosis from the step rail', async () => {
     const config = await loadAllConfig(process.cwd());
     const session = createSession({
@@ -132,7 +157,7 @@ describe('M2 pretest route', () => {
     expect(screen.queryByText('判断题')).not.toBeInTheDocument();
   });
 
-  it('renders grouped exam context, badge, and figure above the active subquestion', async () => {
+  it('renders the original grouped exam as a continuous fill-in flow', async () => {
     const config = await loadAllConfig(process.cwd());
     const question = config.pretest.questions.find((entry) =>
       entry.id === 'pretest-exam1-polarity');
@@ -142,16 +167,28 @@ describe('M2 pretest route', () => {
       <QuestionCard
         question={question}
         dimensionLabel="装置"
+        groupProgress={[
+          { id: question.id, label: '1-1', answered: false, current: true },
+          { id: 'pretest-exam1-electron-flow', label: '1-2', answered: false, current: false },
+          { id: 'pretest-exam1-stoichiometry', label: '1-3', answered: false, current: false },
+          { id: 'pretest-exam1-membrane', label: '1-4', answered: false, current: false },
+        ]}
         onAnswerChange={() => undefined}
         onSubmit={() => undefined}
       />,
     );
 
     expect(screen.getByText('高考真题')).toBeInTheDocument();
-    expect(screen.getByText(question.group.stimulus)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'K—O₂ 电池' })).toBeInTheDocument();
+    expect(screen.getByText(question.group.stimulus.replace(/^【高考真题】/, '')))
+      .toBeInTheDocument();
     expect(screen.getByRole('img', { name: '高考真题装置图' }))
       .toHaveAttribute('src', '/assets/exam/q1-k-o2.png');
-    expect(screen.getByRole('heading', { name: question.prompt })).toBeInTheDocument();
+    expect(screen.getByText('填空题')).toBeInTheDocument();
+    expect(screen.getByLabelText('电极 a 的极性')).toBeInTheDocument();
+    expect(screen.getByLabelText('电极 b 的极性')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '1-1，未作答' })).toBeInTheDocument();
+    expect(screen.queryByRole('radio')).not.toBeInTheDocument();
   });
 
   it.each([
@@ -268,12 +305,28 @@ describe('M2 pretest route', () => {
     await user.click(await screen.findByLabelText(/^A\./));
     await user.click(screen.getByRole('button', { name: '提交作答' }));
 
-    await user.click(await screen.findByLabelText(/^A\./));
+    await user.type(await screen.findByLabelText('电极 a 的极性'), '负');
+    await user.type(screen.getByLabelText('电极 b 的极性'), '正');
     await user.click(screen.getByRole('button', { name: '提交作答' }));
-    await user.click(await screen.findByLabelText(/^A\./));
+    expect(runtime.assessChoice).toHaveBeenLastCalledWith(expect.objectContaining({
+      questionId: 'pretest-exam1-polarity',
+      optionId: 'A',
+    }));
+
+    await user.type(await screen.findByLabelText('电子流出电极'), 'a');
+    await user.type(screen.getByLabelText('电子流入电极'), 'b');
     await user.click(screen.getByRole('button', { name: '提交作答' }));
-    await user.click(await screen.findByLabelText(/^A\./));
+    expect(runtime.assessChoice).toHaveBeenLastCalledWith(expect.objectContaining({
+      questionId: 'pretest-exam1-electron-flow',
+      optionId: 'A',
+    }));
+
+    await user.type(await screen.findByLabelText('K 与 O₂ 的物质的量之比'), '1:1');
     await user.click(screen.getByRole('button', { name: '提交作答' }));
+    expect(runtime.assessChoice).toHaveBeenLastCalledWith(expect.objectContaining({
+      questionId: 'pretest-exam1-stoichiometry',
+      optionId: 'A',
+    }));
 
     const membraneAnswer = await screen.findByLabelText('简答作答');
     await user.type(membraneAnswer, '不能，防止钾与氧气直接反应。');
@@ -306,6 +359,21 @@ describe('M2 pretest route', () => {
     expect(await screen.findByRole('heading', { name: '教师视图' })).toBeInTheDocument();
     expect(screen.queryByRole('dialog', { name: '课程与会话工具' })).not.toBeInTheDocument();
     expect(screen.getByLabelText('电子流进度')).toBeInTheDocument();
+  });
+
+  it('opens the glasscn material lab and records a selected official variant in the URL', async () => {
+    const user = userEvent.setup();
+    const config = await loadAllConfig(process.cwd());
+    window.history.replaceState({}, '', '/glass-lab');
+
+    render(<App initialConfig={config} />);
+
+    expect(await screen.findByRole('heading', { name: '毛玻璃方案预览' })).toBeInTheDocument();
+    expect(screen.getAllByRole('article')).toHaveLength(5);
+    expect(screen.getByText('当前使用 Frosted')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '选择方案 E Liquid Refract' }));
+    expect(screen.getByText('当前使用 Liquid Refract')).toBeInTheDocument();
+    expect(window.location.search).toBe('?variant=liquid-refract');
   });
 
   it('dismisses the controlled utility menu with Escape and restores trigger focus', async () => {

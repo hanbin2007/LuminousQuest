@@ -1,5 +1,5 @@
 import { Clapperboard, GraduationCap, MoreHorizontal } from 'lucide-react';
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 
 import { buildLearnerProfile } from '../../shared/scoring/profile';
@@ -20,21 +20,20 @@ export function AppUtilityMenu() {
     demoModeError,
     toggleDemoMode,
   } = useAppContext();
-  const [open, setOpen] = useState(false);
+  const [openPath, setOpenPath] = useState<string | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const popoverId = 'app-utility-menu-popover';
-
-  useLayoutEffect(() => setOpen(false), [pathname]);
+  const open = openPath === pathname;
 
   useEffect(() => {
     if (!open) return undefined;
     const dismiss = (event: PointerEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+      if (!rootRef.current?.contains(event.target as Node)) setOpenPath(null);
     };
     const escape = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
-      setOpen(false);
+      setOpenPath(null);
       triggerRef.current?.focus();
     };
     window.addEventListener('pointerdown', dismiss);
@@ -58,7 +57,7 @@ export function AppUtilityMenu() {
         aria-haspopup="dialog"
         aria-label="课程与会话工具"
         className="app-utility-menu__trigger"
-        onClick={() => setOpen((current) => !current)}
+        onClick={() => setOpenPath((current) => current === pathname ? null : pathname)}
         ref={triggerRef}
         title="课程与会话工具"
         type="button"
@@ -101,7 +100,7 @@ export function AppUtilityMenu() {
                 try {
                   const mode = await toggleDemoMode();
                   if (mode === 'demo') {
-                    setOpen(false);
+                    setOpenPath(null);
                     navigate('/training');
                   }
                 } catch {

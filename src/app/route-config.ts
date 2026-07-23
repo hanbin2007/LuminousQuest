@@ -49,6 +49,7 @@ export function routeContextLabel(config: LoadedConfig, pathname: string) {
   }
   if (pathname.startsWith('/model')) return '认知模型';
   if (pathname.startsWith('/teacher')) return '教师视图';
+  if (pathname.startsWith('/glass-lab')) return '玻璃材质实验室';
   return '前测诊断';
 }
 

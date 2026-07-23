@@ -1,8 +1,14 @@
+import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
-import { defineConfig } from 'vitest/config';
+import { defineConfig, type Plugin } from 'vitest/config';
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), ...(tailwindcss() as unknown as Plugin[])],
+  resolve: {
+    alias: {
+      '@': new URL('./src', import.meta.url).pathname,
+    },
+  },
   build: {
     outDir: 'dist/client',
     emptyOutDir: true,

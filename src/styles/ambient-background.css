@@ -1,0 +1,38 @@
+.app-shell {
+  position: relative;
+  min-height: 100dvh;
+  isolation: isolate;
+}
+
+.app-shell > .app-header,
+.app-shell > main {
+  position: relative;
+  z-index: 1;
+}
+
+.ambient-chemistry {
+  position: fixed;
+  inset: 60px 0 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.ambient-chemistry__canvas {
+  width: 100% !important;
+  height: 100% !important;
+  display: block;
+  opacity: 0.94;
+}
+
+@media (max-width: 620px) {
+  .ambient-chemistry__canvas {
+    opacity: 0.72;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ambient-chemistry__canvas {
+    opacity: 0.68;
+  }
+}

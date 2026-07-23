@@ -17,12 +17,16 @@
 }
 
 .primary-button {
-  color: var(--text-primary);
-  background: var(--accent);
+  color: var(--accent-ink);
+  border: 1px solid rgba(255, 255, 255, 0.52);
+  background: rgba(122, 167, 255, 0.52);
+  box-shadow: 0 2px 20px rgba(0, 0, 0, 0.06);
+  -webkit-backdrop-filter: blur(16px) saturate(160%);
+  backdrop-filter: blur(16px) saturate(160%);
 }
 
 .primary-button:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--accent) 88%, white);
+  background: rgba(122, 167, 255, 0.64);
 }
 
 .primary-button:active:not(:disabled),
@@ -32,7 +36,9 @@
 
 .primary-button:disabled {
   color: var(--text-muted);
+  border-color: transparent;
   background: var(--line-strong);
+  box-shadow: none;
 }
 
 .secondary-button {
@@ -63,10 +69,21 @@
 
 .ds-frame {
   --ds-cut: 23px;
+  --ds-edge-top: var(--edge-a);
+  --ds-edge-right: var(--edge-b);
+  --ds-edge-bottom: var(--edge-c);
+  --ds-edge-left: var(--edge-b);
   --ds-surface: var(--panel-a);
   position: relative;
   isolation: isolate;
-  border: 0;
+  border-width: 1px;
+  border-style: solid;
+  border-color:
+    var(--ds-edge-top)
+    var(--ds-edge-right)
+    var(--ds-edge-bottom)
+    var(--ds-edge-left);
+  border-radius: 0;
   clip-path: polygon(
     var(--ds-cut) 0,
     100% 0,
@@ -74,7 +91,7 @@
     0 100%,
     0 var(--ds-cut)
   );
-  background: var(--edge-gradient);
+  background: transparent;
 }
 
 .ds-frame::before {
@@ -93,12 +110,31 @@
   pointer-events: none;
 }
 
+.ds-frame::after {
+  position: absolute;
+  top: calc(var(--ds-cut) - 1px);
+  left: 0;
+  z-index: 3;
+  width: var(--ds-cut);
+  height: 1px;
+  background: linear-gradient(90deg, var(--ds-edge-left), var(--ds-edge-top));
+  content: '';
+  pointer-events: none;
+  transform: rotate(-45deg) scaleX(1.4143);
+  transform-origin: left center;
+}
+
 .ds-frame--paper {
   --ds-cut: 28px;
   --ds-surface:
-    radial-gradient(90% 40% at 50% 0%, rgba(255, 255, 255, 0.94), transparent),
-    linear-gradient(180deg, var(--panel-a), var(--panel-b));
+    radial-gradient(90% 40% at 50% 0%, rgba(255, 255, 255, 0.34), transparent),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.68), rgba(255, 255, 255, 0.56));
   filter: drop-shadow(var(--shadow-pop));
+}
+
+.ds-frame--paper::before {
+  -webkit-backdrop-filter: blur(16px) saturate(160%);
+  backdrop-filter: blur(16px) saturate(160%);
 }
 
 .ds-frame--secondary {
@@ -125,6 +161,7 @@
 .drawing-panel.ds-frame,
 .diagnosis-view.ds-frame,
 .bench.ds-frame {
+  box-shadow: none;
   filter: drop-shadow(var(--shadow-pop));
 }
 
@@ -136,10 +173,21 @@
 
 .ds-control {
   --ds-cut: 10px;
+  --ds-edge-top: var(--edge-a);
+  --ds-edge-right: var(--edge-b);
+  --ds-edge-bottom: var(--edge-c);
+  --ds-edge-left: var(--edge-b);
   --ds-surface: var(--card);
   position: relative;
   isolation: isolate;
-  border: 0;
+  border-width: 1px;
+  border-style: solid;
+  border-color:
+    var(--ds-edge-top)
+    var(--ds-edge-right)
+    var(--ds-edge-bottom)
+    var(--ds-edge-left);
+  border-radius: 0;
   clip-path: polygon(
     var(--ds-cut) 0,
     100% 0,
@@ -147,29 +195,28 @@
     0 100%,
     0 var(--ds-cut)
   );
-  background: var(--edge-gradient);
+  background: transparent;
 }
 
 .choice-option.ds-control {
   --ds-cut: 12px;
+  --ds-surface: rgba(255, 255, 255, 0.62);
 }
 
 .choice-option.ds-control:has(input:checked) {
+  --ds-edge-top: var(--accent);
+  --ds-edge-right: color-mix(in srgb, var(--accent) 78%, var(--edge-c));
+  --ds-edge-bottom: color-mix(in srgb, var(--accent) 62%, var(--edge-c));
+  --ds-edge-left: color-mix(in srgb, var(--accent) 78%, var(--edge-c));
   --ds-surface: linear-gradient(var(--accent-faint), var(--accent-faint)), var(--card);
-  background: linear-gradient(
-    180deg,
-    var(--accent),
-    color-mix(in srgb, var(--accent) 62%, var(--edge-c))
-  );
 }
 
 .bench__annotate.ds-control.is-active {
+  --ds-edge-top: var(--accent);
+  --ds-edge-right: color-mix(in srgb, var(--accent) 78%, var(--edge-c));
+  --ds-edge-bottom: color-mix(in srgb, var(--accent) 62%, var(--edge-c));
+  --ds-edge-left: color-mix(in srgb, var(--accent) 78%, var(--edge-c));
   --ds-surface: var(--accent-soft);
-  background: linear-gradient(
-    180deg,
-    var(--accent),
-    color-mix(in srgb, var(--accent) 60%, var(--edge-c))
-  );
 }
 
 .live-model__focus.ds-control {
@@ -199,30 +246,27 @@
 }
 
 .bench.ds-frame .tray-item.ds-control:hover {
+  --ds-edge-top: var(--accent);
+  --ds-edge-right: color-mix(in srgb, var(--accent) 76%, var(--edge-c));
+  --ds-edge-bottom: color-mix(in srgb, var(--accent) 58%, var(--edge-c));
+  --ds-edge-left: color-mix(in srgb, var(--accent) 76%, var(--edge-c));
   --ds-surface: var(--accent-faint);
-  background: linear-gradient(
-    180deg,
-    var(--accent),
-    color-mix(in srgb, var(--accent) 58%, var(--edge-c))
-  );
 }
 
 .bench.ds-frame .builder-submit.ds-control {
+  --ds-edge-top: color-mix(in srgb, var(--accent) 84%, white);
+  --ds-edge-right: color-mix(in srgb, var(--accent) 76%, var(--edge-c));
+  --ds-edge-bottom: color-mix(in srgb, var(--accent) 68%, var(--edge-c));
+  --ds-edge-left: color-mix(in srgb, var(--accent) 76%, var(--edge-c));
   --ds-surface: var(--accent);
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--accent) 84%, white),
-    color-mix(in srgb, var(--accent) 68%, var(--edge-c))
-  );
 }
 
 .bench.ds-frame .builder-submit.ds-control:hover:not(:disabled) {
+  --ds-edge-top: color-mix(in srgb, var(--accent) 88%, white);
+  --ds-edge-right: color-mix(in srgb, var(--accent) 72%, var(--edge-c));
+  --ds-edge-bottom: color-mix(in srgb, var(--accent) 62%, var(--edge-c));
+  --ds-edge-left: color-mix(in srgb, var(--accent) 72%, var(--edge-c));
   --ds-surface: color-mix(in srgb, var(--accent) 88%, white);
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--accent) 78%, white),
-    color-mix(in srgb, var(--accent) 62%, var(--edge-c))
-  );
 }
 
 .ds-control::before {
@@ -239,6 +283,45 @@
   background: var(--ds-surface);
   content: '';
   pointer-events: none;
+}
+
+.ds-control::after {
+  position: absolute;
+  top: calc(var(--ds-cut) - 1px);
+  left: 0;
+  z-index: 3;
+  width: var(--ds-cut);
+  height: 1px;
+  background: linear-gradient(90deg, var(--ds-edge-left), var(--ds-edge-top));
+  content: '';
+  pointer-events: none;
+  transform: rotate(-45deg) scaleX(1.4143);
+  transform-origin: left center;
+}
+
+.choice-option.ds-control::before,
+.exam-fill__control.ds-control::before,
+.text-answer__surface.ds-control::before,
+.question-previous.ds-control::before,
+.question-skip.ds-control::before,
+.question-submit.ds-control::before {
+  -webkit-backdrop-filter: blur(16px) saturate(160%);
+  backdrop-filter: blur(16px) saturate(160%);
+}
+
+.exam-fill__control.ds-control,
+.text-answer__surface.ds-control,
+.question-previous.ds-control,
+.question-skip.ds-control {
+  --ds-surface: rgba(255, 255, 255, 0.55);
+}
+
+.question-submit.ds-control {
+  --ds-edge-top: rgba(255, 255, 255, 0.82);
+  --ds-edge-right: color-mix(in srgb, var(--accent) 76%, var(--edge-c));
+  --ds-edge-bottom: color-mix(in srgb, var(--accent) 64%, var(--edge-c));
+  --ds-edge-left: color-mix(in srgb, var(--accent) 76%, var(--edge-c));
+  --ds-surface: rgba(122, 167, 255, 0.52);
 }
 
 .route-loading__label {

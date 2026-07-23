@@ -1,0 +1,186 @@
+.glass-lab {
+  width: 100%;
+  min-height: calc(100dvh - 60px);
+  padding: 34px clamp(20px, 4vw, 72px) 56px;
+  overflow: auto;
+}
+
+.glass-lab__header {
+  width: min(1540px, 100%);
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 24px;
+  margin: 0 auto 28px;
+}
+
+.glass-lab__header > div {
+  display: grid;
+  gap: 6px;
+}
+
+.glass-lab__header span {
+  color: var(--accent-ink);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.glass-lab__header h1 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: clamp(28px, 3vw, 42px);
+  font-weight: 650;
+  letter-spacing: 0;
+}
+
+.glass-lab__header output {
+  min-width: 156px;
+  padding: 8px 12px;
+  color: var(--text-secondary);
+  border: 1px solid var(--line-soft);
+  background: rgba(255, 255, 255, 0.48);
+  font-size: 12px;
+  text-align: center;
+}
+
+.glass-lab__grid {
+  width: min(1540px, 100%);
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 28px 24px;
+  margin: 0 auto;
+}
+
+.glass-lab__option {
+  min-width: 0;
+  display: grid;
+  gap: 11px;
+}
+
+.glass-lab__option > header {
+  min-height: 42px;
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.glass-lab__option > header > span {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  color: var(--text-secondary);
+  border: 1px solid var(--line-strong);
+  background: rgba(255, 255, 255, 0.46);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.glass-lab__option[data-selected='true'] > header > span {
+  color: var(--accent-ink);
+  border-color: var(--accent);
+  background: var(--accent-faint);
+}
+
+.glass-lab__option > header > div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.glass-lab__option h2 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.glass-lab__option small {
+  color: var(--text-tertiary);
+  font-size: 11px;
+}
+
+.glass-lab__specimen {
+  min-height: 320px;
+  gap: 17px;
+  padding: 28px 28px 22px;
+  color: var(--text-primary);
+}
+
+.glass-lab__refract-surface {
+  min-height: 320px;
+}
+
+.glass-lab__meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.glass-lab__meta strong {
+  color: var(--accent);
+  font-size: 12px;
+}
+
+.glass-lab__meta span {
+  color: var(--text-tertiary);
+  font-size: 11px;
+}
+
+.glass-lab__specimen h3 {
+  min-height: 52px;
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 19px;
+  font-weight: 600;
+  line-height: 1.42;
+}
+
+.glass-lab__specimen label {
+  display: grid;
+  gap: 7px;
+}
+
+.glass-lab__specimen label > span {
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.glass-lab__specimen label input {
+  height: 48px;
+  font-family: var(--font-body);
+}
+
+.glass-lab__specimen footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: auto;
+}
+
+@media (max-width: 1160px) {
+  .glass-lab__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 700px) {
+  .glass-lab {
+    padding: 24px 14px 40px;
+  }
+
+  .glass-lab__header {
+    align-items: start;
+  }
+
+  .glass-lab__header output {
+    min-width: 110px;
+  }
+
+  .glass-lab__grid {
+    grid-template-columns: 1fr;
+  }
+}

@@ -195,16 +195,32 @@ describe('real M3 route chain', () => {
     fireEvent.click(screen.getByRole('button', { name: '提交作答' }));
     await user.click(await screen.findByLabelText(/^A\./, {}, routeTransitionTimeout));
     await user.click(screen.getByRole('button', { name: '提交作答' }));
-    const examChoicePrompts = [
-      /电极 a、b 分别为什么极/,
-      /外电路中电子的流向/,
-      /消耗 K 与消耗 O₂/,
-    ];
-    for (const prompt of examChoicePrompts) {
-      await screen.findByText(prompt, {}, routeTransitionTimeout);
-      await user.click(await screen.findByLabelText(/^A\./, {}, routeTransitionTimeout));
-      await user.click(screen.getByRole('button', { name: '提交作答' }));
-    }
+    fireEvent.change(await screen.findByLabelText(
+      '电极 a 的极性',
+      {},
+      routeTransitionTimeout,
+    ), { target: { value: '负' } });
+    fireEvent.change(screen.getByLabelText('电极 b 的极性'), {
+      target: { value: '正' },
+    });
+    await user.click(screen.getByRole('button', { name: '提交作答' }));
+
+    fireEvent.change(await screen.findByLabelText(
+      '电子流出电极',
+      {},
+      routeTransitionTimeout,
+    ), { target: { value: 'a' } });
+    fireEvent.change(screen.getByLabelText('电子流入电极'), {
+      target: { value: 'b' },
+    });
+    await user.click(screen.getByRole('button', { name: '提交作答' }));
+
+    fireEvent.change(await screen.findByLabelText(
+      'K 与 O₂ 的物质的量之比',
+      {},
+      routeTransitionTimeout,
+    ), { target: { value: '1:1' } });
+    await user.click(screen.getByRole('button', { name: '提交作答' }));
     await screen.findByText(/隔膜能否通过 O₂/, {}, routeTransitionTimeout);
     fireEvent.change(await screen.findByLabelText('简答作答', {}, routeTransitionTimeout), {
       target: { value: '不能。防止 K 与 O₂ 直接反应，两个半反应必须分隔在两个场所。' },

@@ -2,6 +2,7 @@ import { CircleDot } from 'lucide-react';
 import { Suspense, useEffect } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 
+import { AmbientChemistryBackdrop } from './AmbientChemistryBackdrop';
 import { useAppContext } from './AppContext';
 import { AppUtilityMenu } from './AppUtilityMenu';
 import { ElectronFlowProgress } from './ElectronFlowProgress';
@@ -22,6 +23,7 @@ export function AppShell() {
 
   return (
     <div className="app-shell">
+      <AmbientChemistryBackdrop />
       <header className="app-header">
         <div className="app-header__inner">
           <NavLink className="brand" to="/pretest" aria-label="LuminousQuest 前测">
