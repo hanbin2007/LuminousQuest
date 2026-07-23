@@ -57,6 +57,45 @@ function assessmentResponse(
   return { content: JSON.stringify(value), structured: value, model: 'workflow-v1' };
 }
 
+function membraneAssessmentResponse(answer: string): LLMResponse {
+  const evidence = (quote: string) => ({
+    quote,
+    start: answer.indexOf(quote),
+    end: answer.indexOf(quote) + quote.length,
+  });
+  const d3Slots = answer.includes('不能')
+    ? [{ id: 'o2-passes', value: 'false', evidence: evidence('不能') }]
+    : answer.includes('能')
+      ? [{ id: 'o2-passes', value: 'true', evidence: evidence('能') }]
+      : [];
+  const p1Slots = answer.includes('直接反应')
+    ? [{
+        id: 'separation-purpose',
+        value: 'prevent-direct-reaction',
+        evidence: evidence('直接反应'),
+      }]
+    : [];
+  const assessment = (nodeId: 'D3' | 'P1', slots: typeof d3Slots | typeof p1Slots) => ({
+    nodeId,
+    errorIds: [],
+    facts: {
+      response: answer.length === 0 ? 'blank' : 'substantive',
+      terminology: 'model',
+      syllabus: 'within',
+      contradiction: false,
+      typo: 'none',
+      slots,
+    },
+    evidence: slots.length > 0 ? [evidence(answer)] : [],
+    assistance: { kind: 'none', rounds: 0 },
+  });
+  const value = {
+    anchors: [],
+    assessments: [assessment('D3', d3Slots), assessment('P1', p1Slots)],
+  };
+  return { content: JSON.stringify(value), structured: value, model: 'membrane-v1' };
+}
+
 function post(app: ReturnType<typeof createServerApp>, route: string, body: unknown, token = apiToken) {
   return app.request(route, {
     method: 'POST',
@@ -66,7 +105,7 @@ function post(app: ReturnType<typeof createServerApp>, route: string, body: unkn
 }
 
 describe('server-owned assessment and tutor routes', () => {
-  it('assesses a configured training-case answer without treating it as pretest data', async () => {
+  it('assesses training answers and applies question-level evidence to pretest text answers', async () => {
     const root = await createTemporaryDirectory();
     await writeValidContentTree(root);
     const sessions = new TestSessionStore();
@@ -75,7 +114,11 @@ describe('server-owned assessment and tutor routes', () => {
       id: 'training-provider',
       async chat() { throw new Error('not used'); },
       async vision() { throw new Error('not used'); },
-      async structured() {
+      async structured(request) {
+        const requestInput = request.input as { answer?: string };
+        if (requestInput.answer !== answer) {
+          return membraneAssessmentResponse(requestInput.answer ?? '');
+        }
         const quote = 'Zn';
         const value = {
           anchors: [],
@@ -138,6 +181,43 @@ describe('server-owned assessment and tutor routes', () => {
         ],
       },
     });
+
+    const membraneCases = [
+      {
+        answer: '不能，防止 O₂ 与 K 直接反应',
+        expected: { D3: 'hit', P1: 'hit' },
+      },
+      {
+        answer: '不能，只允许 K⁺ 通过',
+        expected: { D3: 'hit', P1: 'miss' },
+      },
+      {
+        answer: '能通过',
+        expected: { D3: 'miss', P1: 'miss' },
+      },
+      {
+        answer: '',
+        expected: { D3: 'unanswered', P1: 'unanswered' },
+      },
+    ] as const;
+    for (const [index, membraneCase] of membraneCases.entries()) {
+      const membraneResponse = await post(app, '/api/assessment/extract', {
+        sessionId: `membrane-session-${index + 1}`,
+        questionId: 'pretest-exam1-membrane',
+        targetNodeIds: ['D3', 'P1'],
+        studentAnswer: membraneCase.answer,
+        submissionId: `membrane-submission-${index + 1}`,
+      });
+      const payload = await membraneResponse.json() as { session: StudentSession };
+      const assessments = payload.session.events.filter((event): event is AssessmentCompletedEvent =>
+        event.kind === 'assessment.completed');
+
+      expect(membraneResponse.status).toBe(200);
+      expect(assessments.find((event) => event.nodeId === 'D3')?.ruleDecision.status)
+        .toBe(membraneCase.expected.D3);
+      expect(assessments.find((event) => event.nodeId === 'P1')?.ruleDecision.status)
+        .toBe(membraneCase.expected.P1);
+    }
   });
 
   it('scores a training equation through the server route and keeps retries idempotent', async () => {

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import type { LoadedConfig } from '../../shared/config/schemas';
+import type { LoadedConfig, TextQuestionEvidence } from '../../shared/config/schemas';
 import type { AssistanceMetadata } from '../../shared/scoring/rubric';
 import {
   structuredAssessmentResponseJsonSchema,
@@ -45,6 +45,7 @@ export function createClosedExtractionSchema(input: {
   config: LoadedConfig;
   caseId: string;
   targetNodeIds: readonly string[];
+  questionEvidence?: TextQuestionEvidence;
   assistance: AssistanceMetadata;
 }) {
   const trainingCase = input.config.cases.find((entry) => entry.id === input.caseId);
@@ -52,13 +53,11 @@ export function createClosedExtractionSchema(input: {
   if (input.targetNodeIds.length === 0 || new Set(input.targetNodeIds).size !== input.targetNodeIds.length) {
     throw new Error('Extraction target node ids must be non-empty and unique');
   }
-  const answerNodeIds = new Set(
-    trainingCase.evidencePaths
-      .filter((entry) => entry.source === 'answer')
-      .map((entry) => entry.nodeId),
-  );
   for (const nodeId of input.targetNodeIds) {
-    if (!answerNodeIds.has(nodeId)) {
+    const questionEvidence = input.questionEvidence?.find((entry) => entry.nodeId === nodeId);
+    const caseEvidence = trainingCase.evidencePaths.find((entry) =>
+      entry.nodeId === nodeId && entry.source === 'answer');
+    if (!questionEvidence && !caseEvidence) {
       throw new Error(`Node ${nodeId} has no answer extraction path in case ${input.caseId}`);
     }
   }
@@ -98,8 +97,9 @@ export function createClosedExtractionSchema(input: {
       uniqueItems: true,
       items: { type: 'string', enum: errorsByNode.get(nodeId) ?? [] },
     };
-    const evidencePath = trainingCase.evidencePaths.find((entry) =>
-      entry.nodeId === nodeId && entry.source === 'answer')!;
+    const evidencePath = input.questionEvidence?.find((entry) => entry.nodeId === nodeId)
+      ?? trainingCase.evidencePaths.find((entry) =>
+        entry.nodeId === nodeId && entry.source === 'answer')!;
     const facts = properties.facts;
     const factsProperties = objectProperties(facts);
     factsProperties.slots = closedFactSlotsSchema(
@@ -127,6 +127,7 @@ export interface AssessmentExtractionInput {
   answer: string;
   caseId: string;
   targetNodeIds: readonly string[];
+  questionEvidence?: TextQuestionEvidence;
   assistance: AssistanceMetadata;
   executionMode: LLMExecutionMode;
   provider: string;
@@ -204,6 +205,7 @@ export async function runAssessmentExtraction(
           answer: input.answer,
           caseId: input.caseId,
           targetNodeIds: input.targetNodeIds,
+          questionEvidence: input.questionEvidence,
           config: input.config,
         });
       } catch (error) {

@@ -1,4 +1,4 @@
-import type { LoadedConfig } from '../config/schemas';
+import type { LoadedConfig, TextQuestionEvidence } from '../config/schemas';
 import {
   factValueAliases,
   normalizeComparisonText,
@@ -323,6 +323,7 @@ export function validateAssessmentExtraction(input: {
   answer: string;
   caseId: string;
   targetNodeIds: readonly string[];
+  questionEvidence?: TextQuestionEvidence;
   config: LoadedConfig;
 }): StructuredAssessmentResponse {
   const maximumAnswerCharacters = input.config.scaffoldPolicy.extraction.maximumAnswerCharacters;
@@ -424,8 +425,10 @@ export function validateAssessmentExtraction(input: {
       assessment.facts.slots = [];
       assessment.errorIds = [];
     }
-    const evidencePath = trainingCase.evidencePaths.find((entry) =>
-      entry.nodeId === assessment.nodeId && entry.source === 'answer');
+    const evidencePath = input.questionEvidence?.find((entry) =>
+      entry.nodeId === assessment.nodeId)
+      ?? trainingCase.evidencePaths.find((entry) =>
+        entry.nodeId === assessment.nodeId && entry.source === 'answer');
     const allowedSlotIds = new Set(evidencePath?.factRequirements.map((entry) => entry.id) ?? []);
     const seenSlotIds = new Set<string>();
     for (const [slotIndex, slot] of assessment.facts.slots.entries()) {

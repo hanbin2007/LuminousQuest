@@ -171,6 +171,7 @@ export async function validateReferences(
   const rubricIds = new Set(config.rubrics.rubrics.map((rubric) => rubric.id));
   const followingAnchorIds = new Set(config.rubrics.followingAnchors.map((anchor) => anchor.id));
   const scaffoldLevels = new Set(config.scaffoldPolicy.levels.map((level) => level.level));
+  const factValueAliases = config.scaffoldPolicy.extraction.factValueAliases;
   const rubricNodeIds = new Set<string>();
 
   config.rubrics.rubrics.forEach((rubric, index) => {
@@ -270,6 +271,26 @@ export async function validateReferences(
               `unknown misconception ${misconceptionId}`,
             );
           }
+        });
+      });
+    } else {
+      question.evidence?.forEach((evidence, evidenceIndex) => {
+        if (!question.targetNodeIds.includes(evidence.nodeId)) {
+          throw new ConfigValidationError(
+            'config/pretest.json',
+            `questions.${questionIndex}.evidence.${evidenceIndex}.nodeId`,
+            `evidence node ${evidence.nodeId} must be a question target`,
+          );
+        }
+        evidence.factRequirements.forEach((requirement, requirementIndex) => {
+          requirement.acceptedValues.forEach((acceptedValue, acceptedValueIndex) => {
+            if (Object.hasOwn(factValueAliases, acceptedValue)) return;
+            throw new ConfigValidationError(
+              'config/pretest.json',
+              `questions.${questionIndex}.evidence.${evidenceIndex}.factRequirements.${requirementIndex}.acceptedValues.${acceptedValueIndex}`,
+              `accepted value ${acceptedValue} is not defined in factValueAliases`,
+            );
+          });
         });
       });
     }

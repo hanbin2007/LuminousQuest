@@ -46,6 +46,7 @@ export function createPublicConfigView(config: LoadedConfig) {
       }
     } else {
       delete (question as Partial<typeof question>).answerGuidance;
+      delete (question as Partial<typeof question>).evidence;
       delete (question as Partial<typeof question>).referenceEquations;
     }
   }

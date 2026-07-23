@@ -592,28 +592,28 @@ export function createServerApp(options: ServerAppOptions) {
       const requestedCase = parsed.data.caseId
         ? config.cases.find((entry) => entry.id === parsed.data.caseId)
         : undefined;
-      const question = parsed.data.caseId
+      const questionCandidate = parsed.data.caseId
         ? undefined
-        : config.pretest.questions.find((entry) =>
-            entry.id === parsed.data.questionId && entry.type === 'text');
+        : config.pretest.questions.find((entry) => entry.id === parsed.data.questionId);
+      const question = questionCandidate?.type === 'text' ? questionCandidate : undefined;
       if (parsed.data.caseId && !requestedCase) {
         return context.json({ error: 'Unknown training case' }, 400);
       }
       if (requestedCase && parsed.data.questionId !== `${requestedCase.id}:analysis`) {
         return context.json({ error: 'Unknown training question' }, 400);
       }
-      if (!parsed.data.caseId && (!question || question.type !== 'text')) {
+      if (!parsed.data.caseId && !question) {
         return context.json({ error: 'Unknown text question' }, 400);
       }
       const configuredTargets = new Set(requestedCase?.targetNodeIds ?? question!.targetNodeIds);
       if (parsed.data.targetNodeIds.some((nodeId) => !configuredTargets.has(nodeId))) {
         return context.json({ error: 'Target node is not configured for this question' }, 400);
       }
-      const referenceCaseId = requestedCase?.id
-        ?? (question!.type === 'text' ? question!.referenceEquations[0].caseId : '');
+      const referenceCaseId = requestedCase?.id ?? question!.referenceEquations[0].caseId;
       const trainingCase = config.cases.find((entry) => entry.id === referenceCaseId);
       if (!trainingCase) throw new Error(`Required case ${referenceCaseId} is missing`);
       const sourceByNode = new Map(trainingCase.evidencePaths.map((path) => [path.nodeId, path.source]));
+      question?.evidence?.forEach((evidence) => sourceByNode.set(evidence.nodeId, 'answer'));
       const answerTargetNodeIds = parsed.data.targetNodeIds.filter((nodeId) =>
         sourceByNode.get(nodeId) === 'answer');
       const equationTargetNodeIds = parsed.data.targetNodeIds.filter((nodeId) =>
@@ -669,6 +669,7 @@ export function createServerApp(options: ServerAppOptions) {
           answer: parsed.data.studentAnswer,
           caseId: referenceCaseId,
           targetNodeIds: answerTargetNodeIds,
+          questionEvidence: question?.evidence,
           assistance,
           executionMode: workflow.executionMode,
           provider: workflow.provider,
@@ -691,6 +692,7 @@ export function createServerApp(options: ServerAppOptions) {
               assessmentEventIdPrefix: `assessment-${operationId}-text`,
               assessedAt: occurredAt,
               referenceCaseId,
+              questionEvidence: question?.evidence,
             })
           : recordNeedsReviewTextAssessments({
               session,

@@ -496,6 +496,28 @@ const textQuestionSchema = z
     ...questionBaseShape,
     type: z.literal('text'),
     answerGuidance: z.array(z.string().trim().min(1)).min(1),
+    evidence: z
+      .array(
+        z
+          .object({
+            nodeId: idSchema,
+            description: z.string().trim().min(1),
+            referenceAnswerPoints: z.array(z.string().trim().min(1)).min(1),
+            factRequirements: z
+              .array(
+                z
+                  .object({
+                    id: idSchema,
+                    acceptedValues: z.array(z.string().trim().min(1)).min(1),
+                  })
+                  .strict(),
+              )
+              .min(1),
+          })
+          .strict(),
+      )
+      .min(1)
+      .optional(),
     referenceEquations: z
       .array(
         z
@@ -508,7 +530,18 @@ const textQuestionSchema = z
       )
       .min(1),
   })
-  .strict();
+  .strict()
+  .superRefine((question, context) => {
+    question.evidence?.forEach((entry, index) => {
+      if (!question.targetNodeIds.includes(entry.nodeId)) {
+        context.addIssue({
+          code: 'custom',
+          path: ['evidence', index, 'nodeId'],
+          message: `evidence node ${entry.nodeId} must be a question target`,
+        });
+      }
+    });
+  });
 
 const pretestQuestionSchema = z.union([choiceQuestionSchema, textQuestionSchema]);
 
@@ -976,6 +1009,9 @@ export type FunctionalRole = z.infer<typeof functionalRoleSchema>;
 export type KnowledgeModelConfig = z.infer<typeof knowledgeModelSchema>;
 export type RubricsConfig = z.infer<typeof rubricsSchema>;
 export type PretestConfig = z.infer<typeof pretestSchema>;
+export type TextQuestionEvidence = NonNullable<
+  Extract<PretestConfig['questions'][number], { type: 'text' }>['evidence']
+>;
 export type CaseConfig = z.infer<typeof caseSchema>;
 export type ScaffoldPolicyConfig = z.infer<typeof scaffoldPolicySchema>;
 

@@ -75,7 +75,7 @@ describe('configuration loading', () => {
     expect(loaded.pretest.questions[0]?.group).toEqual(pretest.questions[0].group);
   });
 
-  it('rejects grouped-question metadata whose figure is missing', async () => {
+  it('rejects invalid grouped-question metadata and question-level evidence', async () => {
     const root = await createTemporaryDirectory();
     await writeValidContentTree(root);
     const file = path.join(root, 'config', 'pretest.json');
@@ -92,6 +92,43 @@ describe('configuration loading', () => {
       file: 'config/pretest.json',
       field: 'questions.0.group.figure',
       reason: expect.stringContaining('missing'),
+    });
+
+    const unknownNodeRoot = await createTemporaryDirectory();
+    await writeValidContentTree(unknownNodeRoot);
+    const unknownNodeFile = path.join(unknownNodeRoot, 'config', 'pretest.json');
+    const unknownNodePretest = JSON.parse(await readFile(unknownNodeFile, 'utf8'));
+    unknownNodePretest.questions[6].evidence ??= [{
+      nodeId: 'D3',
+      description: '隔膜选择性。',
+      referenceAnswerPoints: ['不能。'],
+      factRequirements: [{ id: 'o2-passes', acceptedValues: ['false'] }],
+    }];
+    unknownNodePretest.questions[6].evidence[0].nodeId = 'D1';
+    await writeFile(unknownNodeFile, JSON.stringify(unknownNodePretest));
+    await expect(loadAllConfig(unknownNodeRoot)).rejects.toMatchObject({
+      file: 'config/pretest.json',
+      field: 'questions.6.evidence.0.nodeId',
+      reason: expect.stringContaining('target'),
+    });
+
+    const unknownAliasRoot = await createTemporaryDirectory();
+    await writeValidContentTree(unknownAliasRoot);
+    const unknownAliasFile = path.join(unknownAliasRoot, 'config', 'pretest.json');
+    const unknownAliasPretest = JSON.parse(await readFile(unknownAliasFile, 'utf8'));
+    unknownAliasPretest.questions[6].evidence ??= [{
+      nodeId: 'D3',
+      description: '隔膜选择性。',
+      referenceAnswerPoints: ['不能。'],
+      factRequirements: [{ id: 'o2-passes', acceptedValues: ['false'] }],
+    }];
+    unknownAliasPretest.questions[6].evidence[0]
+      .factRequirements[0].acceptedValues[0] = 'undefined-canonical-value';
+    await writeFile(unknownAliasFile, JSON.stringify(unknownAliasPretest));
+    await expect(loadAllConfig(unknownAliasRoot)).rejects.toMatchObject({
+      file: 'config/pretest.json',
+      field: 'questions.6.evidence.0.factRequirements.0.acceptedValues.0',
+      reason: expect.stringContaining('factValueAliases'),
     });
   });
 

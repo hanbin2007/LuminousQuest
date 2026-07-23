@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import type { LoadedConfig } from '../config/schemas';
+import type { LoadedConfig, TextQuestionEvidence } from '../config/schemas';
 import {
   factValueAliases,
   normalizeComparisonText,
@@ -364,6 +364,7 @@ export interface RecordStructuredTextAssessmentInput {
   assessmentEventIdPrefix: string;
   assessedAt: string;
   referenceCaseId?: string;
+  questionEvidence?: TextQuestionEvidence;
 }
 
 export interface RecordNeedsReviewTextAssessmentInput {
@@ -559,8 +560,10 @@ export function recordStructuredTextAssessment(input: RecordStructuredTextAssess
         throw new Error(`Error ${errorId} is not configured for node ${assessment.nodeId}`);
       }
     });
-    const evidencePath = trainingCase.evidencePaths.find((entry) =>
-      entry.nodeId === assessment.nodeId && entry.source === 'answer');
+    const evidencePath = input.questionEvidence?.find((entry) =>
+      entry.nodeId === assessment.nodeId)
+      ?? trainingCase.evidencePaths.find((entry) =>
+        entry.nodeId === assessment.nodeId && entry.source === 'answer');
     const anchor = rubric.followingAnchorId
       ? anchorEvents.get(rubric.followingAnchorId)
       : undefined;

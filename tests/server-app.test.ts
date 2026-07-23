@@ -61,6 +61,8 @@ describe('Hono server responsibilities', () => {
     };
     const choice = payload.pretest.questions.find((question) => question.type === 'choice')!;
     const text = payload.pretest.questions.find((question) => question.type === 'text')!;
+    const evidenceText = payload.pretest.questions.find((question) =>
+      question.id === 'pretest-exam1-membrane')!;
     const full = await loadAllConfig(root);
 
     expect(response.headers.get('x-lq-api-token')).toBe(apiToken);
@@ -124,6 +126,7 @@ describe('Hono server responsibilities', () => {
     }
     expect(text).not.toHaveProperty('answerGuidance');
     expect(text).not.toHaveProperty('referenceEquations');
+    expect(evidenceText).not.toHaveProperty('evidence');
     for (const component of payload.pretest.builder.components) {
       expect(component).not.toHaveProperty('functionalRole');
       expect(component).not.toHaveProperty('distractor');
@@ -132,6 +135,8 @@ describe('Hono server responsibilities', () => {
       .toHaveProperty('options.0.correct');
     expect(full.pretest.questions.find((question) => question.type === 'text'))
       .toHaveProperty('answerGuidance');
+    expect(full.pretest.questions.find((question) => question.id === 'pretest-exam1-membrane'))
+      .toHaveProperty('evidence');
   });
 
   it('provides a no-key mock LLM flow through the proxy route', async () => {
