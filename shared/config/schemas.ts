@@ -509,8 +509,20 @@ const textQuestionSchema = z
                   .object({
                     id: idSchema,
                     acceptedValues: z.array(z.string().trim().min(1)).min(1),
+                    valueDomain: z.array(z.string().trim().min(1)).min(1).optional(),
+                    hint: z.string().trim().min(1).optional(),
                   })
-                  .strict(),
+                  .strict()
+                  .superRefine((value, context) => {
+                    if (value.valueDomain
+                      && !value.acceptedValues.every((entry) => value.valueDomain!.includes(entry))) {
+                      context.addIssue({
+                        code: z.ZodIssueCode.custom,
+                        path: ['valueDomain'],
+                        message: 'valueDomain must contain every acceptedValue',
+                      });
+                    }
+                  }),
               )
               .min(1),
           })

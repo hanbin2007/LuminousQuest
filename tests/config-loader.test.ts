@@ -124,6 +124,8 @@ describe('configuration loading', () => {
     }];
     unknownAliasPretest.questions[6].evidence[0]
       .factRequirements[0].acceptedValues[0] = 'undefined-canonical-value';
+    delete unknownAliasPretest.questions[6].evidence[0]
+      .factRequirements[0].valueDomain;
     await writeFile(unknownAliasFile, JSON.stringify(unknownAliasPretest));
     await expect(loadAllConfig(unknownAliasRoot)).rejects.toMatchObject({
       file: 'config/pretest.json',

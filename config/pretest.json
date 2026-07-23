@@ -324,7 +324,7 @@
           "description": "判断隔膜不允许 O₂ 通过（离子导体的选择性）。",
           "referenceAnswerPoints": ["不能（隔膜不允许 O₂ 通过）。"],
           "factRequirements": [
-            { "id": "o2-passes", "acceptedValues": ["false"] }
+            { "id": "o2-passes", "acceptedValues": ["false"], "valueDomain": ["true", "false"], "hint": "学生对『隔膜能否通过 O₂』的判断：答不能/否/不通过取 false，答能/可以通过取 true；未作判断不建槽。" }
           ]
         },
         {
@@ -332,7 +332,7 @@
           "description": "说明理由：防止 K 与 O₂ 直接反应，两个半反应必须分隔。",
           "referenceAnswerPoints": ["防止 K 与 O₂ 直接反应（半反应分隔）。"],
           "factRequirements": [
-            { "id": "separation-purpose", "acceptedValues": ["prevent-direct-reaction"] }
+            { "id": "separation-purpose", "acceptedValues": ["prevent-direct-reaction"], "valueDomain": ["prevent-direct-reaction"], "hint": "学生给出的理由是否表达『防止/避免 K 与 O₂ 直接接触或直接反应（两个半反应分隔）』：表达了即取 prevent-direct-reaction 并引用该句；电路断路、O₂ 不带电等其它理由不建此槽。" }
           ]
         }
       ],

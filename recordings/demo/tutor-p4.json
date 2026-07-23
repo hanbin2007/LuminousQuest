@@ -2,7 +2,7 @@
   "version": "llm-recording.v2",
   "recordedAt": "2026-07-16T01:03:00.000Z",
   "metadata": {
-    "configVersion": "sha256:232ee9642276dcee29788bde41945c8082ba560ded29d5638e2a4a1a62ac7a6b",
+    "configVersion": "sha256:03700d740d2560a12947f7e7ab1c02b1d4df5aae075a749f46ef9bf2cf8612ae",
     "schemaVersion": "socratic-action.v2",
     "prompt": {
       "id": "socratic-tutoring",
@@ -20,7 +20,7 @@
       "text": "recorded outside the distributable artifact"
     },
     "schemaVersion": "socratic-action.v2",
-    "configVersion": "sha256:232ee9642276dcee29788bde41945c8082ba560ded29d5638e2a4a1a62ac7a6b",
+    "configVersion": "sha256:03700d740d2560a12947f7e7ab1c02b1d4df5aae075a749f46ef9bf2cf8612ae",
     "input": { "step": "scripted P4 follow-up" },
     "images": [],
     "schema": {

@@ -40,7 +40,7 @@ describe('M2 browser runtime', () => {
       submissionId: 'stable-submission',
     });
     const assertion = expect(result).rejects.toThrow('判分请求超时，请重试；重试不会重复记录本次作答。');
-    await vi.advanceTimersByTimeAsync(20_000);
+    await vi.advanceTimersByTimeAsync(90_000);
     await assertion;
   });
 
