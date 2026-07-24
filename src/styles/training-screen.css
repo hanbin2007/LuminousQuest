@@ -750,3 +750,23 @@
   border-color: rgba(180, 35, 24, 0.3);
   background: rgba(255, 235, 232, 0.76);
 }
+
+.build-badge {
+  padding: 3px 8px;
+  color: var(--text-secondary);
+  border: 1px solid var(--line-soft);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.6);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 10px;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  cursor: help;
+}
+
+.build-badge--mismatch {
+  color: #b3261e;
+  border-color: rgba(179, 38, 30, 0.55);
+  background: rgba(179, 38, 30, 0.08);
+  font-weight: 700;
+}

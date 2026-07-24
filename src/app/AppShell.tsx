@@ -44,7 +44,40 @@ export function AppShell() {
     trainingComplete,
   } = useAppContext();
   const [llmHealth, setLLMHealth] = useState<LLMHealth | null>(null);
+  const [serverVersion, setServerVersion] = useState<
+    { commit: string; dirty: boolean } | null
+  >(null);
   const contextLabel = routeContextLabel(config, pathname);
+  const clientBuild = typeof __LQ_BUILD_INFO__ === 'undefined' ? null : __LQ_BUILD_INFO__;
+
+  useEffect(() => {
+    let active = true;
+    void (async () => {
+      try {
+        const response = await fetch('/api/version', {
+          cache: 'no-store',
+          headers: { accept: 'application/json' },
+        });
+        if (!response.ok) return;
+        const value = await response.json() as { commit?: unknown; dirty?: unknown };
+        if (active && typeof value.commit === 'string' && typeof value.dirty === 'boolean') {
+          setServerVersion({ commit: value.commit, dirty: value.dirty });
+        }
+      } catch {
+        // 版本徽标是诊断辅助,拿不到就只显示前端侧
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const versionMismatch = clientBuild !== null
+    && clientBuild !== undefined
+    && serverVersion !== null
+    && clientBuild.commit !== 'unknown'
+    && serverVersion.commit !== 'unknown'
+    && clientBuild.commit !== serverVersion.commit;
 
   useEffect(() => {
     document.title = routeDocumentTitle(config, pathname);
@@ -129,6 +162,23 @@ export function AppShell() {
               <i aria-hidden="true" />
               <span>{badge.label}</span>
             </div>
+            {clientBuild ? (
+              <span
+                aria-label={`代码版本：前端 ${clientBuild.commit}${versionMismatch ? '，与服务端不一致' : ''}`}
+                className={`build-badge${versionMismatch ? ' build-badge--mismatch' : ''}`}
+                title={[
+                  `前端 ${clientBuild.commit}${clientBuild.dirty ? '(含未提交改动)' : ''} · 构建于 ${clientBuild.builtAt}`,
+                  serverVersion
+                    ? `服务端 ${serverVersion.commit}${serverVersion.dirty ? '(含未提交改动)' : ''}`
+                    : '服务端版本未读取',
+                  versionMismatch ? '⚠ 前后端代码版本不一致——前端产物可能过期,请重新构建/刷新' : '',
+                ].filter(Boolean).join(' ｜ ')}
+              >
+                {clientBuild.commit}
+                {clientBuild.dirty ? '*' : ''}
+                {versionMismatch ? ' ⚠' : ''}
+              </span>
+            ) : null}
             <AppUtilityMenu />
           </div>
         </div>

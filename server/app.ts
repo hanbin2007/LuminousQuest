@@ -1,3 +1,4 @@
+import { execSync } from 'node:child_process';
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -341,6 +342,29 @@ async function readProtectedJson(
   }
 }
 
+// 服务端代码身份:启动时取一次 git 状态,供 /api/version 与前端徽标对账。
+// 打包/断网环境(非 git 目录)回退 unknown,绝不因取版本失败影响启动。
+let cachedServerVersion: { commit: string; dirty: boolean; startedAt: string } | null = null;
+function serverVersionInfo() {
+  if (cachedServerVersion) return cachedServerVersion;
+  let commit = 'unknown';
+  let dirty = false;
+  try {
+    commit = execSync('git rev-parse --short HEAD', {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+    dirty = execSync('git status --porcelain', {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim().length > 0;
+  } catch {
+    // 保持 unknown
+  }
+  cachedServerVersion = { commit, dirty, startedAt: new Date().toISOString() };
+  return cachedServerVersion;
+}
+
 function invalidRequest(context: Context, label: string, error: z.ZodError) {
   return context.json({
     error: `Invalid ${label} request`,
@@ -534,6 +558,11 @@ export function createServerApp(options: ServerAppOptions) {
       executionMode: workflow.executionMode,
       testNavigation: (options.testNavigation ?? false) && !lockDemo,
     });
+  });
+
+  app.get('/api/version', (context) => {
+    context.header('cache-control', 'no-store');
+    return context.json(serverVersionInfo());
   });
 
   app.post('/api/session/sync', async (context) => {

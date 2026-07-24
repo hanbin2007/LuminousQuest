@@ -1,8 +1,24 @@
+import { execSync } from 'node:child_process';
+
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { defineConfig, type Plugin } from 'vitest/config';
 
+// 构建身份注入:页面可显示自己出自哪个 commit,肉眼即可核对"跑的是不是改过的代码"。
+function buildInfo() {
+  try {
+    const commit = execSync('git rev-parse --short HEAD', { encoding: 'utf8' }).trim();
+    const dirty = execSync('git status --porcelain', { encoding: 'utf8' }).trim().length > 0;
+    return { commit, dirty, builtAt: new Date().toISOString() };
+  } catch {
+    return { commit: 'unknown', dirty: false, builtAt: new Date().toISOString() };
+  }
+}
+
 export default defineConfig({
+  define: {
+    __LQ_BUILD_INFO__: JSON.stringify(buildInfo()),
+  },
   plugins: [react(), ...(tailwindcss() as unknown as Plugin[])],
   resolve: {
     alias: {
