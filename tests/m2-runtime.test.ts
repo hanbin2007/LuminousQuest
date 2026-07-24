@@ -42,7 +42,8 @@ describe('M2 browser runtime', () => {
       submissionId: 'stable-submission',
     });
     const assertion = expect(result).rejects.toThrow('判分请求超时，请重试；重试不会重复记录本次作答。');
-    await vi.advanceTimersByTimeAsync(90_000);
+    // 客户端兜底超时 240s(服务端 LLM_TIMEOUT_MS 才是权威上限)
+    await vi.advanceTimersByTimeAsync(250_000);
     await assertion;
   });
 
