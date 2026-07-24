@@ -5,6 +5,7 @@ import type { StudentSession } from '../../../shared/session';
 import { useReducedMotion } from '../../app/useReducedMotion';
 import { buildDimensionProgress, buildLiveCellState, liveNodeById } from '../model/live-cell';
 import { STAGE } from '../model/stage-tokens';
+import { TrainingGlassPanel } from './TrainingGlassPanel';
 
 // three.js 场景按需加载:无 WebGL 或未进入训练页时不下载/解析 3D chunk
 const CellScene = lazy(() =>
@@ -74,7 +75,12 @@ export const LiveModelPanel = memo(function LiveModelPanel({
   // 冷迁移后测:不提供任何即时对错信号,面板冻结为静态说明
   if (trainingCase.caseType === 'transfer') {
     return (
-      <section className="live-model live-model--frozen ds-frame ds-frame--stage" aria-labelledby="live-model-title">
+      <TrainingGlassPanel
+        aria-labelledby="live-model-title"
+        className="live-model live-model--frozen ds-frame ds-frame--stage"
+        role="region"
+        surfaceClassName="training-glass-panel--stage"
+      >
         <header className="live-model__header">
           <h3 id="live-model-title">认知模型</h3>
           <span>暂停点亮</span>
@@ -82,12 +88,17 @@ export const LiveModelPanel = memo(function LiveModelPanel({
         <p className="live-model__focus ds-control">
           冷迁移后测不显示即时对错，模型暂停实时点亮；提交并完成对比后，可在雷达图中回看三维度表现。
         </p>
-      </section>
+      </TrainingGlassPanel>
     );
   }
 
   return (
-    <section className="live-model ds-frame ds-frame--stage" aria-labelledby="live-model-title">
+    <TrainingGlassPanel
+      aria-labelledby="live-model-title"
+      className="live-model ds-frame ds-frame--stage"
+      role="region"
+      surfaceClassName="training-glass-panel--stage"
+    >
       <header className="live-model__header">
         <h3 id="live-model-title">认知模型</h3>
         <p className="live-model__meta" key={trainingCase.id}>
@@ -178,6 +189,6 @@ export const LiveModelPanel = memo(function LiveModelPanel({
         ))}
       </div>
 
-    </section>
+    </TrainingGlassPanel>
   );
 });
