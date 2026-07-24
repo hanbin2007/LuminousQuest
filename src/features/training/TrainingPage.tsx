@@ -1,6 +1,7 @@
 import {
   ArrowRight,
   Check,
+  GripVertical,
   Lightbulb,
   ListChecks,
   LoaderCircle,
@@ -8,6 +9,11 @@ import {
   Send,
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import type {
+  CSSProperties,
+  KeyboardEvent as ReactKeyboardEvent,
+  PointerEvent as ReactPointerEvent,
+} from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import type { CaseConfig } from '../../../shared/config/schemas';
@@ -56,6 +62,33 @@ const equationLabels = {
   positive: '正极反应式',
   overall: '总反应式',
 } as const;
+const trainingStageWidthStorageKey = 'luminous-quest:training-stage-width.v1';
+const defaultTrainingStageWidth = 430;
+const minimumTrainingStageWidth = 320;
+const minimumTrainingMainWidth = 520;
+const trainingResizerWidth = 14;
+
+function trainingStageWidthBounds(pageWidth: number) {
+  const available = Math.max(0, pageWidth - 32 - trainingResizerWidth);
+  return {
+    min: minimumTrainingStageWidth,
+    max: Math.max(minimumTrainingStageWidth, available - minimumTrainingMainWidth),
+  };
+}
+
+function clampTrainingStageWidth(width: number, pageWidth: number) {
+  const bounds = trainingStageWidthBounds(pageWidth);
+  return Math.min(bounds.max, Math.max(bounds.min, width));
+}
+
+function restoredTrainingStageWidth() {
+  try {
+    const stored = Number(getWorkspaceStorage().getItem(trainingStageWidthStorageKey));
+    return Number.isFinite(stored) && stored > 0 ? stored : defaultTrainingStageWidth;
+  } catch {
+    return defaultTrainingStageWidth;
+  }
+}
 
 interface CompletedRound {
   caseId: string;
@@ -610,10 +643,18 @@ export function TrainingPage() {
   const [tutorBusyNode, setTutorBusyNode] = useState<string | null>(null);
   const [focusNodeId, setFocusNodeId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [trainingStageWidth, setTrainingStageWidth] = useState(restoredTrainingStageWidth);
   const submissionIds = useRef(new Map<string, string>());
   const sessionRef = useRef(session);
   const agentCommandPending = useRef(false);
   const agentIdleWaiters = useRef(new Set<() => void>());
+  const trainingPageRef = useRef<HTMLElement>(null);
+  const trainingStageRailRef = useRef<HTMLElement>(null);
+  const trainingResizeState = useRef<{
+    pointerId: number;
+    startX: number;
+    startWidth: number;
+  } | null>(null);
   sessionRef.current = session;
 
   const handleAgentCommandPending = (pending: boolean) => {
@@ -667,6 +708,32 @@ export function TrainingPage() {
   }, [draft, session.id]);
 
   useEffect(() => {
+    try {
+      getWorkspaceStorage().setItem(
+        trainingStageWidthStorageKey,
+        String(Math.round(trainingStageWidth)),
+      );
+    } catch {
+      // Width persistence is a convenience; the current drag remains usable.
+    }
+  }, [trainingStageWidth]);
+
+  useEffect(() => {
+    const clampToViewport = () => {
+      if (window.innerWidth <= 900) return;
+      const pageWidth = trainingPageRef.current?.clientWidth || window.innerWidth;
+      setTrainingStageWidth((current) =>
+        clampTrainingStageWidth(current, pageWidth));
+    };
+    window.addEventListener('resize', clampToViewport);
+    clampToViewport();
+    return () => {
+      window.removeEventListener('resize', clampToViewport);
+      document.body.classList.remove('is-resizing-training-stage');
+    };
+  }, []);
+
+  useEffect(() => {
     const routeCaseId = resolveTrainingCaseId(config, pathname);
     if (pathname === '/training' || routeCaseId === null) {
       navigate(trainingCasePath(draft.activeCaseId || firstCase?.id || ''), { replace: true });
@@ -703,6 +770,51 @@ export function TrainingPage() {
         [trainingCase.id]: { ...current.equations[trainingCase.id], [equationId]: value },
       },
     }));
+  };
+
+  const resizeTrainingStageTo = (width: number) => {
+    const pageWidth = trainingPageRef.current?.clientWidth || window.innerWidth;
+    setTrainingStageWidth(clampTrainingStageWidth(width, pageWidth));
+  };
+
+  const beginTrainingStageResize = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0) return;
+    trainingResizeState.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startWidth: trainingStageRailRef.current?.getBoundingClientRect().width
+        ?? trainingStageWidth,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+    document.body.classList.add('is-resizing-training-stage');
+    event.preventDefault();
+  };
+
+  const moveTrainingStageResize = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const drag = trainingResizeState.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    resizeTrainingStageTo(drag.startWidth - (event.clientX - drag.startX));
+  };
+
+  const endTrainingStageResize = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (trainingResizeState.current?.pointerId !== event.pointerId) return;
+    trainingResizeState.current = null;
+    document.body.classList.remove('is-resizing-training-stage');
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  };
+
+  const handleTrainingStageResizeKey = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    const pageWidth = trainingPageRef.current?.clientWidth || window.innerWidth;
+    const bounds = trainingStageWidthBounds(pageWidth);
+    const step = event.shiftKey ? 64 : 24;
+    if (event.key === 'ArrowLeft') resizeTrainingStageTo(trainingStageWidth + step);
+    else if (event.key === 'ArrowRight') resizeTrainingStageTo(trainingStageWidth - step);
+    else if (event.key === 'Home') resizeTrainingStageTo(bounds.min);
+    else if (event.key === 'End') resizeTrainingStageTo(bounds.max);
+    else return;
+    event.preventDefault();
   };
 
   const stableSubmissionId = (key: string) => {
@@ -886,6 +998,71 @@ export function TrainingPage() {
     }
   };
 
+  const agentMode = Boolean(runtime.runAgentTurn && runtime.submitAgentAnswer);
+  const agentNextCase = cases[activeIndex + 1];
+  const latestCaseAgentTurn = [...session.events].reverse().find((event) =>
+    event.kind === 'agent.turn.completed'
+    && event.caseId === trainingCase.id);
+  const agentCaseEnded = latestCaseAgentTurn?.kind === 'agent.turn.completed'
+    && (
+      latestCaseAgentTurn.terminalAction.name === 'end_session'
+      || latestCaseAgentTurn.terminalAction.name === 'end_case'
+    );
+
+  const advanceAgentCase = () => {
+    if (!agentCaseEnded) return;
+    if (!agentNextCase) {
+      setTrainingComplete(true);
+      if (trainingCase.caseType === 'transfer') {
+        setComparison(buildTransferComparison(sessionRef.current, config, trainingCase.id));
+      }
+      return;
+    }
+    const nextLevel = agentNextCase.caseType === 'transfer'
+      ? 3
+      : draft.currentLevel;
+    setDraft((current) => ({
+      ...current,
+      activeCaseId: agentNextCase.id,
+      currentLevel: nextLevel,
+    }));
+    navigate(trainingCasePath(agentNextCase.id));
+    setRound(null);
+    setTutorNotes({});
+    setFocusNodeId(null);
+    setError(null);
+  };
+
+  const trainingPageWidth = trainingPageRef.current?.clientWidth
+    || (typeof window === 'undefined' ? 1280 : window.innerWidth);
+  const trainingStageBounds = trainingStageWidthBounds(trainingPageWidth);
+  const trainingPageStyle = {
+    '--training-stage-width': `${trainingStageWidth}px`,
+  } as CSSProperties;
+  const trainingStageResizer = (
+    <div
+      aria-controls="training-model-panel"
+      aria-label="调整认知模型宽度"
+      aria-orientation="vertical"
+      aria-valuemax={Math.round(trainingStageBounds.max)}
+      aria-valuemin={Math.round(trainingStageBounds.min)}
+      aria-valuenow={Math.round(trainingStageWidth)}
+      aria-valuetext={`${Math.round(trainingStageWidth)} 像素`}
+      className="training-stage-resizer"
+      onDoubleClick={() => resizeTrainingStageTo(defaultTrainingStageWidth)}
+      onKeyDown={handleTrainingStageResizeKey}
+      onPointerCancel={endTrainingStageResize}
+      onPointerDown={beginTrainingStageResize}
+      onPointerMove={moveTrainingStageResize}
+      onPointerUp={endTrainingStageResize}
+      role="separator"
+      tabIndex={0}
+      title="拖动调整认知模型宽度，双击恢复默认"
+    >
+      <GripVertical aria-hidden="true" />
+    </div>
+  );
+
   if (comparison) {
     return (
       <main className="page-content training-page">
@@ -894,6 +1071,64 @@ export function TrainingPage() {
           <h1>思维模型训练</h1>
         </header>
         <TransferRadarComparison comparison={comparison} />
+      </main>
+    );
+  }
+
+  if (agentMode) {
+    return (
+      <main
+        className="training-page training-page--split training-page--agent"
+        ref={trainingPageRef}
+        style={trainingPageStyle}
+      >
+        <h1 className="visually-hidden">思维模型训练</h1>
+        <h2 className="visually-hidden">{trainingCase.title}</h2>
+        <div className="training-main training-main--agent" key={trainingCase.id}>
+          <MaterialPanel
+            trainingCase={trainingCase}
+            completedNodeIds={[]}
+            level={draft.currentLevel}
+          />
+          <AgentChat
+            config={config}
+            runtime={runtime}
+            session={session}
+            trainingCase={trainingCase}
+            level={draft.currentLevel}
+            suspended={busy}
+            onCommandPendingChange={handleAgentCommandPending}
+            onSession={(incoming) => {
+              const merged = mergeServerSession(sessionRef.current, incoming);
+              sessionRef.current = merged;
+              setSession(merged);
+            }}
+            {...(agentCaseEnded
+              ? {
+                  completionAction: {
+                    label: agentNextCase ? '进入下一案例' : '完成训练',
+                    onClick: advanceAgentCase,
+                  },
+                }
+              : {})}
+          />
+          {error ? <p className="form-error training-error" role="alert">{error}</p> : null}
+        </div>
+
+        {trainingStageResizer}
+        <aside
+          className="training-stage-rail training-stage-rail--model-only"
+          id="training-model-panel"
+          ref={trainingStageRailRef}
+        >
+          <LiveModelPanel
+            session={session}
+            config={config}
+            trainingCase={trainingCase}
+            focusNodeId={focusNodeId}
+            onFocus={setFocusNodeId}
+          />
+        </aside>
       </main>
     );
   }
@@ -909,7 +1144,11 @@ export function TrainingPage() {
   const interactionBusy = busy;
 
   return (
-    <main className="training-page training-page--split">
+    <main
+      className="training-page training-page--split"
+      ref={trainingPageRef}
+      style={trainingPageStyle}
+    >
       <h1 className="visually-hidden">思维模型训练</h1>
       <h2 className="visually-hidden">{trainingCase.title}</h2>
       <div className="training-main" key={trainingCase.id}>
@@ -1025,7 +1264,12 @@ export function TrainingPage() {
       ) : null}
       </div>
 
-      <aside className="training-stage-rail">
+      {trainingStageResizer}
+      <aside
+        className="training-stage-rail"
+        id="training-model-panel"
+        ref={trainingStageRailRef}
+      >
         <AgentChat
           config={config}
           runtime={runtime}

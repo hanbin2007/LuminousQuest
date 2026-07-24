@@ -14,7 +14,7 @@ import {
   sessionConfigVersions,
 } from '../shared/session';
 import { App } from '../src/App';
-import type { AppRuntime } from '../src/runtime/api';
+import { RuntimeHttpError, type AppRuntime } from '../src/runtime/api';
 
 beforeEach(() => {
   const values = new Map<string, string>();
@@ -122,5 +122,43 @@ describe('M6 Phase 3 session hydrate wiring', () => {
       expectedSequence: 0,
     })));
     expect(await screen.findByText('会话已导入')).toBeInTheDocument();
+  });
+
+  it('forks a divergent local session instead of leaving a prefix conflict blocking it', async () => {
+    const config = await loadAllConfig(process.cwd());
+    const restored = createSession({
+      id: 'prefix-conflict-session',
+      anonymousStudentId: 'anon-HYDRATE4',
+      now: '2026-07-23T21:02:00.000Z',
+      configVersions: sessionConfigVersions(config),
+    });
+    new LocalSessionStore(window.localStorage).save(restored);
+    const syncSession = vi.fn(async ({ session }) => {
+      if (session.id === restored.id) {
+        throw new RuntimeHttpError(
+          'session-prefix-conflict',
+          409,
+          { error: 'session-prefix-conflict', eventIndex: 0 },
+        );
+      }
+      return {
+        status: 'hydrated' as const,
+        replayed: false,
+        sequence: session.events.length,
+        session,
+      };
+    });
+
+    render(<App initialConfig={config} runtime={runtimeWithSync(config, syncSession)} />);
+
+    await waitFor(() => expect(syncSession).toHaveBeenCalledTimes(2));
+    expect(syncSession.mock.calls[1]?.[0]).toMatchObject({
+      session: {
+        id: expect.stringMatching(/^recovered-/),
+        anonymousStudentId: restored.anonymousStudentId,
+      },
+      expectedSequence: 0,
+    });
+    expect(screen.queryByText(/session-prefix-conflict/)).not.toBeInTheDocument();
   });
 });

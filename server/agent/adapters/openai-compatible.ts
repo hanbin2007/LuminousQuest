@@ -117,7 +117,12 @@ export class OpenAICompatibleAgentTurnAdapter implements AgentTurnAdapter {
     }
 
     const messages: OpenAIMessage[] = [
-      { role: 'system', content: request.systemPrompt },
+      {
+        role: 'system',
+        content: Array.isArray(request.systemPrompt)
+          ? request.systemPrompt.join('\n')
+          : request.systemPrompt,
+      },
       ...request.messages.map((message): OpenAIMessage => {
         if (message.role === 'tool') {
           if (!message.toolCallId) {

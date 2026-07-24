@@ -1,4 +1,9 @@
-import { Clapperboard, GraduationCap, MoreHorizontal } from 'lucide-react';
+import {
+  Clapperboard,
+  GraduationCap,
+  MoreHorizontal,
+  TestTube2,
+} from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 
@@ -19,8 +24,12 @@ export function AppUtilityMenu() {
     demoModePending,
     demoModeError,
     toggleDemoMode,
+    testNavigation,
+    activateDevelopmentPretest,
   } = useAppContext();
   const [open, setOpen] = useState(false);
+  const [developmentPending, setDevelopmentPending] = useState(false);
+  const [developmentError, setDevelopmentError] = useState<string | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const popoverId = 'app-utility-menu-popover';
@@ -116,6 +125,35 @@ export function AppUtilityMenu() {
             {executionMode === 'demo' ? <small>executionMode=demo</small> : null}
             {demoModeError ? <small className="demo-mode-error" role="alert">{demoModeError}</small> : null}
           </div>
+          {testNavigation ? (
+            <div className="development-pretest-control">
+              <button
+                className="secondary-button"
+                disabled={developmentPending}
+                onClick={async () => {
+                  setDevelopmentPending(true);
+                  setDevelopmentError(null);
+                  try {
+                    await activateDevelopmentPretest();
+                    setOpen(false);
+                    navigate('/training');
+                  } catch (error) {
+                    setDevelopmentError(
+                      error instanceof Error ? error.message : '调试前测载入失败',
+                    );
+                  } finally {
+                    setDevelopmentPending(false);
+                  }
+                }}
+                type="button"
+              >
+                <TestTube2 aria-hidden="true" />载入调试前测
+              </button>
+              {developmentError ? (
+                <small className="demo-mode-error" role="alert">{developmentError}</small>
+              ) : null}
+            </div>
+          ) : null}
           <NavLink className="teacher-link" onClick={() => setOpen(false)} to="/teacher">
             <GraduationCap aria-hidden="true" />教师视图
           </NavLink>

@@ -39,7 +39,12 @@ export class ConfigValidationError extends Error {
   }
 }
 
-async function parseJsonFile<T>(contentRoot: string, relativeFile: string, schema: ZodType<T>) {
+async function parseJsonFile<T>(
+  contentRoot: string,
+  relativeFile: string,
+  schema: ZodType<T>,
+  normalize: (value: unknown) => unknown = (value) => value,
+) {
   const absoluteFile = path.join(contentRoot, relativeFile);
   let source: string;
 
@@ -63,7 +68,7 @@ async function parseJsonFile<T>(contentRoot: string, relativeFile: string, schem
   }
 
   try {
-    return schema.parse(value);
+    return schema.parse(normalize(value));
   } catch (error) {
     if (error instanceof ZodError) {
       const issue = error.issues[0];
@@ -72,6 +77,88 @@ async function parseJsonFile<T>(contentRoot: string, relativeFile: string, schem
     }
     throw error;
   }
+}
+
+function withHistoricalAgentObjectives(value: unknown) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
+  const source = value as Record<string, unknown>;
+  if (source.agentObjectives !== undefined) return value;
+  const targetNodeIds = Array.isArray(source.targetNodeIds)
+    && source.targetNodeIds.every((entry) => typeof entry === 'string')
+    ? source.targetNodeIds as string[]
+    : null;
+  const equationSets = Array.isArray(source.equationSets)
+    ? source.equationSets.filter((entry): entry is Record<string, unknown> =>
+        Boolean(entry) && typeof entry === 'object' && !Array.isArray(entry))
+    : [];
+  const anchors = Array.isArray(source.followingAnchors)
+    ? source.followingAnchors.filter((entry): entry is Record<string, unknown> =>
+        Boolean(entry) && typeof entry === 'object' && !Array.isArray(entry))
+    : [];
+  if (!targetNodeIds || targetNodeIds.length === 0 || equationSets.length === 0) {
+    return value;
+  }
+  const withinCase = (...nodeIds: string[]) =>
+    nodeIds.filter((nodeId) => targetNodeIds.includes(nodeId));
+  const fallbackTarget = [targetNodeIds[0]!];
+  const objectives: Array<Record<string, unknown>> = [];
+  const deviceTargets = withinCase('D1', 'D2', 'D3', 'D4', 'D5', 'P1', 'P2');
+  if (deviceTargets.length > 0) {
+    const anchorId = typeof anchors[0]?.id === 'string' ? anchors[0].id : undefined;
+    objectives.push({
+      id: 'device-and-reactants',
+      goal: '区分装置、反应场所与真正参与反应的物质。',
+      targetNodeIds: deviceTargets,
+      boardKinds: ['single-choice', 'short-fill'],
+      ...(anchorId ? { unlockAnchorId: anchorId } : {}),
+    });
+  }
+  const transportTargets = withinCase('P4', 'P5');
+  if (transportTargets.length > 0) {
+    objectives.push({
+      id: 'transport-and-observation',
+      goal: '建立载流粒子方向与两极现象的因果链。',
+      targetNodeIds: transportTargets,
+      boardKinds: ['single-choice', 'short-fill'],
+    });
+  }
+  for (const equation of equationSets) {
+    if (
+      typeof equation.id !== 'string'
+      || (
+        equation.electrode !== 'negative'
+        && equation.electrode !== 'positive'
+        && equation.electrode !== 'overall'
+      )
+    ) continue;
+    objectives.push({
+      id: `${equation.electrode}-equation`,
+      goal: equation.electrode === 'overall'
+        ? '合并电子并得到总反应式。'
+        : `写出并核验${equation.electrode === 'negative' ? '负极' : '正极'}半反应式。`,
+      targetNodeIds: equation.electrode === 'overall'
+        ? (withinCase('P7').length > 0 ? withinCase('P7') : fallbackTarget)
+        : (
+            withinCase('P3', 'P6').length > 0
+              ? withinCase('P3', 'P6')
+              : fallbackTarget
+          ),
+      boardKinds: ['equation-fill'],
+      equationSetId: equation.id,
+    });
+  }
+  const energyTargets = withinCase('E1', 'E2', 'E3');
+  if (energyTargets.length > 0) {
+    objectives.push({
+      id: 'energy-chain',
+      goal: '确认自发反应的能量来源、转化方向和损耗。',
+      targetNodeIds: energyTargets,
+      boardKinds: ['single-choice', 'short-fill'],
+    });
+  }
+  return objectives.length > 0
+    ? { ...source, agentObjectives: objectives }
+    : value;
 }
 
 async function loadCases(contentRoot: string) {
@@ -95,7 +182,12 @@ async function loadCases(contentRoot: string) {
   return Promise.all(
     files.map(async (file) => ({
       file: path.join(relativeDirectory, file),
-      value: await parseJsonFile(contentRoot, path.join(relativeDirectory, file), caseSchema),
+      value: await parseJsonFile(
+        contentRoot,
+        path.join(relativeDirectory, file),
+        caseSchema,
+        withHistoricalAgentObjectives,
+      ),
     })),
   );
 }
@@ -261,6 +353,34 @@ export async function validateReferences(
         );
       }
     });
+    if (question.directAssessment) {
+      const scopeNodeIds = question.directAssessment.nodes.map((entry) => entry.nodeId);
+      if (
+        scopeNodeIds.length !== question.targetNodeIds.length
+        || scopeNodeIds.some((nodeId, nodeIndex) =>
+          nodeId !== question.targetNodeIds[nodeIndex])
+      ) {
+        throw new ConfigValidationError(
+          'config/pretest.json',
+          `questions.${questionIndex}.directAssessment.nodes`,
+          'direct assessment nodes must exactly match targetNodeIds in order',
+        );
+      }
+      question.directAssessment.examples.forEach((example, exampleIndex) => {
+        const exampleNodeIds = example.assessments.map((entry) => entry.nodeId);
+        if (
+          exampleNodeIds.length !== question.targetNodeIds.length
+          || exampleNodeIds.some((nodeId, nodeIndex) =>
+            nodeId !== question.targetNodeIds[nodeIndex])
+        ) {
+          throw new ConfigValidationError(
+            'config/pretest.json',
+            `questions.${questionIndex}.directAssessment.examples.${exampleIndex}.assessments`,
+            'direct assessment example nodes must exactly match targetNodeIds in order',
+          );
+        }
+      });
+    }
     if (question.type === 'choice') {
       question.options.forEach((option, optionIndex) => {
         option.misconceptionIds.forEach((misconceptionId, misconceptionIndex) => {

@@ -12,6 +12,13 @@ import type {
 
 type AssessmentOutcome = 'hit' | 'partial' | 'miss';
 
+export function withoutAgentConversation(runtime: AppRuntime): AppRuntime {
+  const legacyRuntime = { ...runtime };
+  delete legacyRuntime.runAgentTurn;
+  delete legacyRuntime.submitAgentAnswer;
+  return legacyRuntime;
+}
+
 export function withImmediatePromotion(config: LoadedConfig) {
   const value = structuredClone(config);
   value.scaffoldPolicy.promotion.consecutiveHits = 1;

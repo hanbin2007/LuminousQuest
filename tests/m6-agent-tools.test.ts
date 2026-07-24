@@ -160,6 +160,57 @@ describe('M6 Phase 2 agent tool handlers', () => {
     expect(fixture.transaction.state).toBe('terminal');
   });
 
+  it('accepts one board prompt and rejects multiple questions in one Agent turn', async () => {
+    const fixture = await handlerFixture('one-question', 'pretest');
+    const free = fixture.builtContext.responseContractCandidates.find(
+      (candidate) => candidate.kind === 'unassessed',
+    )!;
+    const multiple = await fixture.handler.execute({
+      callId: 'multiple',
+      name: 'ask_student',
+      arguments: {
+        text: '电子经过外电路吗？还是经过溶液？',
+        responseContractId: free.candidateId,
+        board: {
+          kind: 'choice',
+          options: [
+            { id: 'wire', label: '外电路' },
+            { id: 'solution', label: '溶液' },
+          ],
+        },
+      },
+    });
+    expect(multiple).toMatchObject({
+      accepted: false,
+      errorCategory: 'multiple-student-questions',
+    });
+
+    const single = await fixture.handler.execute({
+      callId: 'single',
+      name: 'ask_student',
+      arguments: {
+        text: '请比较前者和后者，并尝试补全 A -> ?',
+        responseContractId: free.candidateId,
+        board: {
+          kind: 'choice',
+          options: [
+            { id: 'first', label: '甲选项' },
+            { id: 'second', label: '乙选项' },
+          ],
+        },
+      },
+    });
+    expect(single.accepted, single.content).toBe(true);
+    expect(single).toMatchObject({
+      accepted: true,
+      action: {
+        name: 'ask_student',
+        arguments: { board: { kind: 'choice' } },
+      },
+    });
+    expect(fixture.transaction.recordedActions).toHaveLength(1);
+  });
+
   it('enforces revealAfterNodeIds before presenting a gated material', async () => {
     const blocked = await handlerFixture('material-gated', 'aluminum-air');
 

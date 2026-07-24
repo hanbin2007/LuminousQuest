@@ -62,12 +62,18 @@ function shortHash(value: string) {
   return createHash('sha256').update(value).digest('hex').slice(0, 32);
 }
 
+const currentResponseContractIdPrefix = `rc-${
+  RESPONSE_CONTRACT_REVISION.replace('response-contract.', '')
+}-`;
+
 export function responseContractIdFor(
   agentTurnId: string,
   callId: string,
   candidateId: string,
 ) {
-  return `rc-${shortHash(`${agentTurnId}\u0000${callId}\u0000${candidateId}`)}`;
+  return `${currentResponseContractIdPrefix}${shortHash(
+    `${RESPONSE_CONTRACT_REVISION}\u0000${agentTurnId}\u0000${callId}\u0000${candidateId}`,
+  )}`;
 }
 
 export function buildResponseContractCandidates(input: {
@@ -144,9 +150,13 @@ function questionBinding(
     }
     return {
       targetNodeIds: [...question.targetNodeIds],
-      assessmentEntrypoint: question.type === 'choice'
-        ? { kind: 'choice', route: '/api/assessment/choice' }
-        : { kind: 'text-extraction', route: '/api/assessment/extract' },
+      assessmentEntrypoint: question.directAssessment?.mode === 'record-primary'
+        ? question.type === 'choice'
+          ? { kind: 'direct-choice', route: '/api/assessment/choice' }
+          : { kind: 'direct-text', route: '/api/assessment/extract' }
+        : question.type === 'choice'
+          ? { kind: 'choice', route: '/api/assessment/choice' }
+          : { kind: 'text-extraction', route: '/api/assessment/extract' },
     };
   }
 
@@ -244,12 +254,46 @@ export class ResponseContractRegistry {
       action.callId === turn.terminalAction.callId);
     if (
       !terminal
-      || (terminal.name !== 'ask_student' && terminal.name !== 'present_question')
+      || (
+        terminal.name !== 'ask_student'
+        && terminal.name !== 'present_question'
+        && terminal.name !== 'show_question_card'
+      )
     ) {
       throw new ResponseContractBindingError('Agent turn does not accept a student response');
     }
-    let contract = this.get(session.id, terminal.arguments.responseContractId);
-    if (!contract && input.config) {
+    const responseContractId = terminal.arguments.responseContractId;
+    if (!responseContractId) {
+      throw new ResponseContractBindingError('Agent question card lacks its server contract');
+    }
+    let contract = this.get(session.id, responseContractId);
+    if (!contract && terminal.name === 'show_question_card' && input.config) {
+      const objective = input.config.cases
+        .find((entry) => entry.id === turn.caseId)
+        ?.agentObjectives.find((entry) =>
+          entry.id === terminal.arguments.objectiveId);
+      if (!objective) {
+        throw new ResponseContractBindingError('Agent question objective is not configured');
+      }
+      contract = objective.equationSetId
+        ? this.issueQuestion({
+            sessionId: session.id,
+            agentTurnId: turn.turnId,
+            questionId: `${turn.caseId}:${objective.equationSetId}`,
+            caseId: turn.caseId,
+            createdThroughSequence: turn.contextThroughSequence,
+            responseContractId,
+          }, input.config)
+        : this.issueUnassessed({
+            sessionId: session.id,
+            agentTurnId: turn.turnId,
+            caseId: turn.caseId,
+            createdThroughSequence: turn.contextThroughSequence,
+            reason: 'conversation-only',
+            responseContractId,
+          });
+    }
+    if (!contract && input.config && terminal.name !== 'show_question_card') {
       contract = this.recoverContract({
         session,
         turn,
@@ -307,7 +351,11 @@ export class ResponseContractRegistry {
         input.terminal.callId,
         entry.candidateId,
       ) === responseContractId);
-    if (!candidate && input.terminal.name === 'present_question') {
+    if (
+      !candidate
+      && responseContractId.startsWith(currentResponseContractIdPrefix)
+      && input.terminal.name === 'present_question'
+    ) {
       const questionId = input.terminal.arguments.questionId;
       candidate = candidates.find((entry) =>
         entry.kind === 'question'

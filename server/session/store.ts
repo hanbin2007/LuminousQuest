@@ -1,9 +1,20 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
+import {
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs';
+import path from 'node:path';
 
 import {
   sessionSchema,
+  type SessionEventInput,
   type StudentSession,
 } from '../../shared/session/schema';
+import { isAuditOnlyEvent } from '../../shared/session/audit';
+import { projectStudentSession } from '../../shared/session/projections';
 import { appendSessionEvent } from '../../shared/session/session';
 import type { SessionCommandEnvelope } from '../../shared/session/sync';
 
@@ -91,7 +102,9 @@ export type SessionCommandName =
   | 'equation'
   | 'tutor'
   | 'agent-turn'
-  | 'agent-answer';
+  | 'agent-answer'
+  | 'agent-case-start'
+  | 'agent-case-answer';
 
 export interface ExecuteSessionCommandInput<T> {
   store: ServerSessionStore;
@@ -157,9 +170,9 @@ function rebuiltCommandResults(session: StudentSession) {
 }
 
 /**
- * Single-machine classroom deployments intentionally keep command coordination
- * in process: there is no DB or WAL. After a process crash, recovery depends on
- * the Phase 3 client sync hydrate path replaying this event stream.
+ * Command coordination remains in-process. A file-backed store preserves the
+ * committed event stream across restarts, while the client sync path can still
+ * hydrate sessions created before the server saw them.
  */
 export function executeSessionCommand<T>(
   input: ExecuteSessionCommandInput<T>,
@@ -235,11 +248,7 @@ export function executeSessionCommand<T>(
       index -= 1
     ) {
       const event = next.events[index];
-      if (
-        event
-        && event.kind !== 'agent.judgment.recorded'
-        && event.kind !== 'agent.divergence.changed'
-      ) {
+      if (event && !isAuditOnlyEvent(event)) {
         recoveryEventIndex = index;
         break;
       }
@@ -293,6 +302,53 @@ function sameMetadata(left: StudentSession, right: StudentSession) {
     && left.anonymousStudentId === right.anonymousStudentId
     && left.startedAt === right.startedAt
     && JSON.stringify(left.configVersions) === JSON.stringify(right.configVersions);
+}
+
+function appendVisibleSuffix(
+  current: StudentSession,
+  uploaded: StudentSession,
+  visiblePrefixLength: number,
+) {
+  const uploadedVisible = projectStudentSession(uploaded);
+  let merged = current;
+  for (const visibleEvent of uploadedVisible.events.slice(visiblePrefixLength)) {
+    const uploadedEvent = uploaded.events.find((event) => event.id === visibleEvent.id);
+    if (
+      !uploadedEvent
+      || uploadedEvent.command
+      || uploadedEvent.kind === 'session.command.executed'
+    ) {
+      throw new SessionPrefixConflictError(visibleEvent.sequence);
+    }
+    const {
+      schemaVersion: _schemaVersion,
+      sequence: _sequence,
+      ...input
+    } = uploadedEvent;
+    if (uploadedEvent.kind === 'agent.turn.completed') {
+      const uploadedContext = uploaded.events[uploadedEvent.contextThroughSequence];
+      const mergedContext = uploadedContext
+        ? merged.events.find((event) => event.id === uploadedContext.id)
+        : undefined;
+      if (!mergedContext) {
+        throw new SessionPrefixConflictError(visibleEvent.sequence);
+      }
+      (input as Extract<
+        SessionEventInput,
+        { kind: 'agent.turn.completed' }
+      >).contextThroughSequence = mergedContext.sequence;
+    }
+    merged = appendSessionEvent(merged, input as SessionEventInput);
+  }
+  return sessionSchema.parse({
+    ...merged,
+    updatedAt: new Date(Math.max(
+      Date.parse(current.updatedAt),
+      Date.parse(uploaded.updatedAt),
+      Date.parse(merged.updatedAt),
+    )).toISOString(),
+    serverSequence: merged.events.length,
+  });
 }
 
 async function withStoreSessionLock<T>(
@@ -349,31 +405,41 @@ function synchronizeStore(
     if (command.expectedSequence !== actualSequence) {
       throw new SessionSequenceConflictError(command.expectedSequence, actualSequence);
     }
+    let persisted: StudentSession;
     if (current) {
       if (!sameMetadata(current, parsed)) {
         throw new SessionPrefixConflictError();
       }
-      if (parsed.events.length < current.events.length) {
-        throw new SessionPrefixConflictError(parsed.events.length);
+      const currentVisible = projectStudentSession(current);
+      const uploadedVisible = projectStudentSession(parsed);
+      if (uploadedVisible.events.length < currentVisible.events.length) {
+        throw new SessionPrefixConflictError(uploadedVisible.events.length);
       }
-      for (let index = 0; index < current.events.length; index += 1) {
-        if (JSON.stringify(current.events[index]) !== JSON.stringify(parsed.events[index])) {
+      for (let index = 0; index < currentVisible.events.length; index += 1) {
+        if (
+          JSON.stringify(currentVisible.events[index])
+          !== JSON.stringify(uploadedVisible.events[index])
+        ) {
           throw new SessionPrefixConflictError(index);
         }
       }
+      persisted = uploadedVisible.events.length === currentVisible.events.length
+        ? current
+        : appendVisibleSuffix(current, parsed, currentVisible.events.length);
+    } else {
+      persisted = sessionSchema.parse({
+        ...parsed,
+        serverSequence: parsed.events.length,
+      });
     }
 
-    const persisted = sessionSchema.parse({
-      ...parsed,
-      serverSequence: parsed.events.length,
-    });
     store.set(persisted);
     const result: SessionSyncResult = {
-      status: !current || parsed.events.length > current.events.length
+      status: !current || persisted.events.length > current.events.length
         ? 'hydrated'
         : 'already-current',
       replayed: false,
-      sequence: parsed.events.length,
+      sequence: persisted.events.length,
       session: persisted,
     };
     sessionIdempotency.set(command.idempotencyKey, {
@@ -414,6 +480,62 @@ export class InMemorySessionStore implements CoordinatedServerSessionStore {
   set(session: StudentSession) {
     const parsed = sessionSchema.parse(session);
     this.sessions.set(parsed.id, parsed);
+  }
+
+  withSessionLock<T>(
+    sessionId: string,
+    operation: () => Promise<T> | T,
+  ) {
+    return withStoreSessionLock(this, sessionId, operation);
+  }
+
+  synchronize(
+    uploadedSession: StudentSession,
+    command: SessionCommandEnvelope,
+  ) {
+    return synchronizeStore(this, uploadedSession, command);
+  }
+}
+
+export class FileSessionStore implements CoordinatedServerSessionStore {
+  constructor(private readonly root: string) {
+    mkdirSync(this.root, { recursive: true, mode: 0o700 });
+  }
+
+  private file(sessionId: string) {
+    const digest = createHash('sha256').update(sessionId).digest('hex');
+    return path.join(this.root, `${digest}.json`);
+  }
+
+  get(sessionId: string) {
+    try {
+      const parsed = sessionSchema.parse(JSON.parse(readFileSync(this.file(sessionId), 'utf8')));
+      return parsed.id === sessionId ? parsed : undefined;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
+      throw error;
+    }
+  }
+
+  set(session: StudentSession) {
+    const parsed = sessionSchema.parse(session);
+    const file = this.file(parsed.id);
+    const temporary = `${file}.${process.pid}.${randomUUID()}.tmp`;
+    mkdirSync(this.root, { recursive: true, mode: 0o700 });
+    try {
+      writeFileSync(temporary, `${JSON.stringify(parsed, null, 2)}\n`, {
+        encoding: 'utf8',
+        mode: 0o600,
+      });
+      renameSync(temporary, file);
+    } catch (error) {
+      try {
+        unlinkSync(temporary);
+      } catch {
+        // Ignore cleanup failures and preserve the original write error.
+      }
+      throw error;
+    }
   }
 
   withSessionLock<T>(

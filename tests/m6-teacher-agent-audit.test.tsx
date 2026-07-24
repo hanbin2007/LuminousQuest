@@ -162,6 +162,14 @@ describe('M6 Phase 3 teacher agent audit', () => {
         shadowVerdict: 'miss',
       }),
     ]));
+    expect(report.agentEventChain.map((event) => event.id)).toEqual(
+      expect.arrayContaining([
+        'a-assessment-p4',
+        'teacher-agent-turn',
+        'teacher-agent-judgment',
+        'teacher-agent-divergence',
+      ]),
+    );
 
     new LocalSessionStore(window.localStorage).save(session);
     const runtime = {
@@ -174,11 +182,14 @@ describe('M6 Phase 3 teacher agent audit', () => {
     } as unknown as AppRuntime;
     render(<App initialConfig={config} runtime={runtime} />);
 
-    expect(await screen.findByRole('heading', { name: 'Agent 判断与分歧审计' }))
+    expect(await screen.findByRole('heading', { name: '双轨判断与分歧审计' }))
       .toBeInTheDocument();
-    expect(screen.getByText('量表记录以判分引擎为准')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Agent 相关事件链' }))
+      .toBeInTheDocument();
+    expect(screen.getAllByText('原始事件').length).toBeGreaterThanOrEqual(4);
+    expect(screen.getByText('审计轨只留痕，不改写主记录轨')).toBeInTheDocument();
     expect(screen.getByText('学生已经说明电子从负极流向正极。')).toBeInTheDocument();
     expect(screen.getAllByText('Agent 命中 · 判分引擎 未命中')).toHaveLength(2);
-    expect(screen.getByLabelText('1 条 Agent 分歧待复核')).toBeInTheDocument();
+    expect(screen.getByLabelText('1 条双轨分歧待复核')).toBeInTheDocument();
   });
 });

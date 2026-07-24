@@ -10,6 +10,8 @@ import { loadAllConfig, ConfigValidationError } from './config/loader';
 import { RecordingStore, RecordingValidationError } from './llm/recording-store';
 import { loadAllPrompts, PromptValidationError } from './prompts/loader';
 import { resolveClientRoot, resolveContentRoot } from './runtime/content-root';
+import { FileSessionStore } from './session/store';
+import { FileAgentTranscriptStore } from './agent/transcript-store';
 import { openBrowser } from './runtime/open-browser';
 import {
   demoLockEnabled,
@@ -42,6 +44,14 @@ async function main() {
   const app = createServerApp({
     contentRoot,
     clientRoot: resolveClientRoot(contentRoot),
+    sessions: new FileSessionStore(
+      process.env.LQ_SESSION_STORE
+        ?? path.join(contentRoot, 'recordings', 'runtime', 'sessions'),
+    ),
+    agentTranscripts: new FileAgentTranscriptStore(
+      process.env.LQ_AGENT_TRANSCRIPT_STORE
+        ?? path.join(contentRoot, 'recordings', 'runtime', 'agent-transcripts'),
+    ),
     ...(accessToken ? { accessToken } : {}),
     lockDemo,
     testNavigation: process.env.LQ_TEST_NAV === '1',

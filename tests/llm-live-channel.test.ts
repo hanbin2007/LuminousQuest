@@ -115,10 +115,10 @@ describe('live LLM channel wiring', () => {
     });
   });
 
-  it('selects the production Modelverse channel when its key is the only provider setting', async () => {
+  it('does not let an unrelated provider key override the default Claude Agent channel', async () => {
     clearLLMEnvironment();
     process.env.MODELVERSE_API_KEY = 'test-key';
-    const provider = providerWithId('modelverse');
+    const provider = providerWithId('claude-agent');
     const app = createServerApp({
       contentRoot: process.cwd(),
       clientRoot: path.join(process.cwd(), 'dist', 'client'),
@@ -128,8 +128,8 @@ describe('live LLM channel wiring', () => {
     const health = await app.request('/api/llm/health');
 
     expect(await health.json()).toMatchObject({
-      provider: 'modelverse',
-      model: 'glm-5.2',
+      provider: 'claude-agent',
+      model: 'claude-sonnet-5',
       status: 'ok',
     });
   });
@@ -194,7 +194,7 @@ describe('live LLM channel wiring', () => {
 
     expect(response.status).toBe(200);
     expect(payload).toMatchObject({
-      status: 'needs-review',
+      status: 'direct-assessed',
       source: 'fallback',
       recordingStatus: 'recorded',
     });

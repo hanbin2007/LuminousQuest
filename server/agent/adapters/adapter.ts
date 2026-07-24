@@ -7,6 +7,7 @@ import {
   terminalAgentActionNameSchema,
   terminalAgentActionRefSchema,
 } from '../../../shared/agent/contracts';
+import type { SessionStore } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
 
 export interface AgentTurnMessage {
@@ -24,7 +25,7 @@ export interface AgentToolDefinition {
 export interface AgentTurnAdapterRequest {
   requestHash: `sha256:${string}`;
   model: string;
-  systemPrompt: string;
+  systemPrompt: string | string[];
   messages: AgentTurnMessage[];
   tools: AgentToolDefinition[];
   maxTurns: number;
@@ -32,6 +33,11 @@ export interface AgentTurnAdapterRequest {
   executeTool?: (
     action: NormalizedAgentAction,
   ) => Promise<AgentToolExecutionResult>;
+  sdkSession?: {
+    sessionId: string;
+    resume: boolean;
+    store: SessionStore;
+  };
 }
 
 export interface AgentTurnUsage {
@@ -46,6 +52,11 @@ export interface AgentTurnAdapterResult {
   orderedActions: NormalizedAgentAction[];
   terminalAction: TerminalAgentActionRef;
   usage: AgentTurnUsage;
+  sdkSessionId?: string;
+  compacted?: boolean;
+  contextUsage?: {
+    totalTokens?: number;
+  };
 }
 
 export interface AgentToolExecutionResult {
@@ -73,6 +84,12 @@ export const agentTurnAdapterResultSchema = z
         totalTokens: z.number().nonnegative().optional(),
       })
       .strict(),
+    sdkSessionId: z.string().uuid().optional(),
+    compacted: z.boolean().optional(),
+    contextUsage: z
+      .object({ totalTokens: z.number().nonnegative().optional() })
+      .strict()
+      .optional(),
   })
   .strict()
   .superRefine((result, context) => {

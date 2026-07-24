@@ -4,11 +4,12 @@ import type {
   StudentSession,
 } from '../../../shared/session';
 import type { NodeLight } from './lighting';
+import type { StudentUnderstandingState } from '../../../shared/agent/memory';
 
 /**
  * 训练分屏 3D 认知模型的实时状态推导(纯函数)。
- * 只看「当前案例」的判分事件——面板呈现的是本案例的即时进展,
- * 与模块三整节课外显(全会话画像)刻意区分。
+ * v3 训练页显示 Agent 的学生模型：完整记忆快照是已提交灯态，
+ * 当前题 working update 是临时预览。正式成绩仍由 assessment 记录轨负责。
  */
 
 export interface LiveCellNode {
@@ -72,12 +73,41 @@ function lightOfEvent(event: AssessmentCompletedEvent): NodeLight {
   return 'unassessed';
 }
 
+function lightOfUnderstanding(state: StudentUnderstandingState): NodeLight {
+  if (state === 'mastered') return 'full-lit';
+  if (state === 'developing') return 'half-lit';
+  if (state === 'not-yet') return 'dark';
+  if (state === 'uncertain') return 'needs-review';
+  return 'unassessed';
+}
+
 export function buildLiveCellState(
   session: StudentSession,
   config: LoadedConfig,
   trainingCase: CaseConfig,
 ): LiveCellState {
   const latestByNode = new Map<string, AssessmentCompletedEvent>();
+  const agentStateByNode = new Map<string, StudentUnderstandingState>();
+  const agentSequenceByNode = new Map<string, number>();
+  const latestMemory = [...session.events].reverse().find((event) =>
+    event.kind === 'agent.memory.snapshot.committed');
+  if (latestMemory?.kind === 'agent.memory.snapshot.committed') {
+    for (const node of latestMemory.snapshot.nodes) {
+      agentStateByNode.set(node.nodeId, node.state);
+      agentSequenceByNode.set(node.nodeId, latestMemory.sequence);
+    }
+    for (const event of session.events) {
+      if (
+        event.kind !== 'agent.understanding.updated'
+        || event.caseId !== trainingCase.id
+        || event.sequence <= latestMemory.sequence
+      ) continue;
+      for (const update of event.updates) {
+        agentStateByNode.set(update.nodeId, update.state);
+        agentSequenceByNode.set(update.nodeId, event.sequence);
+      }
+    }
+  }
   let polarityLit = false;
   let polarity: { negative: string; positive: string } | null = null;
   let latestPolarityAssessmentId: string | null = null;
@@ -101,24 +131,41 @@ export function buildLiveCellState(
     ) {
       polarity = event.values;
     }
+    if (event.kind === 'agent.anchor.revealed') {
+      polarityLit = true;
+      polarity = event.values;
+    }
   }
 
-  const litEvents = [...latestByNode.values()]
-    .filter((event) => {
-      const light = lightOfEvent(event);
-      return light === 'full-lit' || light === 'half-lit';
-    })
-    .sort((left, right) => left.sequence - right.sequence);
-  const ignitionByNode = new Map(litEvents.map((event, index) => [event.nodeId, index]));
+  const agentProjectionActive = Boolean(latestMemory);
+  const litNodes = agentProjectionActive
+    ? [...agentStateByNode.entries()]
+        .filter(([, state]) => state === 'mastered' || state === 'developing')
+        .sort(([left], [right]) =>
+          (agentSequenceByNode.get(left) ?? 0) - (agentSequenceByNode.get(right) ?? 0))
+        .map(([nodeId]) => nodeId)
+    : [...latestByNode.values()]
+        .filter((event) => {
+          const light = lightOfEvent(event);
+          return light === 'full-lit' || light === 'half-lit';
+        })
+        .sort((left, right) => left.sequence - right.sequence)
+        .map((event) => event.nodeId);
+  const ignitionByNode = new Map(litNodes.map((nodeId, index) => [nodeId, index]));
 
   const nodes: LiveCellNode[] = config.knowledgeModel.nodes.map((node) => {
     const event = latestByNode.get(node.id);
+    const agentState = agentStateByNode.get(node.id);
     return {
       id: node.id,
       dimensionId: node.dimensionId as LiveCellNode['dimensionId'],
       statement: node.statement,
       position: node.position,
-      light: event ? lightOfEvent(event) : 'unassessed',
+      light: agentProjectionActive
+        ? lightOfUnderstanding(agentState ?? 'unseen')
+        : event
+          ? lightOfEvent(event)
+          : 'unassessed',
       ignitionIndex: ignitionByNode.get(node.id) ?? null,
     };
   });
@@ -138,7 +185,7 @@ export function buildLiveCellState(
     },
     polarityLit,
     medium: trainingCase.medium,
-    litCount: litEvents.length,
+    litCount: litNodes.length,
     totalCount: nodes.length,
     litSignature: [
       trainingCase.id,

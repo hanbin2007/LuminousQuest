@@ -64,9 +64,11 @@ export function classifyDimensionLevel(
 }
 
 function originalAnswer(answer: AnswerSubmittedEvent) {
-  return answer.answer.format === 'text'
+  return answer.answer.format === 'text' || answer.answer.format === 'equation'
     ? answer.answer.value
-    : JSON.stringify(answer.answer.value);
+    : answer.answer.format === 'choice'
+      ? answer.answer.optionId
+      : JSON.stringify(answer.answer.value);
 }
 
 function needsReview(event: AssessmentCompletedEvent) {

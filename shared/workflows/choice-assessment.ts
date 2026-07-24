@@ -9,15 +9,20 @@ export function recordChoiceAssessment(input: {
   session: StudentSession;
   config: LoadedConfig;
   question: ChoiceQuestion;
-  optionId: string;
+  optionId?: string;
+  rawAnswer?: string;
+  submissionKind?: 'answer' | 'skip';
   occurredAt?: string;
   attemptId?: string;
   idFactory?: (prefix: string) => string;
   responseToAgentTurnId?: string;
   responseContractId?: string;
 }) {
+  const submissionKind = input.submissionKind ?? 'answer';
   const option = input.question.options.find((candidate) => candidate.id === input.optionId);
-  if (!option) throw new Error(`Unknown choice option ${input.optionId}`);
+  if (submissionKind === 'answer' && !option) {
+    throw new Error(`Unknown choice option ${input.optionId}`);
+  }
   const occurredAt = input.occurredAt ?? new Date().toISOString();
   const idFactory = input.idFactory ?? ((prefix: string) => `${prefix}-${crypto.randomUUID()}`);
   const answerId = idFactory('answer-choice');
@@ -33,7 +38,10 @@ export function recordChoiceAssessment(input: {
     stageId: 'assessment',
     attemptId,
     questionId: input.question.id,
-    answer: { format: 'text', value: option.text },
+    answer: {
+      format: 'text',
+      value: input.rawAnswer ?? (submissionKind === 'skip' ? '' : option!.text),
+    },
     ...(input.responseToAgentTurnId && input.responseContractId
       ? {
           responseToAgentTurnId: input.responseToAgentTurnId,
@@ -45,19 +53,63 @@ export function recordChoiceAssessment(input: {
   input.question.targetNodeIds.forEach((nodeId) => {
     const rubric = input.config.rubrics.rubrics.find((entry) => entry.nodeId === nodeId);
     if (!rubric) throw new Error(`No rubric configured for ${nodeId}`);
+    if (submissionKind === 'skip') {
+      const policy = input.config.rubrics.policy.nonResponse;
+      session = appendSessionEvent(session, {
+        id: idFactory('assessment-choice'),
+        occurredAt,
+        kind: 'assessment.completed',
+        pipelineStage: 'score',
+        caseId: 'pretest',
+        stageId: 'assessment',
+        attemptId,
+        sourceAnswerEventId: answerId,
+        nodeId,
+        rubric: { id: rubric.id, version: input.config.rubrics.version },
+        assistance: { kind: 'none', rounds: 0 },
+        extraction: {
+          status: 'assessed',
+          evidence: [],
+          model: 'configured-choice',
+          provenance: {
+            promptId: input.question.id,
+            promptVersion: input.config.pretest.version,
+            cacheKey: `${answerId}:${nodeId}`,
+          },
+        },
+        ruleDecision: {
+          status: 'unanswered',
+          reason: 'Question was skipped',
+          promptRetry: policy.promptRetry,
+          includeInDiagnosis: policy.includeInDiagnosis,
+        },
+        following: {
+          status: 'not-followed',
+          anchorNodeId: null,
+          anchorOutcome: null,
+          policy: input.config.rubrics.policy.followingError.strategy,
+        },
+        score: {
+          status: 'unanswered',
+          promptRetry: policy.promptRetry,
+          includeInDiagnosis: policy.includeInDiagnosis,
+        },
+      });
+      return;
+    }
     const decision = resolveRubricDecision({
       rubrics: input.config.rubrics,
       scaffoldPolicy: input.config.scaffoldPolicy,
       nodeId,
-      objectiveOutcome: option.correct ? 'hit' : 'miss',
+      objectiveOutcome: option!.correct ? 'hit' : 'miss',
       assistance: { kind: 'none', rounds: 0 },
       engine: {
         id: 'configured-choice',
         version: input.config.pretest.version,
-        ruleId: option.id,
-        reason: option.correct
+        ruleId: option!.id,
+        reason: option!.correct
           ? 'Selected the configured correct option'
-          : `Selected a configured distractor: ${option.misconceptionIds.join(', ')}`,
+          : `Selected a configured distractor: ${option!.misconceptionIds.join(', ')}`,
       },
     });
     session = appendSessionEvent(session, {
@@ -70,13 +122,17 @@ export function recordChoiceAssessment(input: {
       attemptId,
       sourceAnswerEventId: answerId,
       nodeId,
-      ...(option.misconceptionIds.length > 0
-        ? { misconceptionIds: option.misconceptionIds }
+      ...(option!.misconceptionIds.length > 0
+        ? { misconceptionIds: option!.misconceptionIds }
         : {}),
       rubric: { id: rubric.id, version: input.config.rubrics.version },
       extraction: {
         status: 'assessed',
-        evidence: [{ quote: option.text, start: 0, end: option.text.length }],
+        evidence: [{
+          quote: input.rawAnswer ?? option!.text,
+          start: 0,
+          end: (input.rawAnswer ?? option!.text).length,
+        }],
         model: 'configured-choice',
         provenance: {
           promptId: input.question.id,
@@ -87,5 +143,9 @@ export function recordChoiceAssessment(input: {
       ...decision,
     });
   });
-  return { session, correct: option.correct, selectedText: option.text };
+  return {
+    session,
+    correct: option?.correct ?? false,
+    selectedText: option?.text ?? '',
+  };
 }

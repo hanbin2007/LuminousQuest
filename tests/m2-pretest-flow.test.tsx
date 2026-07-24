@@ -302,6 +302,50 @@ describe('M2 pretest route', () => {
     }));
   });
 
+  it('submits a skipped choice to the server before advancing', async () => {
+    const user = userEvent.setup();
+    const config = await loadAllConfig(process.cwd());
+    const questionIndex = config.pretest.questions.findIndex((question) =>
+      question.id === 'pretest-exam1-polarity');
+    const session = createSession({
+      id: 'session-pretest-skip',
+      now: '2026-07-24T00:00:00.000Z',
+      configVersions: sessionConfigVersions(config),
+    });
+    new LocalSessionStore(window.localStorage).save(session);
+    savePretestDraft(window.localStorage, session.id, {
+      ...emptyPretestDraft(),
+      step: questionIndex + 1,
+    });
+    const runtime: AppRuntime = {
+      loadConfig: vi.fn(async () => config),
+      assessChoice: vi.fn(async () => ({ session: null })),
+      extractAssessment: vi.fn(async () => ({ session: null })),
+      assessEquation: vi.fn(async () => ({ session: null })),
+      tutorTurn: vi.fn(async () => ({
+        status: 'none' as const,
+        reason: 'no-assessment' as const,
+        session: null as never,
+        assistance: { kind: 'none' as const, rounds: 0 },
+        source: 'preset' as const,
+        degraded: false,
+      })),
+      reviewDrawing: vi.fn(async () => '已收到手绘。'),
+    };
+    render(<App initialConfig={config} runtime={runtime} />);
+
+    await user.type(await screen.findByLabelText('电极 a 的极性'), '正');
+    await user.click(await screen.findByRole('button', { name: '跳过' }));
+
+    expect(runtime.assessChoice).toHaveBeenCalledWith(expect.objectContaining({
+      questionId: 'pretest-exam1-polarity',
+      rawAnswer: '',
+      submissionKind: 'skip',
+    }));
+    await user.click(await screen.findByRole('button', { name: '上一题' }));
+    expect(await screen.findByLabelText('电极 a 的极性')).toHaveValue('');
+  });
+
   it('completes builder, thirteen configured questions, and reaches traceable diagnosis under a mock runtime', async () => {
     const user = userEvent.setup();
     const config = await loadAllConfig(process.cwd());

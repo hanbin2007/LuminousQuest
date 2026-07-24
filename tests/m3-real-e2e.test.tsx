@@ -17,6 +17,7 @@ import type { StudentSession } from '../shared/session';
 import { App } from '../src/App';
 import { defaultRuntime } from '../src/runtime/api';
 import { createTemporaryDirectory, writeValidContentTree } from './helpers/content-fixture';
+import { withoutAgentConversation } from './helpers/training-runtime';
 
 const apiToken = 'm3-real-e2e-token';
 const routeTransitionTimeout = { timeout: 5_000 };
@@ -87,6 +88,24 @@ function assessmentProvider(root: string, requests: LLMRequest[]): LLMProvider {
         return { content: '{"ok":true}', structured: { ok: true }, model: 'm3-real-e2e.v1' };
       }
       requests.push(request);
+      if (request.prompt.id === 'direct-assessment') {
+        const input = request.input as {
+          answer: string;
+          nodes: Array<{ id: string }>;
+        };
+        const value = {
+          assessments: input.nodes.map((node) => ({
+            nodeId: node.id,
+            verdict: 'hit',
+            misconceptionIds: [],
+            rationale: `${node.id} is supported by the submitted answer.`,
+            confidence: 0.99,
+            reviewReason: null,
+            evidence: [{ quote: input.answer, start: 0, end: input.answer.length }],
+          })),
+        };
+        return { content: JSON.stringify(value), structured: value, model: 'm3-real-e2e.v1' };
+      }
       const input = request.input as {
         answer: string;
         caseId: string;
@@ -208,7 +227,7 @@ describe('real M3 route chain', () => {
     installHonoFetch(app);
     const privateConfig = await loadAllConfig(root);
     const user = userEvent.setup();
-    render(<App runtime={defaultRuntime} />);
+    render(<App runtime={withoutAgentConversation(defaultRuntime)} />);
 
     expect(await screen.findByRole(
       'heading',
@@ -346,7 +365,10 @@ describe('real M3 route chain', () => {
     )).toBeInTheDocument();
 
     expect(requests.length).toBeGreaterThanOrEqual(5);
-    expect(requests.every((request) => request.prompt.id === 'structured-assessment')).toBe(true);
+    expect(new Set(requests.map((request) => request.prompt.id))).toEqual(new Set([
+      'direct-assessment',
+      'structured-assessment',
+    ]));
     const serverSession = [...sessions.values.values()][0]!;
     const stageIds = new Set(serverSession.events.map((event) => event.stageId));
     expect(stageIds).toEqual(new Set(['assessment', 'training', 'transfer']));

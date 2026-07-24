@@ -72,11 +72,68 @@
   height: calc(100dvh - 60px);
   min-height: 674px;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 430px;
-  gap: 14px;
+  grid-template-columns:
+    minmax(0, 1fr)
+    14px
+    minmax(320px, var(--training-stage-width, 430px));
+  gap: 0;
   align-items: stretch;
   padding: 16px;
   overflow: hidden;
+}
+
+.training-stage-resizer {
+  position: relative;
+  z-index: 3;
+  width: 14px;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  color: var(--text-tertiary);
+  cursor: col-resize;
+  touch-action: none;
+  outline: none;
+}
+
+.training-stage-resizer::before {
+  position: absolute;
+  inset: 0 6px;
+  content: '';
+  background: var(--line-soft);
+  transition: background-color 120ms ease, inset 120ms ease;
+}
+
+.training-stage-resizer .lucide {
+  position: relative;
+  width: 14px;
+  height: 22px;
+  padding: 2px 0;
+  background: var(--paper-raised);
+}
+
+.training-stage-resizer:hover::before,
+.training-stage-resizer:focus-visible::before,
+.is-resizing-training-stage .training-stage-resizer::before {
+  inset: 0 5px;
+  background: var(--accent);
+}
+
+.training-stage-resizer:focus-visible .lucide {
+  color: var(--text-primary);
+}
+
+.is-resizing-training-stage,
+.is-resizing-training-stage * {
+  cursor: col-resize !important;
+  user-select: none !important;
+}
+
+.training-main--agent > .agent-chat {
+  width: 100%;
+  min-height: 0;
+  max-height: none;
+  flex: 1 1 auto;
 }
 
 .training-main {
@@ -628,6 +685,10 @@
     grid-template-columns: auto 1fr auto;
   }
 
+  .test-nav {
+    right: 0;
+  }
+
   .electron-progress__connector {
     width: 24px;
   }
@@ -636,7 +697,12 @@
     height: auto;
     min-height: calc(100dvh - 60px);
     grid-template-columns: minmax(0, 1fr);
+    gap: 14px;
     overflow: visible;
+  }
+
+  .training-stage-resizer {
+    display: none;
   }
 
   .training-main {

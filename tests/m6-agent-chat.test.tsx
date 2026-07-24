@@ -100,6 +100,161 @@ describe('M6 Phase 3 student agent chat', () => {
       .toBe('agent-chat-trigger');
   });
 
+  it('waits for the explicit first-round button before calling the Agent', async () => {
+    const root = await createTemporaryDirectory();
+    await writeValidContentTree(root);
+    const config = await loadAllConfig(root);
+    const trainingCase = config.cases[0];
+    const session = triggeredSession(config, trainingCase.id);
+    const runAgentTurn = vi.fn(async () => ({
+      status: 'completed' as const,
+      turnId: 'manual-agent-turn',
+      degraded: false,
+      session,
+    }));
+    const user = userEvent.setup();
+
+    renderChat({
+      config,
+      session,
+      runtime: { runAgentTurn } as unknown as AppRuntime,
+      caseId: trainingCase.id,
+    });
+
+    expect(runAgentTurn).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: '开始 Agent 对话' }));
+    await waitFor(() => expect(runAgentTurn).toHaveBeenCalledTimes(1));
+    expect(runAgentTurn).toHaveBeenCalledWith(expect.objectContaining({
+      sessionId: session.id,
+      caseId: trainingCase.id,
+      triggerEventId: 'agent-chat-trigger',
+      idempotencyKey: `agent-turn:${trainingCase.id}:0:attempt-0`,
+    }));
+  });
+
+  it('keeps every configured question visible when the Agent presents a case analysis', async () => {
+    const root = await createTemporaryDirectory();
+    await writeValidContentTree(root);
+    const config = await loadAllConfig(root);
+    const trainingCase = config.cases[0];
+    const triggerSession = triggeredSession(config, trainingCase.id);
+    const session = appendSessionEvent(triggerSession, {
+      id: 'agent-chat-analysis-event',
+      occurredAt: '2026-07-23T21:30:02.000Z',
+      kind: 'agent.turn.completed',
+      pipelineStage: 'agent',
+      caseId: trainingCase.id,
+      stageId: 'training',
+      attemptId: 'agent-chat-analysis-attempt',
+      turnId: 'agent-chat-analysis-turn',
+      triggerEventId: 'agent-chat-trigger',
+      contextThroughSequence: triggerSession.events.at(-1)!.sequence,
+      requestHash: `sha256:${'a'.repeat(64)}`,
+      source: 'provider',
+      model: 'mock-agent',
+      orderedActions: [{
+        callId: 'agent-chat-analysis-question',
+        name: 'present_question',
+        arguments: {
+          questionId: `${trainingCase.id}:analysis`,
+          responseContractId: 'agent-chat-analysis-contract',
+        },
+      }],
+      terminalAction: {
+        callId: 'agent-chat-analysis-question',
+        name: 'present_question',
+      },
+      provenance: {
+        adapter: 'openai-compatible',
+        adapterVersion: 'agent-chat-test.v1',
+      },
+    });
+
+    renderChat({
+      config,
+      session,
+      runtime: { submitAgentAnswer: vi.fn() } as unknown as AppRuntime,
+      caseId: trainingCase.id,
+    });
+
+    const firstScaffold = trainingCase.scaffold.find((entry) => entry.level === 1)!;
+    if (firstScaffold.level !== 1) throw new Error('level-one scaffold missing');
+    for (const field of firstScaffold.fields) {
+      expect(screen.getByText(field.prompt)).toBeInTheDocument();
+    }
+    expect(screen.getByRole('textbox', { name: /逐项完成分析/ })).toBeInTheDocument();
+  });
+
+  it('renders Agent answers as a choice board instead of a sentence textarea', async () => {
+    const root = await createTemporaryDirectory();
+    await writeValidContentTree(root);
+    const config = await loadAllConfig(root);
+    const trainingCase = config.cases[0];
+    const triggerSession = triggeredSession(config, trainingCase.id);
+    const session = appendSessionEvent(triggerSession, {
+      id: 'agent-chat-choice-event',
+      occurredAt: '2026-07-23T21:30:02.000Z',
+      kind: 'agent.turn.completed',
+      pipelineStage: 'agent',
+      caseId: trainingCase.id,
+      stageId: 'training',
+      attemptId: 'agent-chat-choice-attempt',
+      turnId: 'agent-chat-choice-turn',
+      triggerEventId: 'agent-chat-trigger',
+      contextThroughSequence: triggerSession.events.at(-1)!.sequence,
+      requestHash: `sha256:${'b'.repeat(64)}`,
+      source: 'provider',
+      model: 'mock-agent',
+      orderedActions: [{
+        callId: 'agent-chat-choice-question',
+        name: 'ask_student',
+        arguments: {
+          text: '电子经过哪一部分？',
+          responseContractId: 'agent-chat-choice-contract',
+          board: {
+            kind: 'choice',
+            options: [
+              { id: 'wire', label: '外电路' },
+              { id: 'solution', label: '电解质溶液' },
+            ],
+          },
+        },
+      }],
+      terminalAction: {
+        callId: 'agent-chat-choice-question',
+        name: 'ask_student',
+      },
+      provenance: {
+        adapter: 'openai-compatible',
+        adapterVersion: 'agent-chat-test.v1',
+      },
+    });
+    const submitAgentAnswer = vi.fn(async () => ({
+      status: 'recorded' as const,
+      session,
+    }));
+    const user = userEvent.setup();
+
+    const rendered = renderChat({
+      config,
+      session,
+      runtime: { submitAgentAnswer } as unknown as AppRuntime,
+      caseId: trainingCase.id,
+    });
+
+    expect(screen.getByRole('radio', { name: '外电路' })).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: '电解质溶液' })).toBeInTheDocument();
+    expect(rendered.container.querySelector('textarea')).toBeNull();
+    await user.click(screen.getByRole('radio', { name: '外电路' }));
+    await user.click(screen.getByRole('button', { name: '提交给 Agent' }));
+    await waitFor(() => expect(submitAgentAnswer).toHaveBeenCalledWith(
+      expect.objectContaining({
+        turnId: 'agent-chat-choice-turn',
+        answer: { format: 'choice', optionId: 'wire' },
+      }),
+    ));
+  });
+
   it('submits an answer, records shadow scoring, renders the next turn, and retries idempotently', async () => {
     const root = await createTemporaryDirectory();
     await writeValidContentTree(root);
@@ -227,7 +382,7 @@ describe('M6 Phase 3 student agent chat', () => {
     expect(sessions.get('agent-chat-session')!.events).toHaveLength(beforeRetry);
   });
 
-  it('shows the fallback state and leaves the deterministic workspace as the active path', async () => {
+  it('shows a retry state without presenting the preset fallback as Agent dialogue', async () => {
     const root = await createTemporaryDirectory();
     await writeValidContentTree(root);
     const config = await loadAllConfig(root);
@@ -262,20 +417,38 @@ describe('M6 Phase 3 student agent chat', () => {
         caseId: trainingCase.id,
         triggerEventId: 'agent-chat-trigger',
         expectedSequence: 1,
-        idempotencyKey: 'chat-fallback-turn',
+        idempotencyKey: `agent-turn:${trainingCase.id}:0:attempt-0`,
       }),
     });
-    const fallback = await response.json() as { session: StudentSession };
+    expect(response.status).toBe(500);
+    const pending = sessions.get('agent-chat-session')!;
+    expect(pending.events.some((event) => event.kind === 'agent.input.pending')).toBe(true);
+
+    const runAgentTurn = vi.fn(async () => ({
+      status: 'completed' as const,
+      turnId: 'retry-turn',
+      degraded: false,
+      session: pending,
+    }));
+    const user = userEvent.setup();
 
     renderChat({
       config,
-      session: fallback.session,
-      runtime: {} as AppRuntime,
+      session: pending,
+      runtime: { runAgentTurn } as unknown as AppRuntime,
       caseId: trainingCase.id,
     });
 
-    expect(screen.getByText('Agent 通道已降级')).toBeInTheDocument();
-    expect(screen.getByText(/继续使用下方现有确定性训练流程/)).toBeInTheDocument();
+    expect(screen.getByText('Agent 上一轮尚未完成')).toBeInTheDocument();
+    expect(screen.getByText(/持久化会话继续/)).toBeInTheDocument();
+    expect(screen.queryByText(/最确定的一条判断/)).not.toBeInTheDocument();
     await waitFor(() => expect(screen.queryByRole('textbox')).not.toBeInTheDocument());
+
+    await user.click(screen.getByRole('button', { name: '继续本轮' }));
+    await waitFor(() => expect(runAgentTurn).toHaveBeenCalledTimes(1));
+    expect(runAgentTurn).toHaveBeenCalledWith(expect.objectContaining({
+      triggerEventId: 'agent-chat-trigger',
+      idempotencyKey: `agent-turn:${trainingCase.id}:0:attempt-0`,
+    }));
   });
 });

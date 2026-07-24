@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { loadAllConfig } from '../server/config/loader';
 import { App } from '../src/App';
+import type { AppRuntime } from '../src/runtime/api';
 import { createTrainingRuntime, withImmediatePromotion } from './helpers/training-runtime';
 
 function installStorage() {
@@ -40,6 +41,32 @@ describe('M3 training flow', () => {
   });
 
   afterEach(cleanup);
+
+  it('replaces the old AI assistant with Agent dialogue without removing the case question or 3D model', async () => {
+    const user = userEvent.setup();
+    const config = await loadAllConfig(process.cwd());
+    const { runtime } = createTrainingRuntime(config);
+    const agentRuntime = {
+      ...runtime,
+      runAgentTurn: vi.fn(),
+      submitAgentAnswer: vi.fn(),
+    } as unknown as AppRuntime;
+
+    const view = render(<App initialConfig={config} runtime={agentRuntime} />);
+
+    expect(await screen.findByRole('region', { name: 'Agent 对话' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'AI 助教' })).not.toBeInTheDocument();
+    expect(screen.getByText(/两极分别由什么材料提供反应场所/)).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: '认知模型' })).toBeInTheDocument();
+    expect(view.container.querySelector('.training-stage-rail > .live-model')).not.toBeNull();
+    const resizer = screen.getByRole('separator', { name: '调整认知模型宽度' });
+    const initialWidth = Number(resizer.getAttribute('aria-valuenow'));
+    resizer.focus();
+    await user.keyboard('{ArrowLeft}');
+    expect(Number(resizer.getAttribute('aria-valuenow'))).toBeGreaterThan(initialWidth);
+    await user.keyboard('{Home}');
+    expect(resizer).toHaveAttribute('aria-valuenow', '320');
+  });
 
   it('runs all three scaffold presentations through the mock assessment provider', async () => {
     const user = userEvent.setup();

@@ -167,7 +167,8 @@ export class LLMHealthMonitor {
     }
 
     const provider = this.options.providers.get(configuration.provider);
-    if (!provider) {
+    const agentAdapter = this.options.agentAdapters?.get(configuration.provider);
+    if (!provider && !agentAdapter) {
       return {
         ...base,
         status: 'down',
@@ -190,10 +191,9 @@ export class LLMHealthMonitor {
       timeoutMs: healthTimeoutMilliseconds(),
     };
     try {
-      const agentAdapter = this.options.agentAdapters?.get(configuration.provider);
       if (agentAdapter) {
         const tools = createAgentToolDefinitions().filter(
-          (definition) => definition.name === 'end_session',
+          (definition) => definition.name === 'end_case',
         );
         const requestHash = deterministicHash({
           probe: 'agent-tool-call-canary.v1',
@@ -206,7 +206,7 @@ export class LLMHealthMonitor {
           requestHash,
           model: configuration.model,
           systemPrompt:
-            'Health canary: call end_session exactly once with summary "health-canary".',
+            'Health canary: call end_case exactly once with summary "health-canary".',
           messages: [{
             role: 'user',
             content: 'Run the required tool-call canary now.',
@@ -215,7 +215,7 @@ export class LLMHealthMonitor {
           maxTurns: 4,
           signal: AbortSignal.timeout(healthTimeoutMilliseconds()),
           executeTool: async (action) => {
-            const accepted = action.name === 'end_session'
+            const accepted = action.name === 'end_case'
               && action.arguments.summary === 'health-canary';
             if (accepted) observedCanaryToolCall = true;
             return {
@@ -228,8 +228,8 @@ export class LLMHealthMonitor {
         });
         if (
           !observedCanaryToolCall
-          || result.terminalAction.name !== 'end_session'
-          || !result.orderedActions.some((action) => action.name === 'end_session')
+          || result.terminalAction.name !== 'end_case'
+          || !result.orderedActions.some((action) => action.name === 'end_case')
         ) {
           throw new Error('Provider did not complete the tool-call canary');
         }
@@ -238,6 +238,9 @@ export class LLMHealthMonitor {
           status: 'ok',
           detail: '实时 AI 工具调用通道可用',
         };
+      }
+      if (!provider) {
+        throw new Error('Structured provider is not configured');
       }
       const response = await provider.structured(request);
       const value = response.structured ?? JSON.parse(response.content);

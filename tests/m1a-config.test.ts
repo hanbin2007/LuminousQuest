@@ -175,7 +175,7 @@ describe('M1a external teaching configuration', () => {
 
     expect(config.knowledgeModel.version).toBe('knowledge-model.v1.2');
     expect(config.rubrics.version).toBe('rubrics.v1.2');
-    expect(config.pretest.version).toBe('pretest.v1.3');
+    expect(config.pretest.version).toBe('pretest.v1.4');
     expect(config.scaffoldPolicy.version).toBe('scaffold-policy.v1.5');
     expect(config.scaffoldPolicy.extraction.temperature).toBe(0.1);
     expect(config.cases.every((entry) => entry.version === 'case.v1.5')).toBe(true);

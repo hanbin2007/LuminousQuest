@@ -1,5 +1,6 @@
 import type { LoadedConfig } from '../../shared/config/schemas';
 import { buildLearnerProfile } from '../../shared/scoring/profile';
+import { isAuditOnlyEvent } from '../../shared/session/audit';
 import {
   sessionSchema,
   type AssessmentCompletedEvent,
@@ -18,18 +19,37 @@ import {
 } from './question-bank';
 import type { ResponseContractCandidate } from './response-contracts';
 import { createAgentToolDefinitions } from './tools';
+import { latestAgentUnderstanding } from './understanding';
+import {
+  buildStudentMemoryIndex,
+  createInitialStudentMemorySnapshot,
+  latestStudentMemorySnapshot,
+} from './student-memory';
 
-export const AGENT_SYSTEM_PROMPT_VERSION = 'agent-system-prompt.v1' as const;
+export const AGENT_SYSTEM_PROMPT_VERSION = 'agent-system-prompt.v3' as const;
 export const DEFAULT_AGENT_LOGICAL_ROUND_WINDOW = 6;
+// Keep non-Agent providers/package smoke independent of the optional SDK runtime.
+// This is the public boundary token exported by @anthropic-ai/claude-agent-sdk.
+export const AGENT_SYSTEM_PROMPT_DYNAMIC_BOUNDARY =
+  '__SYSTEM_PROMPT_DYNAMIC_BOUNDARY__' as const;
 
 export const AGENT_SYSTEM_PROMPT = [
   `[${AGENT_SYSTEM_PROMPT_VERSION}]`,
   '你是 LuminousQuest 训练阶段的自主电化学导师。',
-  '前测画像只用于节奏：已掌握节点快速核验，薄弱节点细致追问；不得改写记录轨结论。',
-  '记录轨判分是灯态与量表账本的唯一来源。你可以独立判断，并用 conclude_node 留下依据。',
-  '所有学生可见问题和总结都必须通过工具；不得在文本中泄露题库答案或未公开事实。',
-  'continuation 工具可连续调用，但最终必须恰好调用一次 ask_student、present_question 或 end_session。',
-  'responseContractId 必须逐字使用上下文给出的候选 id，不得自行编造。',
+  '一个案例对应一个 Claude session；案例内所有原子目标共享完整对话，案例之间不得引用自然语言 transcript。',
+  '前测基线不可改写。每次案例启动都会注入完整前测基线和最新学生记忆索引。',
+  '每次学生回答后必须先调用 update_student_understanding，实时更新题内工作理解。',
+  '每个理解更新都必须把本轮 studentResponse.answerEventId 放入 evidenceEventIds，形成可核验证据链。',
+  '同一原子目标可以反复追问；只有你确认已解决后才调用 resolve_question。',
+  'resolve_question 会原子写入完整学生记忆快照，并返回最新索引供同一案例下一题立即使用。',
+  '只能从服务端目标池选择目标。先 select_objective，再围绕该目标逐次追问。',
+  '每轮永远只显示一个问题。只能使用 single-choice、short-fill 或 equation-fill。',
+  'short-fill 默认不超过 24 字，绝对上限 40 字；禁止要求完整句子、长段解释或组合回答。',
+  '题干最多一个问句，禁止“分别回答”“依次说明”等多问表达。',
+  '所有学生可见问题、材料、3D 聚焦和案例结束都必须通过工具。',
+  'focus_cognitive_node 只改变镜头和光圈，不代表掌握；不得直接指定灯色、极性或电极名称。',
+  '每个 SDK query 最终必须恰好调用一次 show_question_card 或 end_case，且必须是最后一次工具调用。',
+  '不要生成预设替代题；调用失败时由产品保留当前题卡并显示重试。',
 ].join('\n');
 export const AGENT_RECORDING_PROMPT = {
   id: 'agent-loop',
@@ -96,23 +116,15 @@ function recordTrackSnapshot(session: StudentSession, config: LoadedConfig) {
 }
 
 function latestJudgments(session: StudentSession) {
-  const latest = new Map<string, Extract<
-    StudentSession['events'][number],
-    { kind: 'agent.judgment.recorded' }
-  >>();
-  session.events.forEach((event) => {
-    if (event.kind === 'agent.judgment.recorded') latest.set(event.nodeId, event);
-  });
-  return [...latest.values()]
-    .sort((left, right) => left.nodeId < right.nodeId ? -1 : left.nodeId > right.nodeId ? 1 : 0)
-    .map((event) => ({
-      eventId: event.id,
-      turnId: event.turnId,
-      nodeId: event.nodeId,
-      verdict: event.verdict,
-      basisThroughSequence: event.basisThroughSequence,
-      basisEventIds: event.basisEventIds,
-    }));
+  return latestAgentUnderstanding(session).map((entry) => ({
+    eventId: entry.persistedEventId ?? `working:${entry.turnId}:${entry.callId}`,
+    turnId: entry.turnId,
+    nodeId: entry.nodeId,
+    verdict: entry.verdict,
+    basisThroughSequence: entry.basisThroughSequence,
+    basisEventIds: entry.basisEventIds,
+    persistence: entry.persistence,
+  }));
 }
 
 function contextActionArguments(
@@ -128,7 +140,11 @@ function contextActionArguments(
   };
 }
 
-function lastLogicalRounds(session: StudentSession, maximum: number): LogicalRound[] {
+function lastLogicalRounds(
+  session: StudentSession,
+  maximum: number,
+  caseId: string,
+): LogicalRound[] {
   const responseByTurn = new Map(
     session.events
       .filter((event): event is Extract<
@@ -141,7 +157,7 @@ function lastLogicalRounds(session: StudentSession, maximum: number): LogicalRou
     .filter((event): event is Extract<
       StudentSession['events'][number],
       { kind: 'agent.turn.completed' }
-    > => event.kind === 'agent.turn.completed')
+    > => event.kind === 'agent.turn.completed' && event.caseId === caseId)
     .map((turn): LogicalRound => {
       const response = responseByTurn.get(turn.turnId);
       return {
@@ -167,13 +183,28 @@ function lastLogicalRounds(session: StudentSession, maximum: number): LogicalRou
 function currentTrigger(session: StudentSession, triggerEventId: string) {
   const event = session.events.find((candidate) => candidate.id === triggerEventId);
   if (!event) throw new Error(`Unknown agent trigger event ${triggerEventId}`);
-  if (
-    event.kind === 'agent.judgment.recorded'
-    || event.kind === 'agent.divergence.changed'
-  ) {
+  if (isAuditOnlyEvent(event)) {
     throw new Error('An audit-only event cannot trigger an agent turn');
   }
   return stripContextData(event) as Omit<typeof event, 'occurredAt' | 'schemaVersion'>;
+}
+
+function pendingStudentResponse(session: StudentSession, triggerEventId: string) {
+  const pending = session.events.find((event) =>
+    event.id === triggerEventId && event.kind === 'agent.input.pending');
+  if (!pending || pending.kind !== 'agent.input.pending') return null;
+  const answer = session.events.find((event) =>
+    event.id === pending.triggerEventId
+    && event.kind === 'answer.submitted'
+    && Boolean(event.responseToAgentTurnId));
+  if (!answer || answer.kind !== 'answer.submitted') return null;
+  return {
+    answerEventId: answer.id,
+    responseToAgentTurnId: answer.responseToAgentTurnId!,
+    responseContractId: answer.responseContractId!,
+    questionId: answer.questionId,
+    answer: answer.answer,
+  };
 }
 
 function materialIndex(config: LoadedConfig) {
@@ -251,6 +282,9 @@ export interface BuildAgentTurnContextInput {
   model: string;
   maxTurns?: number;
   logicalRoundWindow?: number;
+  caseRunId?: string;
+  sdkSessionId?: string;
+  resume?: boolean;
 }
 
 export interface AgentTurnContext {
@@ -262,11 +296,41 @@ export interface AgentTurnContext {
   diagnosticProfile: ReturnType<typeof buildDiagnosticProfile>;
   recordTrack: ReturnType<typeof recordTrackSnapshot>;
   latestJudgments: ReturnType<typeof latestJudgments>;
+  learnerUnderstanding: {
+    persistencePolicy: 'per-question-full-snapshot';
+    nodes: ReturnType<typeof latestJudgments>;
+  };
   questionBank: AgentQuestionBankEntry[];
   materials: ReturnType<typeof materialIndex>;
   recentLogicalRounds: LogicalRound[];
   currentTrigger: ReturnType<typeof currentTrigger>;
   freeResponseContractCandidateId: string;
+  caseAgent: {
+    caseRunId: string | null;
+    sdkSessionId: string | null;
+    resume: boolean;
+    case: {
+      id: string;
+      title: string;
+      caseType: 'training' | 'transfer';
+      medium: string;
+    };
+    objectives: Array<{
+      id: string;
+      goal: string;
+      targetNodeIds: string[];
+      boardKinds: Array<'single-choice' | 'short-fill' | 'equation-fill'>;
+      equationSetId?: string;
+    }>;
+    materials: Array<{
+      id: string;
+      kind: string;
+      status: string;
+      revealAfterNodeIds: string[];
+    }>;
+    pretestBaseline: ReturnType<typeof createInitialStudentMemorySnapshot>['pretestBaseline'];
+    memoryIndex: ReturnType<typeof buildStudentMemoryIndex>;
+  };
 }
 
 export interface BuiltAgentTurnContext {
@@ -293,6 +357,16 @@ export function buildAgentTurnContext(
     (candidate) => candidate.kind === 'unassessed',
   );
   if (!freeCandidate) throw new Error('Agent context lacks an unassessed response candidate');
+  const trainingCase = input.config.cases.find((entry) =>
+    entry.id === input.currentCaseId) ?? input.config.cases[0];
+  if (!trainingCase) throw new Error('Agent context requires at least one configured case');
+  const snapshot = latestStudentMemorySnapshot(session)
+    ?? createInitialStudentMemorySnapshot({
+      session,
+      config: input.config,
+      snapshotId: `${session.id}-memory-initial`,
+      occurredAt: session.updatedAt,
+    });
 
   const rawContext: AgentTurnContext = {
     version: AGENT_CONTEXT_BUILDER_VERSION,
@@ -303,24 +377,84 @@ export function buildAgentTurnContext(
     diagnosticProfile: buildDiagnosticProfile(session, input.config),
     recordTrack: recordTrackSnapshot(session, input.config),
     latestJudgments: latestJudgments(session),
+    learnerUnderstanding: {
+      persistencePolicy: 'per-question-full-snapshot',
+      nodes: latestJudgments(session),
+    },
     questionBank: questionBank.entries,
     materials: materialIndex(input.config),
     recentLogicalRounds: lastLogicalRounds(
       session,
       input.logicalRoundWindow ?? DEFAULT_AGENT_LOGICAL_ROUND_WINDOW,
+      input.currentCaseId,
     ),
     currentTrigger: currentTrigger(session, input.triggerEventId),
     freeResponseContractCandidateId: freeCandidate.candidateId,
+    caseAgent: {
+      caseRunId: input.caseRunId ?? null,
+      sdkSessionId: input.sdkSessionId ?? null,
+      resume: input.resume ?? false,
+      case: {
+        id: trainingCase.id,
+        title: trainingCase.title,
+        caseType: trainingCase.caseType,
+        medium: trainingCase.medium,
+      },
+      objectives: trainingCase.agentObjectives.map((objective) => ({
+        id: objective.id,
+        goal: objective.goal,
+        targetNodeIds: [...objective.targetNodeIds],
+        boardKinds: [...objective.boardKinds],
+        ...(objective.equationSetId
+          ? { equationSetId: objective.equationSetId }
+          : {}),
+      })),
+      materials: trainingCase.materials.map((material) => ({
+        id: material.id,
+        kind: material.kind,
+        status: material.status,
+        revealAfterNodeIds: [...material.revealAfterNodeIds],
+      })),
+      pretestBaseline: snapshot.pretestBaseline,
+      memoryIndex: buildStudentMemoryIndex(snapshot),
+    },
   };
   const context = stripContextData(rawContext) as AgentTurnContext;
   assertSafeContextData(context);
   const serializedContext = deterministicJson(context);
   const tools = createAgentToolDefinitions();
   const maxTurns = input.maxTurns ?? 16;
-  const messages = [{ role: 'user' as const, content: serializedContext }];
+  const messages = [{
+    role: 'user' as const,
+    content: input.resume
+      ? deterministicJson({
+          type: 'student-turn',
+          caseRunId: input.caseRunId,
+          currentTrigger: rawContext.currentTrigger,
+          studentResponse: pendingStudentResponse(session, input.triggerEventId),
+          instruction:
+            'Process this single student response using the existing case conversation. '
+            + 'Update working understanding, then either ask one next atomic question, '
+            + 'or resolve the objective and continue to exactly one next card/end_case.',
+        })
+      : serializedContext,
+  }];
+  const dynamicSystemContext = deterministicJson({
+    caseRunId: input.caseRunId ?? null,
+    sdkSessionId: input.sdkSessionId ?? null,
+    caseId: trainingCase.id,
+    objectiveIds: trainingCase.agentObjectives.map((objective) => objective.id),
+    memorySnapshotId: snapshot.snapshotId,
+    coldTransfer: trainingCase.caseType === 'transfer',
+  });
+  const systemPrompt = [
+    AGENT_SYSTEM_PROMPT,
+    AGENT_SYSTEM_PROMPT_DYNAMIC_BOUNDARY,
+    dynamicSystemContext,
+  ];
   const requestHash = deterministicHash({
     contextBuilderVersion: AGENT_CONTEXT_BUILDER_VERSION,
-    systemPrompt: AGENT_SYSTEM_PROMPT,
+    systemPrompt,
     provider: input.provider,
     model: input.model,
     maxTurns,
@@ -335,7 +469,7 @@ export function buildAgentTurnContext(
     adapterRequest: {
       requestHash,
       model: input.model,
-      systemPrompt: AGENT_SYSTEM_PROMPT,
+      systemPrompt,
       messages,
       tools,
       maxTurns,

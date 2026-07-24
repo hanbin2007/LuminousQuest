@@ -15,6 +15,43 @@ import {
 } from '../server/agent/adapters/adapter';
 
 describe('LLM health route', () => {
+  it('probes a native Agent adapter without requiring a legacy completion provider', async () => {
+    const execute = vi.fn<AgentTurnAdapter['execute']>(async (request) => {
+      const action = {
+        callId: 'agent-only-health-call',
+        name: 'end_case' as const,
+        arguments: { summary: 'health-canary' },
+      };
+      await request.executeTool?.(action);
+      return {
+        source: 'provider',
+        model: request.model,
+        orderedActions: [action],
+        terminalAction: { callId: action.callId, name: action.name },
+        usage: {},
+      };
+    });
+    const adapter: AgentTurnAdapter = {
+      id: 'claude-agent',
+      execute,
+    };
+    const monitor = new LLMHealthMonitor({
+      providers: new Map(),
+      agentAdapters: new Map([['claude-agent', adapter]]),
+      configuration: () => ({
+        executionMode: 'live',
+        provider: 'claude-agent',
+        model: 'agent-model',
+      }),
+    });
+
+    await expect(monitor.get()).resolves.toMatchObject({
+      status: 'ok',
+      detail: '实时 AI 工具调用通道可用',
+    });
+    expect(execute).toHaveBeenCalledTimes(1);
+  });
+
   it('requires a real native tool call when an agent adapter is configured', async () => {
     const structured = vi.fn(async () => {
       throw new Error('legacy completion probe must not run');
@@ -26,10 +63,10 @@ describe('LLM health route', () => {
       structured,
     };
     const execute = vi.fn<AgentTurnAdapter['execute']>(async (request) => {
-      expect(request.tools.map((tool) => tool.name)).toEqual(['end_session']);
+      expect(request.tools.map((tool) => tool.name)).toEqual(['end_case']);
       const action = {
         callId: 'health-call',
-        name: 'end_session' as const,
+        name: 'end_case' as const,
         arguments: { summary: 'health-canary' },
       };
       await request.executeTool?.(action);
@@ -77,7 +114,7 @@ describe('LLM health route', () => {
       async execute(request) {
         const action = {
           callId: 'fabricated-health-call',
-          name: 'end_session' as const,
+          name: 'end_case' as const,
           arguments: { summary: 'health-canary' },
         };
         return {

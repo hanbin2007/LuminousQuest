@@ -2,7 +2,7 @@
 
 import '@testing-library/jest-dom/vitest';
 
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -92,5 +92,30 @@ describe('test-stage manual navigation', () => {
     await user.click(screen.getByRole('button', { name: '测试' }));
     await user.click(screen.getByRole('button', { name: '冷迁移' }));
     expect(await screen.findByText(/冷迁移后测不显示即时对错/, undefined, { timeout: 5000 })).toBeInTheDocument();
+  });
+
+  it('loads the ready-made pretest fixture and lands on the manual Agent start', async () => {
+    const user = userEvent.setup();
+    const config = await loadAllConfig(process.cwd());
+    const runtime = {
+      ...stubRuntime(config, true),
+      runAgentTurn: vi.fn(),
+      submitAgentAnswer: vi.fn(),
+    } as unknown as AppRuntime;
+    render(<App initialConfig={config} runtime={runtime} />);
+
+    await user.click(await screen.findByRole('button', { name: '课程与会话工具' }));
+    await user.click(screen.getByRole('button', { name: '载入调试前测' }));
+
+    expect(await screen.findByRole(
+      'button',
+      { name: '开始 Agent 对话' },
+      { timeout: 5000 },
+    )).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/training/zinc-copper');
+    await waitFor(() => {
+      expect(screen.getByRole('link', { name: '前测' }).closest('li'))
+        .toHaveAttribute('data-complete', 'true');
+    });
   });
 });

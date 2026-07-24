@@ -79,6 +79,10 @@ export async function writeValidContentTree(
       path.join(promptsRoot, 'structured-assessment.md'),
     ),
     copyRepositoryFile(
+      path.join('prompts', 'direct-assessment.md'),
+      path.join(promptsRoot, 'direct-assessment.md'),
+    ),
+    copyRepositoryFile(
       path.join('prompts', 'socratic-tutoring.md'),
       path.join(promptsRoot, 'socratic-tutoring.md'),
     ),

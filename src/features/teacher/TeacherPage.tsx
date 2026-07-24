@@ -44,6 +44,19 @@ const agentVerdictLabels = {
   inconclusive: '无法判定',
 } as const;
 
+const agentEventLabels: Record<string, string> = {
+  'answer.submitted': '学生回答',
+  'polarity.assessed': '极性判定',
+  'polarity.revealed': '极性公开',
+  'assessment.completed': '回答判定',
+  'assessment.audit.completed': '判定审计',
+  'assessment.divergence.changed': '判定分歧',
+  'agent.turn.completed': 'Agent 回合',
+  'agent.judgment.recorded': '理解落盘',
+  'agent.divergence.changed': '理解分歧',
+  'session.command.executed': '命令提交',
+};
+
 function uniqueSessions(sessions: readonly StudentSession[]) {
   const byId = new Map<string, StudentSession>();
   sessions.forEach((session) => {
@@ -220,8 +233,8 @@ function StudentEvidence({ session }: { session: StudentSession }) {
         <header className="teacher-section__heading">
           <div>
             <span>驾驶轨 / 记录轨</span>
-            <h2 id="teacher-agent-audit-title">Agent 判断与分歧审计</h2>
-            <p className="teacher-agent-audit__disclosure">量表记录以判分引擎为准</p>
+            <h2 id="teacher-agent-audit-title">双轨判断与分歧审计</h2>
+            <p className="teacher-agent-audit__disclosure">审计轨只留痕，不改写主记录轨</p>
           </div>
           <History aria-hidden="true" />
         </header>
@@ -247,18 +260,84 @@ function StudentEvidence({ session }: { session: StudentSession }) {
                 <AlertTriangle aria-hidden="true" />
                 <div>
                   <strong>
-                    Agent {agentVerdictLabels[item.agentVerdict]} · 判分引擎 {
+                    {item.source === 'assessment' ? '直接评判' : 'Agent'} {
+                      agentVerdictLabels[item.agentVerdict]
+                    } · {item.source === 'assessment' ? '旧管线审计' : '判分引擎'} {
                       agentVerdictLabels[item.shadowVerdict]
                     }
                   </strong>
-                  <p>{item.status === 'detected' ? '检测到双轨分歧' : '双轨分歧已解决'}</p>
-                  <small>{item.nodeId} · {item.comparisonPolicyVersion}</small>
+                  <p>{
+                    item.status === 'detected'
+                      ? '检测到双轨分歧'
+                      : item.status === 'matched'
+                        ? '本次双轨判断一致'
+                        : '双轨分歧已解决'
+                  }</p>
+                  {item.source === 'assessment' ? (
+                    <>
+                      <p>
+                        主判依据：{item.primaryRationale}
+                        {item.primaryConfidence === null
+                          ? ''
+                          : `（置信度 ${item.primaryConfidence.toFixed(2)}）`}
+                      </p>
+                      <p>
+                        审计依据：{item.auditRationale} · {
+                          item.auditEngine
+                            ? `${item.auditEngine.id} ${item.auditEngine.version}`
+                            : '未知引擎'
+                        }
+                      </p>
+                      <HighlightedAnswer
+                        text={item.originalAnswer}
+                        evidence={item.auditEvidence}
+                      />
+                    </>
+                  ) : null}
+                  <small>
+                    {item.questionId ? `${item.questionId} · ` : ''}
+                    {item.nodeId} · {item.comparisonPolicyVersion}
+                  </small>
                 </div>
                 <time dateTime={item.occurredAt}>{displayTime(item.occurredAt)}</time>
               </li>
             ))}
           </ol>
         ) : <p className="teacher-empty">本会话暂无 Agent 判断或分歧记录。</p>}
+      </section>
+
+      <section className="teacher-section teacher-agent-chain" aria-labelledby="teacher-agent-chain-title">
+        <header className="teacher-section__heading">
+          <div>
+            <span>完整可观测链</span>
+            <h2 id="teacher-agent-chain-title">Agent 相关事件链</h2>
+            <p className="teacher-agent-audit__disclosure">
+              包含触发、提问、回答、判定、训练结束后的理解提交及命令元数据
+            </p>
+          </div>
+          <FileJson aria-hidden="true" />
+        </header>
+        {report.agentEventChain.length > 0 ? (
+          <ol className="teacher-agent-chain__list">
+            {report.agentEventChain.map((item) => (
+              <li key={`${item.sequence}-${item.id}`}>
+                <span className="teacher-agent-chain__sequence">
+                  {String(item.sequence).padStart(3, '0')}
+                </span>
+                <div>
+                  <strong>{agentEventLabels[item.kind] ?? item.kind}</strong>
+                  <p>{item.kind} · {item.caseId} / {item.stageId}</p>
+                  {item.relation ? <small>{item.relation}</small> : null}
+                  <details>
+                    <summary>原始事件</summary>
+                    <pre>{JSON.stringify(item.rawEvent, null, 2)}</pre>
+                  </details>
+                </div>
+                <time dateTime={item.occurredAt}>{displayTime(item.occurredAt)}</time>
+              </li>
+            ))}
+          </ol>
+        ) : <p className="teacher-empty">本会话暂无 Agent 相关事件。</p>}
       </section>
 
       <div className="teacher-two-column">
@@ -286,7 +365,7 @@ function StudentEvidence({ session }: { session: StudentSession }) {
             <span className="teacher-review-section__status">
               {report.agentAudit.unresolvedCount > 0 ? (
                 <span
-                  aria-label={`${report.agentAudit.unresolvedCount} 条 Agent 分歧待复核`}
+                  aria-label={`${report.agentAudit.unresolvedCount} 条双轨分歧待复核`}
                   className="teacher-review-dot"
                   role="status"
                 >
@@ -307,7 +386,9 @@ function StudentEvidence({ session }: { session: StudentSession }) {
                       <strong>{item.nodeId} · 双轨分歧</strong>
                       <p>{item.reason}</p>
                       <mark>
-                        Agent {agentVerdictLabels[item.agentVerdict]} · 判分引擎 {
+                        {item.source === 'assessment' ? '直接评判' : 'Agent'} {
+                          agentVerdictLabels[item.agentVerdict]
+                        } · {item.source === 'assessment' ? '旧管线审计' : '判分引擎'} {
                           agentVerdictLabels[item.shadowVerdict]
                         }
                       </mark>

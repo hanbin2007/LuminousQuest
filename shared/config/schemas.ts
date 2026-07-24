@@ -450,6 +450,80 @@ const structuralRuleSchema = z
   })
   .strict();
 
+const directAssessmentVerdictSchema = z.enum([
+  'hit',
+  'partial',
+  'miss',
+  'needs-review',
+]);
+
+const directAssessmentSchema = z
+  .object({
+    mode: z.enum(['record-primary', 'shadow']),
+    version: versionSchema,
+    votes: z.literal(3),
+    lowConfidenceThreshold: z.number().min(0).max(1),
+    context: z.array(z.string().trim().min(1)).min(1),
+    adjudication: z.array(z.string().trim().min(1)).min(1),
+    nodes: z
+      .array(
+        z
+          .object({
+            nodeId: idSchema,
+            guidance: z.array(z.string().trim().min(1)).min(1),
+          })
+          .strict(),
+      )
+      .min(1),
+    examples: z
+      .array(
+        z
+          .object({
+            answer: z.string().trim().min(1),
+            assessments: z
+              .array(
+                z
+                  .object({
+                    nodeId: idSchema,
+                    verdict: directAssessmentVerdictSchema,
+                    rationale: z.string().trim().min(1),
+                  })
+                  .strict(),
+              )
+              .min(1),
+          })
+          .strict(),
+      )
+      .min(2),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    const nodeIds = new Set<string>();
+    value.nodes.forEach((node, nodeIndex) => {
+      if (nodeIds.has(node.nodeId)) {
+        context.addIssue({
+          code: 'custom',
+          path: ['nodes', nodeIndex, 'nodeId'],
+          message: `duplicate direct assessment node ${node.nodeId}`,
+        });
+      }
+      nodeIds.add(node.nodeId);
+    });
+    value.examples.forEach((example, exampleIndex) => {
+      const seen = new Set<string>();
+      example.assessments.forEach((assessment, assessmentIndex) => {
+        if (seen.has(assessment.nodeId)) {
+          context.addIssue({
+            code: 'custom',
+            path: ['examples', exampleIndex, 'assessments', assessmentIndex, 'nodeId'],
+            message: `duplicate example node ${assessment.nodeId}`,
+          });
+        }
+        seen.add(assessment.nodeId);
+      });
+    });
+  });
+
 const questionBaseShape = {
   id: idSchema,
   prompt: z.string().trim().min(1),
@@ -457,6 +531,7 @@ const questionBaseShape = {
   rubricIds: z.array(idSchema).min(1),
   targetNodeIds: z.array(idSchema).min(1),
   evidencePath: z.string().trim().min(1),
+  directAssessment: directAssessmentSchema.optional(),
   group: z
     .object({
       id: idSchema,
@@ -724,6 +799,35 @@ const caseScaffoldSchema = z.discriminatedUnion('level', [
   scaffoldLevelThreeSchema,
 ]);
 
+const agentObjectiveSchema = z
+  .object({
+    id: idSchema,
+    goal: z.string().trim().min(1),
+    targetNodeIds: z.array(idSchema).min(1),
+    boardKinds: z.array(z.enum([
+      'single-choice',
+      'short-fill',
+      'equation-fill',
+    ])).min(1),
+    equationSetId: idSchema.optional(),
+    unlockAnchorId: idSchema.optional(),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    reportDuplicateStrings(value.targetNodeIds, ['targetNodeIds'], context);
+    reportDuplicateStrings(value.boardKinds, ['boardKinds'], context);
+    if (
+      value.boardKinds.includes('equation-fill')
+      !== (value.equationSetId !== undefined)
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['equationSetId'],
+        message: 'equation-fill objectives must bind exactly one equation set',
+      });
+    }
+  });
+
 export const caseSchema = z
   .object({
     version: versionSchema,
@@ -747,6 +851,7 @@ export const caseSchema = z
       .min(1),
     scaffold: z.array(caseScaffoldSchema).length(3),
     equationSets: z.array(equationSetSchema).length(3),
+    agentObjectives: z.array(agentObjectiveSchema).min(1),
     tutoring: z
       .array(
         z
@@ -784,6 +889,7 @@ export const caseSchema = z
     reportDuplicateIds(value.materials, ['materials'], context);
     reportDuplicateIds(value.followingAnchors, ['followingAnchors'], context);
     reportDuplicateIds(value.equationSets, ['equationSets'], context);
+    reportDuplicateIds(value.agentObjectives, ['agentObjectives'], context);
     reportDuplicateStrings(value.tutoring.map((entry) => entry.nodeId), ['tutoring'], context);
     reportDuplicateIds(value.evidencePaths, ['evidencePaths'], context);
     reportDuplicateStrings(value.targetNodeIds, ['targetNodeIds'], context);
@@ -851,6 +957,37 @@ export const caseSchema = z
           code: 'custom',
           path: ['evidencePaths', index, 'referenceAnswerPoints'],
           message: 'answer evidence requires node-specific reference answer points',
+        });
+      }
+    });
+    value.agentObjectives.forEach((objective, index) => {
+      objective.targetNodeIds.forEach((nodeId, nodeIndex) => {
+        if (!value.targetNodeIds.includes(nodeId)) {
+          context.addIssue({
+            code: 'custom',
+            path: ['agentObjectives', index, 'targetNodeIds', nodeIndex],
+            message: `objective targets non-case node ${nodeId}`,
+          });
+        }
+      });
+      if (
+        objective.equationSetId
+        && !value.equationSets.some((entry) => entry.id === objective.equationSetId)
+      ) {
+        context.addIssue({
+          code: 'custom',
+          path: ['agentObjectives', index, 'equationSetId'],
+          message: `unknown equation set ${objective.equationSetId}`,
+        });
+      }
+      if (
+        objective.unlockAnchorId
+        && !value.followingAnchors.some((entry) => entry.id === objective.unlockAnchorId)
+      ) {
+        context.addIssue({
+          code: 'custom',
+          path: ['agentObjectives', index, 'unlockAnchorId'],
+          message: `unknown reveal anchor ${objective.unlockAnchorId}`,
         });
       }
     });

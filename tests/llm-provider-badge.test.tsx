@@ -113,6 +113,7 @@ describe('AppShell LLM provider badge', () => {
           demoModeError: null,
           toggleDemoMode: vi.fn(async () => executionMode),
           testNavigation: false,
+          activateDevelopmentPretest: vi.fn(),
         }}>
           <MemoryRouter initialEntries={['/pretest']}>
             <Routes>

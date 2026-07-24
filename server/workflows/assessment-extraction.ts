@@ -244,6 +244,7 @@ export async function runAssessmentExtraction(
     temperature: input.config.scaffoldPolicy.extraction.temperature,
   }, {
     retryCount: input.config.scaffoldPolicy.extraction.retryCount,
+    timeoutMs: 6_000,
     validateStructured: async (value) => {
       try {
         validationResult = validateAssessmentExtraction({

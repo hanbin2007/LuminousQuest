@@ -6,6 +6,7 @@ import type {
 } from '../server/agent/adapters/adapter';
 import { ClaudeAgentTurnAdapter } from '../server/agent/adapters/claude-agent';
 import { OpenAICompatibleAgentTurnAdapter } from '../server/agent/adapters/openai-compatible';
+import { InMemoryAgentTranscriptStore } from '../server/agent/transcript-store';
 
 const request = {
   requestHash: `sha256:${'f'.repeat(64)}`,
@@ -73,6 +74,92 @@ function completion(message: unknown, usage = {
 }
 
 describe('provider-neutral AgentTurnAdapter runtime', () => {
+  it('creates and resumes one persisted Claude SDK session with app-owned storage', async () => {
+    const sessionId = '00000000-0000-4000-8000-000000000001';
+    let callSequence = 0;
+    const queryMock = vi.fn((_input: { options: Record<string, unknown> }) => {
+      callSequence += 1;
+      const sequence = callSequence;
+      const iterator = (async function* () {
+        yield {
+          type: 'assistant',
+          message: {
+            content: [{
+              type: 'tool_use',
+              id: `sdk-question-${sequence}`,
+              name: 'mcp__lq__ask_student',
+              input: {
+                text: '选择电子经过的位置？',
+                responseContractId: `candidate-${sequence}`,
+              },
+            }],
+          },
+        };
+        yield {
+          type: 'result',
+          subtype: 'success',
+          session_id: sessionId,
+          usage: { input_tokens: 8, output_tokens: 3 },
+        };
+      })();
+      return Object.assign(iterator, {
+        getContextUsage: vi.fn(async () => ({ totalTokens: 37 })),
+      });
+    });
+    const sdk = {
+      query: queryMock,
+      tool: vi.fn((
+        name: string,
+        _description: string,
+        _shape: unknown,
+        handler: (value: unknown) => Promise<unknown>,
+      ) => ({ name, handler })),
+      createSdkMcpServer: vi.fn((options: unknown) => ({
+        type: 'sdk',
+        name: 'lq',
+        options,
+      })),
+    };
+    const store = new InMemoryAgentTranscriptStore();
+    const adapter = new ClaudeAgentTurnAdapter({ sdk: sdk as never });
+    const systemPrompt = ['STATIC', 'SYSTEM_PROMPT_DYNAMIC_BOUNDARY', 'DYNAMIC'];
+
+    const created = await adapter.execute({
+      ...request,
+      systemPrompt,
+      sdkSession: { sessionId, resume: false, store },
+    });
+    const resumed = await adapter.execute({
+      ...request,
+      systemPrompt,
+      sdkSession: { sessionId, resume: true, store },
+    });
+
+    const firstOptions = queryMock.mock.calls[0]![0].options;
+    const secondOptions = queryMock.mock.calls[1]![0].options;
+    expect(firstOptions).toMatchObject({
+      systemPrompt,
+      persistSession: true,
+      sessionId,
+      sessionStore: store,
+      sessionStoreFlush: 'eager',
+      settingSources: [],
+      settings: { autoMemoryEnabled: false },
+    });
+    expect(firstOptions).not.toHaveProperty('resume');
+    expect(secondOptions).toMatchObject({
+      persistSession: true,
+      resume: sessionId,
+      sessionStore: store,
+    });
+    expect(secondOptions).not.toHaveProperty('sessionId');
+    expect(created).toMatchObject({
+      sdkSessionId: sessionId,
+      contextUsage: { totalTokens: 37 },
+    });
+    expect(resumed.sdkSessionId).toBe(sessionId);
+  });
+
   it('freezes a normalized tool-call trace and usage result independent of provider payloads', () => {
     expect(normalizedResult).toMatchObject({
       source: 'provider',
@@ -238,7 +325,10 @@ describe('provider-neutral AgentTurnAdapter runtime', () => {
       };
       expect(input.options).toMatchObject({
         tools: [],
-        allowedTools: ['mcp__lq__*'],
+        allowedTools: [
+          'mcp__lq__ask_student',
+          'mcp__lq__get_profile',
+        ],
         strictMcpConfig: true,
         settingSources: [],
         persistSession: false,

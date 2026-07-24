@@ -3,7 +3,11 @@ import path from 'node:path';
 
 import { RecordingStore } from '../server/llm/recording-store';
 import { inflateStudentSessionProjection } from '../shared/session/projections';
-import type { AgentTurnCompletedEvent, StudentSession } from '../shared/session/schema';
+import type {
+  AgentAnswerSubmission,
+  AgentTurnCompletedEvent,
+  StudentSession,
+} from '../shared/session/schema';
 import { sessionServerSequence } from '../shared/session/sync';
 
 interface CliOptions {
@@ -114,6 +118,45 @@ function latestTurn(session: StudentSession, caseId: string) {
   );
 }
 
+function answerForTurn(
+  turn: AgentTurnCompletedEvent,
+  rawAnswer: string,
+): AgentAnswerSubmission['answer'] {
+  const terminal = turn.orderedActions.find(
+    (action) => action.callId === turn.terminalAction.callId,
+  );
+  if (terminal?.name !== 'show_question_card') {
+    return { format: 'text', value: rawAnswer };
+  }
+  switch (terminal.arguments.board.kind) {
+    case 'single-choice': {
+      const option = terminal.arguments.board.options.find(
+        (candidate) =>
+          candidate.id === rawAnswer || candidate.label === rawAnswer,
+      );
+      if (!option) {
+        throw new Error(
+          `Answer "${rawAnswer}" is not a valid option. Use one of: ${
+            terminal.arguments.board.options
+              .map((candidate) => `${candidate.id} (${candidate.label})`)
+              .join(', ')
+          }`,
+        );
+      }
+      return { format: 'choice', optionId: option.id };
+    }
+    case 'equation-fill':
+      return { format: 'equation', value: rawAnswer };
+    case 'short-fill':
+      if (rawAnswer.length > terminal.arguments.board.maxLength) {
+        throw new Error(
+          `Answer exceeds the ${terminal.arguments.board.maxLength}-character board limit`,
+        );
+      }
+      return { format: 'text', value: rawAnswer };
+  }
+}
+
 async function main() {
   const options = parseArgs(process.argv.slice(2));
   const recordingId = Date.now().toString(36);
@@ -209,7 +252,10 @@ async function main() {
     if (turn.source === 'fallback' || result.degraded) {
       throw new Error('Provider degraded to fallback; no complete live recording was published');
     }
-    if (turn.terminalAction.name === 'end_session') break;
+    if (
+      turn.terminalAction.name === 'end_case'
+      || turn.terminalAction.name === 'end_session'
+    ) break;
     const answer = answers[answerIndex];
     if (answer === undefined) {
       throw new Error(`Agent is waiting for answer ${answerIndex + 1}; provide another --answer`);
@@ -221,7 +267,7 @@ async function main() {
     }>('/api/agent/answer', {
       sessionId: session.id,
       turnId: turn.turnId,
-      answer: { format: 'text', value: answer },
+      answer: answerForTurn(turn, answer),
       expectedSequence: sessionServerSequence(session),
       idempotencyKey: `record:${recordingId}:answer:${answerIndex}`,
     });
@@ -229,8 +275,11 @@ async function main() {
     if (turnIndex === 19) throw new Error('Agent session exceeded the 20-turn recording limit');
   }
   const terminal = latestTurn(session, options.caseId);
-  if (terminal?.terminalAction.name !== 'end_session') {
-    throw new Error('Agent session did not reach end_session');
+  if (
+    terminal?.terminalAction.name !== 'end_case'
+    && terminal?.terminalAction.name !== 'end_session'
+  ) {
+    throw new Error('Agent case did not reach end_case');
   }
 
   const store = new RecordingStore(options.contentRoot);

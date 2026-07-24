@@ -97,6 +97,29 @@ function membraneAssessmentResponse(answer: string): LLMResponse {
   return { content: JSON.stringify(value), structured: value, model: 'membrane-v1' };
 }
 
+function directAssessmentResponse(
+  answer: string,
+  assessments: Array<{
+    nodeId: string;
+    verdict: 'hit' | 'partial' | 'miss' | 'needs-review';
+    misconceptionIds?: string[];
+    reviewReason?: 'rubric-boundary';
+  }>,
+): LLMResponse {
+  const value = {
+    assessments: assessments.map((assessment) => ({
+      nodeId: assessment.nodeId,
+      verdict: assessment.verdict,
+      misconceptionIds: assessment.misconceptionIds ?? [],
+      rationale: `Test judgment for ${assessment.nodeId}`,
+      confidence: 0.99,
+      reviewReason: assessment.reviewReason ?? null,
+      evidence: [{ quote: answer, start: 0, end: answer.length }],
+    })),
+  };
+  return { content: JSON.stringify(value), structured: value, model: 'direct-test-v1' };
+}
+
 function post(app: ReturnType<typeof createServerApp>, route: string, body: unknown, token = apiToken) {
   return app.request(route, {
     method: 'POST',
@@ -117,6 +140,19 @@ describe('server-owned assessment and tutor routes', () => {
       async vision() { throw new Error('not used'); },
       async structured(request) {
         const requestInput = request.input as { answer?: string };
+        if (request.prompt.id === 'direct-assessment') {
+          const membraneAnswer = requestInput.answer ?? '';
+          return directAssessmentResponse(membraneAnswer, [
+            {
+              nodeId: 'D3',
+              verdict: membraneAnswer.includes('不能') ? 'hit' : 'miss',
+            },
+            {
+              nodeId: 'P1',
+              verdict: membraneAnswer.includes('直接反应') ? 'hit' : 'miss',
+            },
+          ]);
+        }
         if (requestInput.answer !== answer) {
           return membraneAssessmentResponse(requestInput.answer ?? '');
         }
@@ -319,15 +355,26 @@ describe('server-owned assessment and tutor routes', () => {
     ]));
   });
 
-  it('scores the Q4 pure cathode equation without invoking answer extraction', async () => {
+  it('uses direct judgment for the Q4 pure cathode equation and keeps legacy scoring as hidden audit', async () => {
     const root = await createTemporaryDirectory();
     await writeValidContentTree(root);
     const sessions = new TestSessionStore();
+    const provider: LLMProvider = {
+      id: 'q4-equation-provider',
+      async chat() { throw new Error('not used'); },
+      async vision() { throw new Error('not used'); },
+      async structured(request) {
+        const input = request.input as { answer: string };
+        return directAssessmentResponse(input.answer, [{ nodeId: 'P6', verdict: 'hit' }]);
+      },
+    };
     const app = createServerApp({
       contentRoot: root,
       clientRoot: path.join(root, 'client'),
       apiToken,
       sessions,
+      providers: new Map([[provider.id, provider]]),
+      workflow: { executionMode: 'live', provider: provider.id, model: 'q4-equation-v1' },
     });
 
     const response = await post(app, '/api/assessment/extract', {
@@ -345,11 +392,95 @@ describe('server-owned assessment and tutor routes', () => {
       event.kind === 'assessment.completed' && event.nodeId === 'P6');
 
     expect(response.status).toBe(200);
-    expect(payload.status).toBe('deterministic');
+    expect(payload.status).toBe('direct-assessed');
     expect(assessment).toMatchObject({
       ruleDecision: { status: 'hit' },
       score: { status: 'scored', outcome: 'hit' },
     });
+    expect(assessment?.extraction).not.toHaveProperty('judgment');
+    expect(payload.session.events.some((event) => event.kind === 'assessment.audit.completed'))
+      .toBe(false);
+    expect(sessions.get('q4-cathode-equation-session')?.events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: 'assessment.completed',
+          nodeId: 'P6',
+          extraction: expect.objectContaining({
+            judgment: expect.objectContaining({
+              voteCount: 3,
+              agreeingVotes: 3,
+              scopeVersion: expect.any(String),
+            }),
+          }),
+        }),
+        expect.objectContaining({
+          kind: 'assessment.audit.completed',
+          nodeId: 'P6',
+          verdict: 'hit',
+        }),
+        expect.objectContaining({
+          kind: 'assessment.divergence.changed',
+          nodeId: 'P6',
+          status: 'matched',
+        }),
+      ]),
+    );
+  });
+
+  it('does not let a failed legacy audit overturn or block a direct primary score', async () => {
+    const root = await createTemporaryDirectory();
+    await writeValidContentTree(root);
+    const sessions = new TestSessionStore();
+    const provider: LLMProvider = {
+      id: 'audit-failure-provider',
+      async chat() { throw new Error('not used'); },
+      async vision() { throw new Error('not used'); },
+      async structured(request) {
+        const input = request.input as {
+          answer: string;
+          nodes?: Array<{ id: string }>;
+        };
+        if (request.prompt.id !== 'direct-assessment') {
+          throw new Error('legacy audit unavailable');
+        }
+        return directAssessmentResponse(
+          input.answer,
+          input.nodes!.map((node) => ({ nodeId: node.id, verdict: 'hit' as const })),
+        );
+      },
+    };
+    const app = createServerApp({
+      contentRoot: root,
+      clientRoot: path.join(root, 'client'),
+      apiToken,
+      sessions,
+      providers: new Map([[provider.id, provider]]),
+      workflow: { executionMode: 'live', provider: provider.id, model: 'audit-failure-v1' },
+    });
+
+    const response = await post(app, '/api/assessment/extract', {
+      sessionId: 'audit-failure-session',
+      questionId: 'pretest-exam1-membrane',
+      targetNodeIds: ['D3', 'P1'],
+      studentAnswer: '不能，防止 K 与 O₂ 直接反应。',
+      submissionId: 'audit-failure-1',
+    });
+    const payload = await response.json() as { status: string; session: StudentSession };
+
+    expect(response.status).toBe(200);
+    expect(payload.status).toBe('direct-assessed');
+    expect(payload.session.events.filter((event) =>
+      event.kind === 'assessment.completed')).toEqual([
+      expect.objectContaining({ ruleDecision: expect.objectContaining({ status: 'hit' }) }),
+      expect.objectContaining({ ruleDecision: expect.objectContaining({ status: 'hit' }) }),
+    ]);
+    expect(sessions.get('audit-failure-session')?.events.filter((event) =>
+      event.kind === 'assessment.audit.completed')).toEqual([
+      expect.objectContaining({ verdict: 'needs-review' }),
+      expect.objectContaining({ verdict: 'needs-review' }),
+    ]);
+    expect(sessions.get('audit-failure-session')?.events.some((event) =>
+      event.kind === 'assessment.divergence.changed')).toBe(false);
   });
 
   it('scores the Q4 CuO process from its question-level catalyst, regeneration, and oxidation slots', async () => {
@@ -363,8 +494,8 @@ describe('server-owned assessment and tutor routes', () => {
       async structured(request) {
         const input = request.input as {
           answer: string;
-          targetNodeIds: Array<'D5' | 'P2'>;
-          assistance: { kind: 'none'; rounds: 0 };
+          targetNodeIds?: Array<'D5' | 'P2'>;
+          assistance?: { kind: 'none'; rounds: 0 };
         };
         const slot = (id: string, value: string, quote: string) => ({
           id,
@@ -386,8 +517,26 @@ describe('server-owned assessment and tutor routes', () => {
         const oxidized = input.answer.includes('将葡萄糖氧化')
           ? [slot('glucose-oxidized', 'glucose-oxidized', '将葡萄糖氧化')]
           : [];
+        if (request.prompt.id === 'direct-assessment') {
+          return directAssessmentResponse(input.answer, [
+            {
+              nodeId: 'D5',
+              verdict: role.some((entry) => entry.value === 'intermediate')
+                ? 'miss'
+                : role.length > 0 && regenerated.length > 0
+                  ? 'hit'
+                  : role.length > 0
+                    ? 'partial'
+                    : 'miss',
+            },
+            {
+              nodeId: 'P2',
+              verdict: oxidized.length > 0 ? 'hit' : 'miss',
+            },
+          ]);
+        }
         const slotsByNode = { D5: [...role, ...regenerated], P2: oxidized };
-        const assessments = input.targetNodeIds.map((nodeId) => ({
+        const assessments = input.targetNodeIds!.map((nodeId) => ({
           nodeId,
           errorIds: [],
           facts: {
@@ -399,7 +548,7 @@ describe('server-owned assessment and tutor routes', () => {
             slots: slotsByNode[nodeId],
           },
           evidence: slotsByNode[nodeId].map((entry) => entry.evidence),
-          assistance: input.assistance,
+          assistance: input.assistance!,
         }));
         const value = { anchors: [], assessments };
         return { content: JSON.stringify(value), structured: value, model: 'q4-process.v1' };
@@ -443,12 +592,6 @@ describe('server-owned assessment and tutor routes', () => {
         submissionId: `q4-process-submission-${processCase.name}`,
       });
       const payload = await response.json() as {
-        extraction: {
-          assessments: Array<{
-            nodeId: string;
-            facts: { slots: Array<{ id: string; value: string }> };
-          }>;
-        };
         session: StudentSession;
       };
       const assessments = payload.session.events.filter(
@@ -461,8 +604,15 @@ describe('server-owned assessment and tutor routes', () => {
       expect(assessments.find((event) => event.nodeId === 'P2')?.ruleDecision.status)
         .toBe(processCase.expectedP2);
       if (processCase.name === 'intermediate') {
-        expect(payload.extraction.assessments.find((entry) => entry.nodeId === 'D5')?.facts.slots)
-          .toContainEqual(expect.objectContaining({ id: 'cuo-role', value: 'intermediate' }));
+        expect(sessions.get(`q4-process-${processCase.name}`)?.events).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              kind: 'assessment.audit.completed',
+              nodeId: 'D5',
+              verdict: 'miss',
+            }),
+          ]),
+        );
       }
     }
   });
@@ -765,16 +915,132 @@ describe('server-owned assessment and tutor routes', () => {
     expect(projectStudentSession(sessions.get('choice-session'))).toEqual(payload.session);
   });
 
-  it('records one answer attempt for a multi-node extraction submission', async () => {
+  it('maps original fill answers server-side and records direct choice skips as unanswered', async () => {
     const root = await createTemporaryDirectory();
     await writeValidContentTree(root);
     const sessions = new TestSessionStore();
+    let providerCalls = 0;
+    const provider: LLMProvider = {
+      id: 'direct-choice-provider',
+      async chat() { throw new Error('not used'); },
+      async vision() { throw new Error('not used'); },
+      async structured(request) {
+        providerCalls += 1;
+        const input = request.input as {
+          answer: string;
+          nodes: Array<{ id: string }>;
+        };
+        return directAssessmentResponse(
+          input.answer,
+          input.nodes.map((node) => ({ nodeId: node.id, verdict: 'hit' as const })),
+        );
+      },
+    };
     const app = createServerApp({
       contentRoot: root,
       clientRoot: path.join(root, 'client'),
       apiToken,
       sessions,
-      workflow: { now: () => Date.parse('2026-07-15T12:00:00.000Z') },
+      providers: new Map([[provider.id, provider]]),
+      workflow: { executionMode: 'live', provider: provider.id, model: 'direct-choice-v1' },
+    });
+
+    const answeredBody = {
+      sessionId: 'direct-choice-answer',
+      questionId: 'pretest-exam4-material',
+      rawAnswer: '纳米CuO',
+      submissionKind: 'answer',
+      submissionId: 'direct-choice-answer-1',
+    };
+    const answered = await post(app, '/api/assessment/choice', answeredBody);
+    const answeredRetry = await post(app, '/api/assessment/choice', answeredBody);
+    const answeredPayload = await answered.json() as { session: StudentSession };
+    expect(answered.status).toBe(200);
+    expect(await answeredRetry.json()).toMatchObject({ status: 'already-recorded' });
+    expect(providerCalls).toBe(3);
+    expect(answeredPayload.session.events).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        kind: 'answer.submitted',
+        answer: { format: 'text', value: '纳米CuO' },
+      }),
+      expect.objectContaining({
+        kind: 'assessment.completed',
+        nodeId: 'D5',
+        ruleDecision: expect.objectContaining({ status: 'hit' }),
+      }),
+    ]));
+    expect(sessions.get('direct-choice-answer')?.events).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        kind: 'assessment.audit.completed',
+        nodeId: 'D5',
+        verdict: 'hit',
+      }),
+      expect.objectContaining({
+        kind: 'assessment.divergence.changed',
+        nodeId: 'D5',
+        status: 'matched',
+      }),
+    ]));
+
+    const skipped = await post(app, '/api/assessment/choice', {
+      sessionId: 'direct-choice-skip',
+      questionId: 'pretest-exam4-material',
+      rawAnswer: '',
+      submissionKind: 'skip',
+      submissionId: 'direct-choice-skip-1',
+    });
+    const skippedPayload = await skipped.json() as { session: StudentSession };
+    expect(skipped.status).toBe(200);
+    expect(providerCalls).toBe(3);
+    expect(skippedPayload.session.events.filter((event) =>
+      event.kind === 'assessment.completed')).toEqual([
+      expect.objectContaining({ ruleDecision: expect.objectContaining({ status: 'unanswered' }) }),
+      expect.objectContaining({ ruleDecision: expect.objectContaining({ status: 'unanswered' }) }),
+    ]);
+
+    const incomplete = await post(app, '/api/assessment/choice', {
+      sessionId: 'direct-choice-incomplete',
+      questionId: 'pretest-exam4-polarity',
+      rawAnswer: '正|',
+      submissionKind: 'answer',
+      submissionId: 'direct-choice-incomplete-1',
+    });
+    expect(incomplete.status).toBe(400);
+    expect(providerCalls).toBe(3);
+    expect(sessions.get('direct-choice-incomplete')).toBeUndefined();
+  });
+
+  it('records one answer attempt for a multi-node extraction submission', async () => {
+    const root = await createTemporaryDirectory();
+    await writeValidContentTree(root);
+    const sessions = new TestSessionStore();
+    const provider: LLMProvider = {
+      id: 'multi-node-provider',
+      async chat() { throw new Error('not used'); },
+      async vision() { throw new Error('not used'); },
+      async structured(request) {
+        const answer = (request.input as { answer: string }).answer;
+        return directAssessmentResponse(
+          answer,
+          ['P3', 'P4', 'P5', 'P6', 'P7'].map((nodeId) => ({
+            nodeId,
+            verdict: 'hit' as const,
+          })),
+        );
+      },
+    };
+    const app = createServerApp({
+      contentRoot: root,
+      clientRoot: path.join(root, 'client'),
+      apiToken,
+      sessions,
+      providers: new Map([[provider.id, provider]]),
+      workflow: {
+        executionMode: 'live',
+        provider: provider.id,
+        model: 'multi-node-v1',
+        now: () => Date.parse('2026-07-15T12:00:00.000Z'),
+      },
     });
 
     const response = await post(app, '/api/assessment/extract', {

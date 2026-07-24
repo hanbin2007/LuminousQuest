@@ -75,6 +75,48 @@
       "accepted": ["Zn + Cu^2+ -> Zn^2+ + Cu"]
     }
   ],
+  "agentObjectives": [
+    {
+      "id": "device-and-reactants",
+      "goal": "区分两极反应场所、材料和真正参与得失电子的反应物。",
+      "targetNodeIds": ["D1", "D2", "D3", "D4", "D5", "P1", "P2"],
+      "boardKinds": ["single-choice", "short-fill"],
+      "unlockAnchorId": "case-polarity"
+    },
+    {
+      "id": "transport-and-observation",
+      "goal": "建立电子与盐桥离子方向到两极现象的因果链。",
+      "targetNodeIds": ["P4", "P5"],
+      "boardKinds": ["single-choice", "short-fill"]
+    },
+    {
+      "id": "negative-equation",
+      "goal": "写出并解释负极半反应式。",
+      "targetNodeIds": ["P3", "P6"],
+      "boardKinds": ["equation-fill"],
+      "equationSetId": "zinc-negative"
+    },
+    {
+      "id": "positive-equation",
+      "goal": "写出并解释正极半反应式。",
+      "targetNodeIds": ["P3", "P6"],
+      "boardKinds": ["equation-fill"],
+      "equationSetId": "copper-positive"
+    },
+    {
+      "id": "overall-equation",
+      "goal": "合并电子并得到总反应式。",
+      "targetNodeIds": ["P7"],
+      "boardKinds": ["equation-fill"],
+      "equationSetId": "zinc-copper-overall"
+    },
+    {
+      "id": "energy-chain",
+      "goal": "确认自发反应、能量来源、转化方向和损耗。",
+      "targetNodeIds": ["E1", "E2", "E3"],
+      "boardKinds": ["single-choice", "short-fill"]
+    }
+  ],
   "tutoring": [
     { "nodeId": "D1" },
     { "nodeId": "D2" },

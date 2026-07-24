@@ -17,6 +17,7 @@ import {
   sessionConfigVersions,
   type StudentSession,
 } from '../shared/session';
+import { inflateStudentSessionProjection } from '../shared/session/projections';
 import { sessionServerSequence } from '../shared/session/sync';
 import { createTemporaryDirectory, writeValidContentTree } from './helpers/content-fixture';
 
@@ -197,6 +198,43 @@ describe('/api/session/sync', () => {
       kind: 'agent.turn.completed',
       orderedActions: [{ name: 'end_session' }],
     });
+
+    const projected = inflateStudentSessionProjection(payload.session);
+    const sameProjection = await app.request('/api/session/sync', {
+      method: 'POST',
+      headers: apiHeaders,
+      body: JSON.stringify({
+        session: projected,
+        expectedSequence: audit.events.length,
+        idempotencyKey: 'projection-rehydrate',
+      }),
+    });
+    expect(sameProjection.status).toBe(200);
+    expect(await sameProjection.json()).toMatchObject({
+      status: 'already-current',
+      sequence: audit.events.length,
+    });
+
+    const withLocalSuffix = withAnswer(projected, {
+      id: 'projection-local-suffix',
+      value: '离线补充',
+    });
+    const suffixSync = await app.request('/api/session/sync', {
+      method: 'POST',
+      headers: apiHeaders,
+      body: JSON.stringify({
+        session: withLocalSuffix,
+        expectedSequence: audit.events.length,
+        idempotencyKey: 'projection-suffix-sync',
+      }),
+    });
+    expect(suffixSync.status).toBe(200);
+    expect(sessions.get(audit.id)?.events.map((event) => event.kind)).toEqual([
+      'answer.submitted',
+      'agent.turn.completed',
+      'agent.judgment.recorded',
+      'answer.submitted',
+    ]);
   });
 
   it('hydrates a full local session and replays the same idempotency key without duplicating it', async () => {

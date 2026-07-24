@@ -12,6 +12,7 @@ import {
   type TutorCycleTerminalEvent,
   type TutorTurnCompletedEvent,
 } from './schema';
+import { isAuditOnlyEvent } from './audit';
 
 const studentVisibleActionNames = new Set([
   'ask_student',
@@ -19,6 +20,10 @@ const studentVisibleActionNames = new Set([
   'present_material',
   'focus_node',
   'end_session',
+  'show_question_card',
+  'show_case_material',
+  'focus_cognitive_node',
+  'end_case',
 ]);
 
 type StudentEventBase = Pick<
@@ -218,8 +223,32 @@ function projectAgentTurn(
     triggerEventId: event.triggerEventId,
     contextThroughSequence,
     source: event.source,
+    ...(event.failureCategory
+      ? { failureCategory: event.failureCategory }
+      : {}),
+    ...(event.providerAttempts !== undefined
+      ? { providerAttempts: event.providerAttempts }
+      : {}),
     orderedActions,
     terminalAction: event.terminalAction,
+    ...(event.caseRunId ? { caseRunId: event.caseRunId } : {}),
+    ...(event.questionRunId ? { questionRunId: event.questionRunId } : {}),
+    ...(event.objectiveId ? { objectiveId: event.objectiveId } : {}),
+    ...(event.compacted !== undefined ? { compacted: event.compacted } : {}),
+  };
+}
+
+type AgentStateEvent = Exclude<
+  Extract<SessionEvent, { pipelineStage: 'agent' }>,
+  | AgentTurnCompletedEvent
+  | Extract<SessionEvent, { kind: 'agent.judgment.recorded' | 'agent.divergence.changed' }>
+>;
+
+function projectAgentState(event: AgentStateEvent, sequence: number) {
+  return {
+    ...event,
+    sequence,
+    ...(event.command ? { command: event.command } : {}),
   };
 }
 
@@ -232,21 +261,17 @@ export type StudentProjectionEvent =
   | ReturnType<typeof projectTutorStarted>
   | ReturnType<typeof projectTutorTurn>
   | ReturnType<typeof projectTutorTerminal>
-  | ReturnType<typeof projectAgentTurn>;
+  | ReturnType<typeof projectAgentTurn>
+  | ReturnType<typeof projectAgentState>;
 
 export type StudentSessionProjection = Omit<StudentSession, 'events'> & {
   events: StudentProjectionEvent[];
 };
 export type TeacherAuditSessionProjection = StudentSession;
 
-function isStudentVisibleEvent(event: SessionEvent) {
-  return event.kind !== 'agent.judgment.recorded'
-    && event.kind !== 'agent.divergence.changed';
-}
-
 export function projectStudentSession(session: unknown): StudentSessionProjection {
   const parsed = sessionSchema.parse(session);
-  const retained = parsed.events.filter(isStudentVisibleEvent);
+  const retained = parsed.events.filter((event) => !isAuditOnlyEvent(event));
   const sequenceByOriginal = new Map(
     retained.map((event, sequence) => [event.sequence, sequence] as const),
   );
@@ -280,6 +305,17 @@ export function projectStudentSession(session: unknown): StudentSessionProjectio
           sequenceByOriginal.get(contextEvent.sequence)!,
         );
       }
+      case 'agent.case.started':
+      case 'agent.question.started':
+      case 'agent.understanding.updated':
+      case 'agent.memory.recalled':
+      case 'agent.question.resolved':
+      case 'agent.memory.snapshot.committed':
+      case 'agent.case.completed':
+      case 'agent.anchor.revealed':
+      case 'agent.input.pending':
+      case 'agent.context.compacted':
+        return projectAgentState(event, sequence);
     }
   });
 
@@ -385,10 +421,18 @@ export function inflateStudentSessionProjection(
     throw new Error('Student session projection must contain events');
   }
   const revealValues = new Map<string, { negative: string; positive: string }>();
+  const sdkSessionByCaseRun = new Map<string, string>();
   source.events.forEach((candidate) => {
     const event = requireProjectionObject(candidate);
     if (event.kind === 'polarity.revealed') {
       revealValues.set(event.sourcePolarityAssessmentEventId, event.values);
+    }
+    if (
+      event.kind === 'agent.case.started'
+      && typeof event.caseRunId === 'string'
+      && typeof event.sdkSessionId === 'string'
+    ) {
+      sdkSessionByCaseRun.set(event.caseRunId, event.sdkSessionId);
     }
   });
   const events = source.events.map((candidate) => {
@@ -426,6 +470,9 @@ export function inflateStudentSessionProjection(
       case 'agent.turn.completed':
         return {
           ...event,
+          ...(typeof event.caseRunId === 'string' && !event.sdkSessionId
+            ? { sdkSessionId: sdkSessionByCaseRun.get(event.caseRunId) }
+            : {}),
           requestHash: `sha256:${'0'.repeat(64)}`,
           model: 'student-projection',
           provenance: {
@@ -433,6 +480,17 @@ export function inflateStudentSessionProjection(
             adapterVersion: 'student-projection.v1',
           },
         };
+      case 'agent.case.started':
+      case 'agent.question.started':
+      case 'agent.understanding.updated':
+      case 'agent.memory.recalled':
+      case 'agent.question.resolved':
+      case 'agent.memory.snapshot.committed':
+      case 'agent.case.completed':
+      case 'agent.anchor.revealed':
+      case 'agent.input.pending':
+      case 'agent.context.compacted':
+        return event;
       default:
         throw new Error(`Unsupported student event kind ${String(event.kind)}`);
     }

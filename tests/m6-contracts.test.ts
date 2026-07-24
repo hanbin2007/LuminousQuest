@@ -1,13 +1,17 @@
 import { describe, expect, it } from 'vitest';
+import { createHash } from 'node:crypto';
 
 import {
+  buildResponseContractCandidates,
   ResponseContractRegistry,
   ResponseContractBindingError,
+  responseContractIdFor,
 } from '../server/agent/response-contracts';
 import {
   AGENT_SHADOW_COMPARISON_POLICY_VERSION,
   selectShadowAssessmentAtBasis,
 } from '../server/agent/shadow-comparison';
+import { createAgentToolDefinitions } from '../server/agent/tools';
 import { loadAllConfig } from '../server/config/loader';
 import {
   AGENT_CONTEXT_BUILDER_VERSION,
@@ -211,6 +215,13 @@ function appendAgentAuditEvents(
 }
 
 describe('M6 session.v2 frozen event contracts', () => {
+  it('keeps the frozen toolset digest synchronized with the live tool schema', () => {
+    const digest = `sha256:${createHash('sha256')
+      .update(JSON.stringify(createAgentToolDefinitions()))
+      .digest('hex')}`;
+    expect(AGENT_TOOLSET_DIGEST).toBe(digest);
+  });
+
   it('round-trips all three agent events and the bound answer fields through the audit export', () => {
     let baseline = appendSessionEvent(staticSession(), answerEvent());
     baseline = appendSessionEvent(baseline, assessmentEvent());
@@ -381,6 +392,10 @@ describe('M6 ResponseContract registry', () => {
     });
     const choice = config.pretest.questions.find((entry) => entry.type === 'choice')!;
     const text = config.pretest.questions.find((entry) => entry.type === 'text')!;
+    const directChoice = config.pretest.questions.find((entry) =>
+      entry.type === 'choice' && entry.directAssessment?.mode === 'record-primary')!;
+    const directText = config.pretest.questions.find((entry) =>
+      entry.type === 'text' && entry.directAssessment?.mode === 'record-primary')!;
     const trainingCase = config.cases[0]!;
     const equationSet = trainingCase.equationSets[0]!;
     const common = {
@@ -404,6 +419,24 @@ describe('M6 ResponseContract registry', () => {
       caseId: 'pretest',
     }, config).assessmentEntrypoint).toEqual({
       kind: 'text-extraction',
+      route: '/api/assessment/extract',
+    });
+    expect(registry.issueQuestion({
+      ...common,
+      agentTurnId: 'derived-contract-direct-choice',
+      questionId: directChoice.id,
+      caseId: 'pretest',
+    }, config).assessmentEntrypoint).toEqual({
+      kind: 'direct-choice',
+      route: '/api/assessment/choice',
+    });
+    expect(registry.issueQuestion({
+      ...common,
+      agentTurnId: 'derived-contract-direct-text',
+      questionId: directText.id,
+      caseId: 'pretest',
+    }, config).assessmentEntrypoint).toEqual({
+      kind: 'direct-text',
       route: '/api/assessment/extract',
     });
     expect(registry.issueQuestion({
@@ -552,6 +585,127 @@ describe('M6 ResponseContract registry', () => {
       ...contract,
       targetNodeIds: ['P4'],
     }).success).toBe(false);
+  });
+
+  it('refuses to recover a persisted v1 contract under v2 grading semantics', async () => {
+    const config = await loadAllConfig(process.cwd());
+    const question = config.pretest.questions.find((entry) =>
+      entry.type === 'choice' && entry.directAssessment?.mode === 'record-primary')!;
+    let session = createSession({
+      id: 'old-response-contract-session',
+      anonymousStudentId: 'anon-OLDCONTR',
+      now: '2026-07-23T13:30:00.000Z',
+      configVersions: sessionConfigVersions(config),
+    });
+    session = appendSessionEvent(session, {
+      ...answerEvent('old-response-trigger', 'old-response-trigger-attempt'),
+      caseId: 'pretest',
+      stageId: 'assessment',
+      questionId: question.id,
+    });
+    session = appendSessionEvent(session, {
+      id: 'old-response-turn-event',
+      occurredAt: '2026-07-23T13:30:01.000Z',
+      kind: 'agent.turn.completed',
+      pipelineStage: 'agent',
+      caseId: 'pretest',
+      stageId: 'assessment',
+      attemptId: 'old-response-attempt',
+      turnId: 'old-response-turn',
+      triggerEventId: 'old-response-trigger',
+      contextThroughSequence: 0,
+      requestHash: `sha256:${'f'.repeat(64)}`,
+      source: 'provider',
+      model: 'model',
+      orderedActions: [{
+        callId: 'old-present-question',
+        name: 'present_question',
+        arguments: {
+          questionId: question.id,
+          responseContractId: `rc-${'1'.repeat(32)}`,
+        },
+      }],
+      terminalAction: { callId: 'old-present-question', name: 'present_question' },
+      provenance: { adapter: 'openai-compatible', adapterVersion: 'agent-adapter.v1' },
+    });
+
+    const restartedRegistry = new ResponseContractRegistry();
+    expect(() => restartedRegistry.resolveSubmission({
+      session,
+      agentTurnId: 'old-response-turn',
+      config,
+    })).toThrow(ResponseContractBindingError);
+  });
+
+  it('recovers a persisted v2 contract with its direct-primary binding intact', async () => {
+    const config = await loadAllConfig(process.cwd());
+    const question = config.pretest.questions.find((entry) =>
+      entry.type === 'text' && entry.directAssessment?.mode === 'record-primary')!;
+    const turnId = 'current-response-turn';
+    const callId = 'current-present-question';
+    const candidate = buildResponseContractCandidates({
+      config,
+      caseId: 'pretest',
+      agentTurnId: turnId,
+    }).find((entry) => entry.questionId === question.id)!;
+    const responseContractId = responseContractIdFor(
+      turnId,
+      callId,
+      candidate.candidateId,
+    );
+    let session = createSession({
+      id: 'current-response-contract-session',
+      anonymousStudentId: 'anon-CURCONTR',
+      now: '2026-07-23T13:40:00.000Z',
+      configVersions: sessionConfigVersions(config),
+    });
+    session = appendSessionEvent(session, {
+      ...answerEvent('current-response-trigger', 'current-response-trigger-attempt'),
+      caseId: 'pretest',
+      stageId: 'assessment',
+      questionId: question.id,
+    });
+    session = appendSessionEvent(session, {
+      id: 'current-response-turn-event',
+      occurredAt: '2026-07-23T13:40:01.000Z',
+      kind: 'agent.turn.completed',
+      pipelineStage: 'agent',
+      caseId: 'pretest',
+      stageId: 'assessment',
+      attemptId: 'current-response-attempt',
+      turnId,
+      triggerEventId: 'current-response-trigger',
+      contextThroughSequence: 0,
+      requestHash: `sha256:${'0'.repeat(64)}`,
+      source: 'provider',
+      model: 'model',
+      orderedActions: [{
+        callId,
+        name: 'present_question',
+        arguments: { questionId: question.id, responseContractId },
+      }],
+      terminalAction: { callId, name: 'present_question' },
+      provenance: { adapter: 'openai-compatible', adapterVersion: 'agent-adapter.v1' },
+    });
+
+    const resolution = new ResponseContractRegistry().resolveSubmission({
+      session,
+      agentTurnId: turnId,
+      config,
+    });
+    expect(responseContractId).toMatch(/^rc-v2-/);
+    expect(resolution).toMatchObject({
+      status: 'assessed',
+      contract: {
+        revision: 'response-contract.v2',
+        responseContractId,
+        questionId: question.id,
+        assessmentEntrypoint: {
+          kind: 'direct-text',
+          route: '/api/assessment/extract',
+        },
+      },
+    });
   });
 });
 

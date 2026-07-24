@@ -6,13 +6,25 @@ import path from 'node:path';
 import { Hono, type Context } from 'hono';
 import { z } from 'zod';
 import type { AgentTurnAdapter } from './agent/adapters/adapter';
+import type { SessionStore } from '@anthropic-ai/claude-agent-sdk';
 import { createAgentAdapterRegistry } from './agent/adapters/factory';
 import { runAgentLoopTurn } from './agent/loop-runtime';
+import {
+  buildStudentMemoryIndex,
+  createInitialStudentMemorySnapshot,
+  latestStudentMemorySnapshot,
+} from './agent/student-memory';
+import {
+  InMemoryAgentTranscriptStore,
+  recoverCompletedAgentActions,
+} from './agent/transcript-store';
 import {
   ResponseContractBindingError,
   ResponseContractRegistry,
 } from './agent/response-contracts';
 import {
+  AgentAnswerBoardValidationError,
+  ExistingDirectPrimaryAssessment,
   ExistingTextShadowAssessment,
   submitAgentAnswer,
   type AgentAnswerAssessmentStatus,
@@ -33,15 +45,20 @@ import {
 } from '../shared/session/sync';
 import {
   createSession,
+  appendSessionEvent,
   sessionConfigVersions,
 } from '../shared/session/session';
 import {
+  classifyTextResponse,
   recordNeedsReviewTextAssessments,
   recordStructuredTextAssessment,
 } from '../shared/workflows/assessment';
+import { appendAssessmentAudit } from '../shared/workflows/assessment-audit';
 import { recordChoiceAssessment } from '../shared/workflows/choice-assessment';
+import { recordDirectAssessment } from '../shared/workflows/direct-assessment';
 import { recordEquationAssessment } from '../shared/workflows/engine-assessment';
 import { ExtractionValidationError } from '../shared/workflows/extraction-validation';
+import { resolvePretestOriginalAnswer } from '../shared/workflows/pretest-answer-mapping';
 import { recordPretestEquationAssessments } from '../shared/workflows/pretest-equation-assessment';
 import { loadAllConfig, ConfigValidationError } from './config/loader';
 import { createPublicConfigView } from './config/public-view';
@@ -66,6 +83,7 @@ import { loadExternalAsset, loadStaticAsset } from './static-assets';
 import {
   runAssessmentExtraction,
 } from './workflows/assessment-extraction';
+import { runDirectAssessment } from './workflows/direct-assessment';
 import { runSocraticTurn } from './workflows/socratic-tutoring';
 import { demoLockEnabled } from './runtime/launch-options';
 
@@ -148,7 +166,9 @@ const choiceRouteRequestSchema = routeCommandEnvelopeSchema
   .extend({
     sessionId: z.string().trim().min(1).max(128),
     questionId: z.string().trim().min(1).max(128),
-    optionId: z.string().trim().min(1).max(128),
+    optionId: z.string().trim().min(1).max(128).optional(),
+    rawAnswer: z.string().optional(),
+    submissionKind: z.enum(['answer', 'skip']).default('answer'),
     submissionId: z.string().trim().min(1).max(128),
   })
   .strict();
@@ -212,12 +232,14 @@ const emptyRequestSchema = z.object({}).strict();
 interface AgentTurnCommandValue {
   degraded: boolean;
   failureCategory?: string;
+  providerAttempts: number;
 }
 
 interface AgentAnswerCommandValue {
   assessmentStatus: AgentAnswerAssessmentStatus;
   degraded: boolean;
   failureCategory?: string;
+  providerAttempts: number;
 }
 
 export interface ServerWorkflowOptions {
@@ -235,6 +257,7 @@ export interface ServerAppOptions {
   providers?: Map<string, LLMProvider>;
   agentAdapters?: Map<string, AgentTurnAdapter>;
   sessions?: ServerSessionStore;
+  agentTranscripts?: SessionStore;
   workflow?: Partial<ServerWorkflowOptions>;
   apiToken?: string;
   accessToken?: string;
@@ -404,7 +427,6 @@ function routeExpectedSequence(
   idempotencyKey: string,
   supplied: number | undefined,
 ) {
-  if (supplied !== undefined) return supplied;
   const session = store.get(sessionId);
   const commandEvent = session?.events.find((event) =>
     event.command?.idempotencyKey === idempotencyKey);
@@ -415,6 +437,7 @@ function routeExpectedSequence(
   if (marker?.kind === 'session.command.executed') {
     return marker.expectedSequence;
   }
+  if (supplied !== undefined) return supplied;
   return session?.events.length ?? 0;
 }
 
@@ -458,6 +481,27 @@ function stableAgentIdentifier(prefix: string, ...parts: string[]) {
     .slice(0, 32)}`;
 }
 
+class AgentCaseAlreadyActiveError extends Error {
+  constructor(readonly caseId: string) {
+    super(`Agent case ${caseId} is already active`);
+    this.name = 'AgentCaseAlreadyActiveError';
+  }
+}
+
+class AgentConfigurationMismatchError extends Error {
+  constructor() {
+    super('The student session uses a different teaching configuration');
+    this.name = 'AgentConfigurationMismatchError';
+  }
+}
+
+async function hasAgentTranscript(store: SessionStore, sessionId: string) {
+  const candidate = store as SessionStore & {
+    hasSessionId?: (value: string) => Promise<boolean>;
+  };
+  return candidate.hasSessionId ? candidate.hasSessionId(sessionId) : false;
+}
+
 function unavailableAgentAdapter(provider: string): AgentTurnAdapter {
   return {
     id: provider === 'claude-agent' ? 'claude-agent' : 'openai-compatible',
@@ -482,6 +526,18 @@ function agentRouteFailure(context: Context, error: unknown) {
   if (error instanceof ResponseContractBindingError) {
     return context.json({ error: 'agent-answer-rejected' }, 409);
   }
+  if (error instanceof AgentCaseAlreadyActiveError) {
+    return context.json({
+      error: 'agent-case-already-active',
+      caseId: error.caseId,
+    }, 409);
+  }
+  if (error instanceof AgentConfigurationMismatchError) {
+    return context.json({
+      error: 'agent-config-version-mismatch',
+      detail: 'The training configuration changed after this session started.',
+    }, 409);
+  }
   return null;
 }
 
@@ -492,6 +548,7 @@ export function createServerApp(options: ServerAppOptions) {
   const recordings = new RecordingStore(options.contentRoot);
   const evalCandidates = new EvalCandidateStore(options.contentRoot);
   const sessions = coordinateSessionStore(options.sessions ?? new InMemorySessionStore());
+  const agentTranscripts = options.agentTranscripts ?? new InMemoryAgentTranscriptStore();
   const lockDemo = options.lockDemo ?? demoLockEnabled(process.env.LQ_LOCK_DEMO);
   const workflow = configuredWorkflow(options, lockDemo);
   const startupWorkflow = { ...workflow };
@@ -687,7 +744,12 @@ export function createServerApp(options: ServerAppOptions) {
     if (!parsed.success) {
       return invalidRequest(context, 'LLM', parsed.error);
     }
-    if (['structured-assessment', 'socratic-tutoring', 'hand-drawing-feedback']
+    if ([
+      'structured-assessment',
+      'direct-assessment',
+      'socratic-tutoring',
+      'hand-drawing-feedback',
+    ]
       .includes(parsed.data.prompt.id)) {
       return context.json({ error: 'Protected workflow prompt requires its dedicated API route' }, 403);
     }
@@ -727,14 +789,37 @@ export function createServerApp(options: ServerAppOptions) {
     if (!parsed.success) return invalidRequest(context, 'choice assessment', parsed.error);
 
     try {
-      const config = await loadAllConfig(options.contentRoot);
+      const [config, directPrompt] = await Promise.all([
+        loadAllConfig(options.contentRoot),
+        loadPrompt(options.contentRoot, 'direct-assessment'),
+      ]);
+      if (!directPrompt) throw new Error('Required prompt direct-assessment is missing');
       const question = config.pretest.questions.find((entry) =>
         entry.id === parsed.data.questionId && entry.type === 'choice');
       if (!question || question.type !== 'choice') {
         return context.json({ error: 'Unknown choice question' }, 400);
       }
-      const option = question.options.find((entry) => entry.id === parsed.data.optionId);
-      if (!option) return context.json({ error: 'Unknown choice option' }, 400);
+      const rawAnswer = parsed.data.rawAnswer
+        ?? parsed.data.optionId
+        ?? '';
+      const resolvedOptionId = parsed.data.submissionKind === 'skip'
+        ? undefined
+        : resolvePretestOriginalAnswer(question.id, rawAnswer);
+      if (
+        parsed.data.submissionKind === 'answer'
+        && (
+          !resolvedOptionId
+          || (parsed.data.optionId && parsed.data.optionId !== resolvedOptionId)
+        )
+      ) {
+        return context.json({ error: 'Choice answer does not match a configured option' }, 400);
+      }
+      const option = resolvedOptionId
+        ? question.options.find((entry) => entry.id === resolvedOptionId)
+        : undefined;
+      if (parsed.data.submissionKind === 'answer' && !option) {
+        return context.json({ error: 'Unknown choice option' }, 400);
+      }
       const nowMs = workflow.now?.() ?? Date.now();
       const idempotencyKey =
         parsed.data.idempotencyKey ?? parsed.data.submissionId;
@@ -751,7 +836,9 @@ export function createServerApp(options: ServerAppOptions) {
         idempotencyKey,
         request: {
           questionId: parsed.data.questionId,
-          optionId: parsed.data.optionId,
+          optionId: option?.id,
+          rawAnswer,
+          submissionKind: parsed.data.submissionKind,
           submissionId: parsed.data.submissionId,
         },
         initialize: () => createSession({
@@ -759,7 +846,7 @@ export function createServerApp(options: ServerAppOptions) {
           now: new Date(nowMs).toISOString(),
           configVersions: sessionConfigVersions(config),
         }),
-        execute(session) {
+        async execute(session) {
           if (session.configVersions.configDigest !== config.configVersion) {
             throw new SessionPrefixConflictError();
           }
@@ -768,17 +855,154 @@ export function createServerApp(options: ServerAppOptions) {
           const occurredAt = new Date(
             Math.max(nowMs, Date.parse(session.updatedAt)),
           ).toISOString();
-          const recorded = recordChoiceAssessment({
-            session,
-            config,
-            question,
-            optionId: option.id,
-            occurredAt,
-            attemptId: parsed.data.submissionId,
-            idFactory: (prefix) => `${prefix}-${operationId}-${idIndex++}`,
-          });
+          let recordedSession;
+          if (
+            question.directAssessment?.mode === 'record-primary'
+            && classifyTextResponse(rawAnswer) === 'substantive'
+          ) {
+            const direct = await runDirectAssessment({
+              service: llmService,
+              config,
+              prompt: directPrompt,
+              question: question as typeof question & {
+                directAssessment: NonNullable<typeof question.directAssessment>;
+              },
+              answer: rawAnswer,
+              ...(option ? { selectedOptionId: option.id } : {}),
+              assistance: { kind: 'none', rounds: 0 },
+              executionMode: workflow.executionMode,
+              provider: workflow.provider,
+              model: workflow.model,
+            });
+            recordedSession = recordDirectAssessment({
+              session,
+              config,
+              question: question as typeof question & {
+                directAssessment: NonNullable<typeof question.directAssessment>;
+              },
+              answer: {
+                id: `answer-direct-${operationId}`,
+                occurredAt,
+                caseId: 'pretest',
+                stageId: 'assessment',
+                attemptId: parsed.data.submissionId,
+                questionId: question.id,
+                value: rawAnswer,
+              },
+              assessments: direct.assessments,
+              provenance: {
+                promptId: directPrompt.id,
+                promptVersion: directPrompt.version,
+                cacheKey: direct.cacheKey,
+                model: direct.model,
+              },
+              assessmentEventIdPrefix: `assessment-direct-${operationId}`,
+              assessedAt: occurredAt,
+            }).session;
+          } else if (question.directAssessment?.mode === 'record-primary') {
+            recordedSession = recordDirectAssessment({
+              session,
+              config,
+              question: question as typeof question & {
+                directAssessment: NonNullable<typeof question.directAssessment>;
+              },
+              answer: {
+                id: `answer-direct-${operationId}`,
+                occurredAt,
+                caseId: 'pretest',
+                stageId: 'assessment',
+                attemptId: parsed.data.submissionId,
+                questionId: question.id,
+                value: rawAnswer,
+              },
+              provenance: {
+                promptId: directPrompt.id,
+                promptVersion: directPrompt.version,
+                cacheKey: `deterministic:${question.directAssessment.version}:non-response`,
+                model: 'deterministic-non-response',
+              },
+              assessmentEventIdPrefix: `assessment-direct-${operationId}`,
+              assessedAt: occurredAt,
+            }).session;
+          } else {
+            recordedSession = recordChoiceAssessment({
+              session,
+              config,
+              question,
+              optionId: option?.id,
+              rawAnswer,
+              submissionKind: parsed.data.submissionKind,
+              occurredAt,
+              attemptId: parsed.data.submissionId,
+              idFactory: (prefix) => `${prefix}-${operationId}-${idIndex++}`,
+            }).session;
+          }
+          if (question.directAssessment?.mode === 'record-primary') {
+            const auditBase = createSession({
+              id: session.id,
+              anonymousStudentId: session.anonymousStudentId,
+              now: session.startedAt,
+              configVersions: session.configVersions,
+            });
+            let auditSource;
+            try {
+              auditSource = recordChoiceAssessment({
+                session: auditBase,
+                config,
+                question,
+                optionId: option?.id,
+                rawAnswer,
+                submissionKind: parsed.data.submissionKind,
+                occurredAt,
+                attemptId: parsed.data.submissionId,
+                idFactory: (prefix) => `${prefix}-audit-source-${operationId}-${idIndex++}`,
+              }).session;
+            } catch (error) {
+              const detail = error instanceof Error ? error.message : String(error);
+              console.error(`[assessment-audit] choice audit failed: ${detail}`);
+              auditSource = recordNeedsReviewTextAssessments({
+                session: auditBase,
+                config,
+                answer: {
+                  id: `answer-audit-source-${operationId}`,
+                  occurredAt,
+                  caseId: 'pretest',
+                  stageId: 'assessment',
+                  attemptId: parsed.data.submissionId,
+                  questionId: question.id,
+                  value: rawAnswer,
+                },
+                nodeIds: question.targetNodeIds,
+                assistance: { kind: 'none', rounds: 0 },
+                reason: 'The legacy choice audit could not produce a reliable result.',
+                provenance: {
+                  promptId: 'assessment-audit',
+                  promptVersion: 'assessment-audit.v1',
+                  cacheKey: `deterministic:${question.directAssessment.version}:audit-failure`,
+                  model: 'audit-fallback',
+                },
+                assessmentEventIdPrefix: `assessment-audit-failure-${operationId}`,
+                assessedAt: occurredAt,
+              }).session;
+            }
+            const primaryAnswer = recordedSession.events.find((event) =>
+              event.kind === 'answer.submitted'
+              && event.attemptId === parsed.data.submissionId);
+            if (!primaryAnswer || primaryAnswer.kind !== 'answer.submitted') {
+              throw new Error('Direct choice assessment did not record its answer');
+            }
+            recordedSession = appendAssessmentAudit({
+              session: recordedSession,
+              auditSession: auditSource,
+              sourceAnswerEventId: primaryAnswer.id,
+              questionId: question.id,
+              targetNodeIds: question.targetNodeIds,
+              eventIdPrefix: `audit-${operationId}`,
+              occurredAt,
+            });
+          }
           return {
-            session: recorded.session,
+            session: recordedSession,
             value: { status: 'recorded' as const },
           };
         },
@@ -788,6 +1012,9 @@ export function createServerApp(options: ServerAppOptions) {
         session: projectStudentSession(command.session),
       });
     } catch (error) {
+      if (error instanceof ExtractionValidationError && error.category === 'answer-too-long') {
+        return context.json({ error: error.message }, 413);
+      }
       const conflict = sessionCommandConflict(context, error);
       if (conflict) return conflict;
       const detail = error instanceof Error ? error.message : String(error);
@@ -840,11 +1067,13 @@ export function createServerApp(options: ServerAppOptions) {
     if (!parsed.success) return invalidRequest(context, 'assessment extraction', parsed.error);
 
     try {
-      const [config, prompt] = await Promise.all([
+      const [config, prompt, directPrompt] = await Promise.all([
         loadAllConfig(options.contentRoot),
         loadPrompt(options.contentRoot, 'structured-assessment'),
+        loadPrompt(options.contentRoot, 'direct-assessment'),
       ]);
       if (!prompt) throw new Error('Required prompt structured-assessment is missing');
+      if (!directPrompt) throw new Error('Required prompt direct-assessment is missing');
       const requestedCase = parsed.data.caseId
         ? config.cases.find((entry) => entry.id === parsed.data.caseId)
         : undefined;
@@ -864,6 +1093,18 @@ export function createServerApp(options: ServerAppOptions) {
       const configuredTargets = new Set(requestedCase?.targetNodeIds ?? question!.targetNodeIds);
       if (parsed.data.targetNodeIds.some((nodeId) => !configuredTargets.has(nodeId))) {
         return context.json({ error: 'Target node is not configured for this question' }, 400);
+      }
+      if (
+        question?.directAssessment?.mode === 'record-primary'
+        && (
+          parsed.data.targetNodeIds.length !== question.targetNodeIds.length
+          || parsed.data.targetNodeIds.some((nodeId, index) =>
+            nodeId !== question.targetNodeIds[index])
+        )
+      ) {
+        return context.json({
+          error: 'Direct assessment requires every configured target node in order',
+        }, 400);
       }
       const referenceCaseId = requestedCase?.id ?? question!.referenceEquations[0].caseId;
       const trainingCase = config.cases.find((entry) => entry.id === referenceCaseId);
@@ -930,78 +1171,226 @@ export function createServerApp(options: ServerAppOptions) {
             questionId: parsed.data.questionId,
             value: parsed.data.studentAnswer,
           };
+          const runExistingAssessment = async (
+            baseSession: typeof currentSession,
+            existingAnswer: typeof answer,
+            prefix: string,
+          ) => {
+            let existingSession = baseSession;
+            let existingExtraction:
+              Awaited<ReturnType<typeof runAssessmentExtraction>> | null = null;
+            let existingProfile:
+              ReturnType<typeof recordPretestEquationAssessments>['profile']
+              | undefined;
+            if (answerTargetNodeIds.length > 0) {
+              existingExtraction = await runAssessmentExtraction({
+                service: llmService,
+                evalCandidates,
+                config,
+                prompt,
+                answer: existingAnswer.value,
+                caseId: referenceCaseId,
+                targetNodeIds: answerTargetNodeIds,
+                questionEvidence: question?.evidence,
+                assistance,
+                executionMode: workflow.executionMode,
+                provider: workflow.provider,
+                model: workflow.model,
+                ...(workflow.extractionStepId
+                  ? { stepId: workflow.extractionStepId }
+                  : {}),
+              });
+              const provenance = {
+                promptId: prompt.id,
+                promptVersion: prompt.version,
+                cacheKey: existingExtraction.cacheKey,
+                model: existingExtraction.model,
+              };
+              const recorded = existingExtraction.status === 'extracted'
+                ? recordStructuredTextAssessment({
+                    session: existingSession,
+                    config,
+                    answer: existingAnswer,
+                    extraction: existingExtraction.extraction,
+                    provenance,
+                    assessmentEventIdPrefix: `${prefix}-text`,
+                    assessedAt: occurredAt,
+                    referenceCaseId,
+                    questionEvidence: question?.evidence,
+                    reviewNodes: existingExtraction.reviewNodes,
+                  })
+                : recordNeedsReviewTextAssessments({
+                    session: existingSession,
+                    config,
+                    answer: existingAnswer,
+                    nodeIds: existingExtraction.reviewNodes.map((review) => review.nodeId),
+                    assistance,
+                    reason: existingExtraction.reason,
+                    provenance,
+                    assessmentEventIdPrefix: `${prefix}-text`,
+                    assessedAt: occurredAt,
+                  });
+              existingSession = recorded.session;
+              existingProfile = recorded.profile;
+            }
+            if (equationTargetNodeIds.length > 0) {
+              const recorded = recordPretestEquationAssessments({
+                session: existingSession,
+                config,
+                answer: existingAnswer,
+                referenceCaseId,
+                referenceEquationSetIds: question?.referenceEquations
+                  .filter((reference) => reference.caseId === referenceCaseId)
+                  .map((reference) => reference.equationSetId),
+                targetNodeIds: equationTargetNodeIds,
+                assessmentEventIdPrefix: `${prefix}-equation`,
+                assessedAt: occurredAt,
+              });
+              existingSession = recorded.session;
+              existingProfile = recorded.profile;
+            }
+            return {
+              session: existingSession,
+              extractionResult: existingExtraction,
+              profile: existingProfile,
+            };
+          };
+
+          const directQuestion = question?.directAssessment?.mode === 'record-primary'
+            ? question as typeof question & {
+                directAssessment: NonNullable<typeof question.directAssessment>;
+              }
+            : undefined;
           let session = currentSession;
           let extractionResult:
             Awaited<ReturnType<typeof runAssessmentExtraction>> | null = null;
           let profile:
             ReturnType<typeof recordPretestEquationAssessments>['profile']
             | undefined;
-          if (answerTargetNodeIds.length > 0) {
-            extractionResult = await runAssessmentExtraction({
-              service: llmService,
-              evalCandidates,
-              config,
-              prompt,
-              answer: parsed.data.studentAnswer,
-              caseId: referenceCaseId,
-              targetNodeIds: answerTargetNodeIds,
-              questionEvidence: question?.evidence,
-              assistance,
-              executionMode: workflow.executionMode,
-              provider: workflow.provider,
-              model: workflow.model,
-              ...(workflow.extractionStepId
-                ? { stepId: workflow.extractionStepId }
-                : {}),
-            });
-            const provenance = {
-              promptId: prompt.id,
-              promptVersion: prompt.version,
-              cacheKey: extractionResult.cacheKey,
-              model: extractionResult.model,
-            };
-            const recorded = extractionResult.status === 'extracted'
-              ? recordStructuredTextAssessment({
-                  session,
+          let directExecution:
+            Awaited<ReturnType<typeof runDirectAssessment>>
+            | null = null;
+          let responseStatus:
+            | 'direct-assessed'
+            | 'deterministic'
+            | 'extracted'
+            | 'needs-review' = 'deterministic';
+
+          if (directQuestion) {
+            const substantive = classifyTextResponse(answer.value) === 'substantive';
+            const direct = substantive
+              ? await runDirectAssessment({
+                  service: llmService,
                   config,
-                  answer,
-                  extraction: extractionResult.extraction,
-                  provenance,
-                  assessmentEventIdPrefix: `assessment-${operationId}-text`,
-                  assessedAt: occurredAt,
-                  referenceCaseId,
-                  questionEvidence: question?.evidence,
-                  reviewNodes: extractionResult.reviewNodes,
-                })
-              : recordNeedsReviewTextAssessments({
-                  session,
-                  config,
-                  answer,
-                  nodeIds: extractionResult.reviewNodes.map((review) => review.nodeId),
+                  prompt: directPrompt,
+                  question: directQuestion,
+                  answer: answer.value,
                   assistance,
-                  reason: extractionResult.reason,
-                  provenance,
-                  assessmentEventIdPrefix: `assessment-${operationId}-text`,
-                  assessedAt: occurredAt,
-                });
-            session = recorded.session;
-            profile = recorded.profile;
-          }
-          if (equationTargetNodeIds.length > 0) {
-            const recorded = recordPretestEquationAssessments({
+                  executionMode: workflow.executionMode,
+                  provider: workflow.provider,
+                  model: workflow.model,
+                })
+              : null;
+            directExecution = direct;
+            const directRecorded = recordDirectAssessment({
               session,
               config,
+              question: directQuestion,
               answer,
-              referenceCaseId,
-              referenceEquationSetIds: question?.referenceEquations
-                .filter((reference) => reference.caseId === referenceCaseId)
-                .map((reference) => reference.equationSetId),
-              targetNodeIds: equationTargetNodeIds,
-              assessmentEventIdPrefix: `assessment-${operationId}-equation`,
+              ...(direct ? { assessments: direct.assessments } : {}),
+              assistance,
+              provenance: direct
+                ? {
+                    promptId: directPrompt.id,
+                    promptVersion: directPrompt.version,
+                    cacheKey: direct.cacheKey,
+                    model: direct.model,
+                  }
+                : {
+                    promptId: directPrompt.id,
+                    promptVersion: directPrompt.version,
+                    cacheKey: `deterministic:${directQuestion.directAssessment.version}:non-response`,
+                    model: 'deterministic-non-response',
+                  },
+              assessmentEventIdPrefix: `assessment-direct-${operationId}`,
               assessedAt: occurredAt,
             });
-            session = recorded.session;
-            profile = recorded.profile;
+            session = directRecorded.session;
+            profile = directRecorded.profile;
+
+            const auditBase = createSession({
+              id: currentSession.id,
+              anonymousStudentId: currentSession.anonymousStudentId,
+              now: currentSession.startedAt,
+              configVersions: currentSession.configVersions,
+            });
+            const auditAnswer = {
+              ...answer,
+              id: `answer-audit-source-${operationId}`,
+            };
+            let auditSession;
+            try {
+              auditSession = substantive
+                ? (await runExistingAssessment(
+                    auditBase,
+                    auditAnswer,
+                    `assessment-audit-source-${operationId}`,
+                  )).session
+                : recordDirectAssessment({
+                    session: auditBase,
+                    config,
+                    question: directQuestion,
+                    answer: auditAnswer,
+                    assistance,
+                    provenance: {
+                      promptId: prompt.id,
+                      promptVersion: prompt.version,
+                      cacheKey: `deterministic:${directQuestion.directAssessment.version}:non-response-audit`,
+                      model: 'deterministic-non-response',
+                    },
+                    assessmentEventIdPrefix: `assessment-audit-source-${operationId}`,
+                    assessedAt: occurredAt,
+                  }).session;
+            } catch (error) {
+              const detail = error instanceof Error ? error.message : String(error);
+              console.error(`[assessment-audit] text audit failed: ${detail}`);
+              auditSession = recordNeedsReviewTextAssessments({
+                session: auditBase,
+                config,
+                answer: auditAnswer,
+                nodeIds: directQuestion.targetNodeIds,
+                assistance,
+                reason: 'The legacy text audit could not produce a reliable result.',
+                provenance: {
+                  promptId: prompt.id,
+                  promptVersion: prompt.version,
+                  cacheKey: `deterministic:${directQuestion.directAssessment.version}:audit-failure`,
+                  model: 'audit-fallback',
+                },
+                assessmentEventIdPrefix: `assessment-audit-failure-${operationId}`,
+                assessedAt: occurredAt,
+              }).session;
+            }
+            session = appendAssessmentAudit({
+              session,
+              auditSession,
+              sourceAnswerEventId: answer.id,
+              questionId: answer.questionId,
+              targetNodeIds: directQuestion.targetNodeIds,
+              eventIdPrefix: `audit-${operationId}`,
+              occurredAt,
+            });
+            responseStatus = 'direct-assessed';
+          } else {
+            const existing = await runExistingAssessment(
+              session,
+              answer,
+              `assessment-${operationId}`,
+            );
+            session = existing.session;
+            extractionResult = existing.extractionResult;
+            profile = existing.profile;
+            responseStatus = extractionResult?.status ?? 'deterministic';
           }
           const submittedAssessments = session.events.filter(
             (event): event is AssessmentCompletedEvent =>
@@ -1020,7 +1409,16 @@ export function createServerApp(options: ServerAppOptions) {
           return {
             session,
             value: {
-              ...(extractionResult ?? { status: 'deterministic' as const }),
+              ...(extractionResult ?? {
+                status: responseStatus,
+                ...(directExecution
+                  ? {
+                      source: directExecution.source,
+                      model: directExecution.model,
+                      degraded: directExecution.degraded,
+                    }
+                  : {}),
+              }),
               profile,
               assessmentSummary,
               recordingStatus: 'recorded' as const,
@@ -1268,6 +1666,11 @@ export function createServerApp(options: ServerAppOptions) {
       if (!trainingCase) return context.json({ error: 'Unknown training case' }, 400);
       const adapter = agentAdapters.get(workflow.provider)
         ?? unavailableAgentAdapter(workflow.provider);
+      const caseRunId = stableAgentIdentifier(
+        'agent-case',
+        parsed.data.sessionId,
+        parsed.data.idempotencyKey,
+      );
       const turnId = stableAgentIdentifier(
         'agent-turn',
         parsed.data.sessionId,
@@ -1277,21 +1680,125 @@ export function createServerApp(options: ServerAppOptions) {
         workflow.now?.() ?? Date.now(),
         Date.parse(existingSession.updatedAt),
       )).toISOString();
+      const pendingInputId = `${turnId}-pending`;
+      const prepare = await executeSessionCommand<{ sdkSessionId: string }>({
+        store: sessions,
+        sessionId: parsed.data.sessionId,
+        commandName: 'agent-case-start',
+        expectedSequence: routeExpectedSequence(
+          sessions,
+          parsed.data.sessionId,
+          `${parsed.data.idempotencyKey}:prepare`,
+          parsed.data.expectedSequence,
+        ),
+        idempotencyKey: `${parsed.data.idempotencyKey}:prepare`,
+        request: {
+          caseId: parsed.data.caseId,
+          triggerEventId: parsed.data.triggerEventId,
+          caseRunId,
+          turnId,
+        },
+        initialize: () => existingSession,
+        execute(session) {
+          if (session.configVersions.configDigest !== config.configVersion) {
+            throw new AgentConfigurationMismatchError();
+          }
+          const completedCaseRuns = new Set(session.events.flatMap((event) =>
+            event.kind === 'agent.case.completed' ? [event.caseRunId] : []));
+          const activeCase = [...session.events].reverse().find((event) =>
+            event.kind === 'agent.case.started'
+            && !completedCaseRuns.has(event.caseRunId));
+          if (activeCase?.kind === 'agent.case.started') {
+            throw new AgentCaseAlreadyActiveError(activeCase.caseId);
+          }
+          if (!session.events.some((event) => event.id === parsed.data.triggerEventId)) {
+            throw new Error('Agent case trigger is not present in the server session');
+          }
+          const sdkSessionId = randomUUID();
+          const identity = {
+            caseId: trainingCase.id,
+            stageId: trainingCase.caseType === 'transfer' ? 'transfer' : 'training',
+            attemptId: caseRunId,
+          };
+          let next = session;
+          let snapshot = latestStudentMemorySnapshot(next);
+          if (!snapshot) {
+            snapshot = createInitialStudentMemorySnapshot({
+              session: next,
+              config,
+              snapshotId: `${next.id}-memory-initial`,
+              occurredAt,
+            });
+            next = appendSessionEvent(next, {
+              id: `${caseRunId}-initial-memory`,
+              occurredAt,
+              kind: 'agent.memory.snapshot.committed',
+              pipelineStage: 'agent',
+              ...identity,
+              caseRunId,
+              snapshot,
+              index: buildStudentMemoryIndex(snapshot),
+            });
+          }
+          next = appendSessionEvent(next, {
+            id: `${caseRunId}-started`,
+            occurredAt,
+            kind: 'agent.case.started',
+            pipelineStage: 'agent',
+            ...identity,
+            caseRunId,
+            sdkSessionId,
+            initialSnapshotId: snapshot.snapshotId,
+            objectiveIds: trainingCase.agentObjectives.map((objective) => objective.id),
+          });
+          next = appendSessionEvent(next, {
+            id: pendingInputId,
+            occurredAt,
+            kind: 'agent.input.pending',
+            pipelineStage: 'agent',
+            ...identity,
+            caseRunId,
+            sdkSessionId,
+            pendingInputId,
+            turnId,
+            triggerEventId: parsed.data.triggerEventId,
+            payloadHash: `sha256:${createHash('sha256')
+              .update(`${parsed.data.caseId}\u0000${parsed.data.triggerEventId}`)
+              .digest('hex')}`,
+          });
+          return { session: next, value: { sdkSessionId } };
+        },
+      });
+      const caseStart = prepare.session.events.find((event) =>
+        event.kind === 'agent.case.started' && event.caseRunId === caseRunId);
+      const sdkSessionId = prepare.value?.sdkSessionId
+        ?? (caseStart?.kind === 'agent.case.started' ? caseStart.sdkSessionId : undefined);
+      if (!sdkSessionId) throw new Error('Prepared Agent case lacks an SDK session id');
+      const pending = prepare.session.events.find((event) => event.id === pendingInputId);
+      if (!pending || pending.kind !== 'agent.input.pending') {
+        throw new Error('Prepared Agent case lacks its pending input');
+      }
       const command = await executeSessionCommand<AgentTurnCommandValue>({
         store: sessions,
         sessionId: parsed.data.sessionId,
         commandName: 'agent-turn',
-        expectedSequence: parsed.data.expectedSequence,
-        idempotencyKey: parsed.data.idempotencyKey,
-        request: {
-          caseId: parsed.data.caseId,
-          triggerEventId: parsed.data.triggerEventId,
-        },
-        initialize: () => existingSession,
+        expectedSequence:
+          pending.command?.resultingSequence ?? prepare.session.events.length,
+        idempotencyKey: `${parsed.data.idempotencyKey}:dispatch`,
+        request: { caseRunId, sdkSessionId, turnId, pendingInputId },
+        initialize: () => prepare.session,
         async execute(session) {
-          if (session.configVersions.configDigest !== config.configVersion) {
-            throw new SessionPrefixConflictError();
-          }
+          const resumeSdkSession = await hasAgentTranscript(
+            agentTranscripts,
+            sdkSessionId,
+          );
+          const recoveredActions = resumeSdkSession
+            ? await recoverCompletedAgentActions({
+                sessionId: sdkSessionId,
+                pendingInputId,
+                store: agentTranscripts,
+              })
+            : null;
           const result = await runAgentLoopTurn({
             session,
             config,
@@ -1302,17 +1809,23 @@ export function createServerApp(options: ServerAppOptions) {
             provider: workflow.provider,
             model: workflow.model,
             turnId,
-            triggerEventId: parsed.data.triggerEventId,
+            triggerEventId: pendingInputId,
             caseId: trainingCase.id,
             stageId: trainingCase.caseType === 'transfer' ? 'transfer' : 'training',
-            attemptId: stableAgentIdentifier('agent-attempt', turnId),
+            attemptId: caseRunId,
             occurredAt,
+            caseRunId,
+            sdkSessionId,
+            resumeSdkSession: resumeSdkSession && !recoveredActions,
+            transcriptStore: agentTranscripts,
+            ...(recoveredActions ? { recoveredActions } : {}),
           });
           return {
             session: result.session,
             value: {
               degraded: result.degraded,
               failureCategory: result.failureCategory,
+              providerAttempts: result.providerAttempts,
             },
           };
         },
@@ -1326,9 +1839,10 @@ export function createServerApp(options: ServerAppOptions) {
         status: command.replayed ? 'already-completed' : 'completed',
         turnId,
         degraded: turn.source === 'fallback',
-        ...(command.value?.failureCategory
-          ? { failureCategory: command.value.failureCategory }
+        ...((command.value?.failureCategory ?? turn.failureCategory)
+          ? { failureCategory: command.value?.failureCategory ?? turn.failureCategory }
           : {}),
+        providerAttempts: command.value?.providerAttempts ?? turn.providerAttempts ?? 1,
         session: projectStudentSession(command.session),
       });
     } catch (error) {
@@ -1349,17 +1863,27 @@ export function createServerApp(options: ServerAppOptions) {
     if (!existingSession) return context.json({ error: 'Session not found' }, 404);
 
     try {
-      const [config, prompt] = await Promise.all([
+      const [config, prompt, directPrompt] = await Promise.all([
         loadAllConfig(options.contentRoot),
         loadPrompt(options.contentRoot, 'structured-assessment'),
+        loadPrompt(options.contentRoot, 'direct-assessment'),
       ]);
       if (!prompt) throw new Error('Required prompt structured-assessment is missing');
+      if (!directPrompt) throw new Error('Required prompt direct-assessment is missing');
       const responseTurn = existingSession.events.find((event) =>
         event.kind === 'agent.turn.completed'
         && event.turnId === parsed.data.turnId);
       if (!responseTurn || responseTurn.kind !== 'agent.turn.completed') {
         return context.json({ error: 'agent-answer-rejected' }, 409);
       }
+      if (!responseTurn.caseRunId || !responseTurn.sdkSessionId) {
+        return context.json({
+          error: 'agent-case-session-missing',
+          detail: 'Please restart this case with the case-session Agent runtime.',
+        }, 409);
+      }
+      const caseRunId = responseTurn.caseRunId;
+      const sdkSessionId = responseTurn.sdkSessionId;
       const adapter = agentAdapters.get(workflow.provider)
         ?? unavailableAgentAdapter(workflow.provider);
       const nextTurnId = stableAgentIdentifier(
@@ -1371,21 +1895,93 @@ export function createServerApp(options: ServerAppOptions) {
         workflow.now?.() ?? Date.now(),
         Date.parse(existingSession.updatedAt),
       )).toISOString();
-      const command = await executeSessionCommand<AgentAnswerCommandValue>({
+      const pendingInputId = `${nextTurnId}-pending`;
+      const existingAnswer = existingSession.events.find((event) =>
+        event.kind === 'answer.submitted'
+        && event.responseToAgentTurnId === parsed.data.turnId);
+      if (
+        existingAnswer?.kind === 'answer.submitted'
+        && JSON.stringify(existingAnswer.answer) !== JSON.stringify(parsed.data.answer)
+      ) {
+        return context.json({
+          error: 'agent-answer-already-submitted',
+          detail: 'This Agent card already has a different answer.',
+        }, 409);
+      }
+      const existingPending = existingAnswer
+        ? existingSession.events.find((event) =>
+            event.kind === 'agent.input.pending'
+            && event.id === pendingInputId
+            && event.triggerEventId === existingAnswer.id
+            && event.caseRunId === caseRunId
+            && event.sdkSessionId === sdkSessionId)
+        : undefined;
+      if (existingAnswer && !existingPending) {
+        return context.json({
+          error: 'agent-answer-recovery-missing',
+          detail: 'The recorded answer has no recoverable pending Agent input.',
+        }, 409);
+      }
+      const existingNextTurn = existingPending
+        ? existingSession.events.find((event) =>
+            event.kind === 'agent.turn.completed'
+            && event.turnId === nextTurnId
+            && event.triggerEventId === pendingInputId)
+        : undefined;
+      if (existingNextTurn?.kind === 'agent.turn.completed') {
+        return context.json({
+          status: 'already-recorded',
+          nextTurnId,
+          degraded: existingNextTurn.source === 'fallback',
+          ...(existingNextTurn.failureCategory
+            ? { failureCategory: existingNextTurn.failureCategory }
+            : {}),
+          providerAttempts: existingNextTurn.providerAttempts ?? 1,
+          session: projectStudentSession(existingSession),
+        });
+      }
+      const preparedExisting = existingPending?.kind === 'agent.input.pending'
+        ? {
+            session: existingSession,
+            value: undefined,
+            replayed: true,
+          }
+        : undefined;
+      const prepare = preparedExisting ?? await executeSessionCommand<{
+        assessmentStatus: AgentAnswerAssessmentStatus;
+      }>({
         store: sessions,
         sessionId: parsed.data.sessionId,
-        commandName: 'agent-answer',
-        expectedSequence: parsed.data.expectedSequence,
-        idempotencyKey: parsed.data.idempotencyKey,
+        commandName: 'agent-case-answer',
+        expectedSequence: routeExpectedSequence(
+          sessions,
+          parsed.data.sessionId,
+          `${parsed.data.idempotencyKey}:prepare`,
+          parsed.data.expectedSequence,
+        ),
+        idempotencyKey: `${parsed.data.idempotencyKey}:prepare`,
         request: {
           turnId: parsed.data.turnId,
           answer: parsed.data.answer,
+          caseRunId,
+          sdkSessionId,
         },
         initialize: () => existingSession,
         async execute(session) {
           if (session.configVersions.configDigest !== config.configVersion) {
-            throw new SessionPrefixConflictError();
+            throw new AgentConfigurationMismatchError();
           }
+          const textAssessment = new ExistingTextShadowAssessment({
+            service: llmService,
+            evalCandidates,
+            prompt,
+            executionMode: workflow.executionMode,
+            provider: workflow.provider,
+            model: workflow.model,
+            ...(workflow.extractionStepId
+              ? { stepId: workflow.extractionStepId }
+              : {}),
+          });
           const submitted = await submitAgentAnswer({
             session,
             config,
@@ -1395,16 +1991,14 @@ export function createServerApp(options: ServerAppOptions) {
               answer: parsed.data.answer,
             },
             occurredAt,
-            textAssessment: new ExistingTextShadowAssessment({
+            textAssessment,
+            directAssessment: new ExistingDirectPrimaryAssessment({
               service: llmService,
-              evalCandidates,
-              prompt,
+              directPrompt,
+              textAudit: textAssessment,
               executionMode: workflow.executionMode,
               provider: workflow.provider,
               model: workflow.model,
-              ...(workflow.extractionStepId
-                ? { stepId: workflow.extractionStepId }
-                : {}),
             }),
             idFactory: (prefix) => stableAgentIdentifier(
               prefix,
@@ -1418,20 +2012,54 @@ export function createServerApp(options: ServerAppOptions) {
           if (!answerEvent || answerEvent.kind !== 'answer.submitted') {
             throw new Error('Agent answer command did not persist its linked answer');
           }
-          const existingNextTurn = submitted.session.events.find((event) =>
-            event.kind === 'agent.turn.completed'
-            && event.triggerEventId === answerEvent.id);
-          if (existingNextTurn?.kind === 'agent.turn.completed') {
-            return {
-              session: submitted.session,
-              value: {
-                assessmentStatus: submitted.status,
-                degraded: existingNextTurn.source === 'fallback',
-              },
-            };
-          }
+          const next = appendSessionEvent(submitted.session, {
+            id: pendingInputId,
+            occurredAt,
+            kind: 'agent.input.pending',
+            pipelineStage: 'agent',
+            caseId: responseTurn.caseId,
+            stageId: responseTurn.stageId,
+            attemptId: caseRunId,
+            caseRunId,
+            sdkSessionId,
+            pendingInputId,
+            turnId: nextTurnId,
+            triggerEventId: answerEvent.id,
+            payloadHash: `sha256:${createHash('sha256')
+              .update(JSON.stringify({
+                turnId: parsed.data.turnId,
+                answer: parsed.data.answer,
+              }))
+              .digest('hex')}`,
+          });
+          return {
+            session: next,
+            value: { assessmentStatus: submitted.status },
+          };
+        },
+      });
+      const pending = prepare.session.events.find((event) =>
+        event.id === pendingInputId);
+      if (!pending || pending.kind !== 'agent.input.pending') {
+        throw new Error('Agent answer prepare did not persist its pending input');
+      }
+      const command = await executeSessionCommand<AgentAnswerCommandValue>({
+        store: sessions,
+        sessionId: parsed.data.sessionId,
+        commandName: 'agent-answer',
+        expectedSequence:
+          pending.command?.resultingSequence ?? prepare.session.events.length,
+        idempotencyKey: `${parsed.data.idempotencyKey}:dispatch`,
+        request: { caseRunId, sdkSessionId, nextTurnId, pendingInputId },
+        initialize: () => prepare.session,
+        async execute(session) {
+          const recoveredActions = await recoverCompletedAgentActions({
+            sessionId: sdkSessionId,
+            pendingInputId,
+            store: agentTranscripts,
+          });
           const result = await runAgentLoopTurn({
-            session: submitted.session,
+            session,
             config,
             service: llmService,
             adapter,
@@ -1440,18 +2068,24 @@ export function createServerApp(options: ServerAppOptions) {
             provider: workflow.provider,
             model: workflow.model,
             turnId: nextTurnId,
-            triggerEventId: answerEvent.id,
+            triggerEventId: pendingInputId,
             caseId: responseTurn.caseId,
             stageId: responseTurn.stageId,
-            attemptId: stableAgentIdentifier('agent-attempt', nextTurnId),
+            attemptId: caseRunId,
             occurredAt,
+            caseRunId,
+            sdkSessionId,
+            resumeSdkSession: !recoveredActions,
+            transcriptStore: agentTranscripts,
+            ...(recoveredActions ? { recoveredActions } : {}),
           });
           return {
             session: result.session,
             value: {
-              assessmentStatus: submitted.status,
+              assessmentStatus: prepare.value?.assessmentStatus ?? 'unassessed',
               degraded: result.degraded,
               failureCategory: result.failureCategory,
+              providerAttempts: result.providerAttempts,
             },
           };
         },
@@ -1468,12 +2102,23 @@ export function createServerApp(options: ServerAppOptions) {
           : {}),
         nextTurnId,
         degraded: nextTurn.source === 'fallback',
-        ...(command.value?.failureCategory
-          ? { failureCategory: command.value.failureCategory }
+        ...((command.value?.failureCategory ?? nextTurn.failureCategory)
+          ? { failureCategory: command.value?.failureCategory ?? nextTurn.failureCategory }
           : {}),
+        providerAttempts:
+          command.value?.providerAttempts ?? nextTurn.providerAttempts ?? 1,
         session: projectStudentSession(command.session),
       });
     } catch (error) {
+      if (error instanceof AgentAnswerBoardValidationError) {
+        return context.json({
+          error: 'agent-answer-invalid',
+          detail: error.message,
+        }, 400);
+      }
+      if (error instanceof ExtractionValidationError && error.category === 'answer-too-long') {
+        return context.json({ error: error.message }, 413);
+      }
       const failure = agentRouteFailure(context, error);
       if (failure) return failure;
       const detail = error instanceof Error ? error.message : String(error);

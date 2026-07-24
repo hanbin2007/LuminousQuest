@@ -1,5 +1,5 @@
 {
-  "version": "pretest.v1.3",
+  "version": "pretest.v1.4",
   "builder": {
     "prompt": "不用具体金属名称，搭建一个能持续工作的原电池通用模型，并标出电子、阳离子和阴离子的运动方向。",
     "components": [
@@ -184,6 +184,28 @@
       "rubricIds": ["rubric-d1", "rubric-d4"],
       "targetNodeIds": ["D1", "D4"],
       "evidencePath": "选择项 -> 电极极性、氧化还原反应场所",
+      "directAssessment": {
+        "mode": "record-primary",
+        "version": "pretest-exam1-polarity.direct.v1",
+        "votes": 3,
+        "lowConfidenceThreshold": 0.75,
+        "context": ["图中 a 极连接单质钾片；放电时 K 在 a 极失电子，O₂ 在 b 极得电子。"],
+        "adjudication": ["a 为负极、b 为正极才是完整正确；只写对其中一极时按对应节点分别判断。"],
+        "nodes": [
+          { "nodeId": "D1", "guidance": ["判断失电子反应发生在负极 a。"] },
+          { "nodeId": "D4", "guidance": ["判断得电子反应发生在正极 b。"] }
+        ],
+        "examples": [
+          { "answer": "a负，b正", "assessments": [
+            { "nodeId": "D1", "verdict": "hit", "rationale": "a 极性正确。" },
+            { "nodeId": "D4", "verdict": "hit", "rationale": "b 极性正确。" }
+          ] },
+          { "answer": "a正，b负", "assessments": [
+            { "nodeId": "D1", "verdict": "miss", "rationale": "把失电子场所判反。" },
+            { "nodeId": "D4", "verdict": "miss", "rationale": "把得电子场所判反。" }
+          ] }
+        ]
+      },
       "group": {
         "id": "exam-q1-k-o2",
         "title": "高考真题",
@@ -225,6 +247,28 @@
       "rubricIds": ["rubric-p4", "rubric-d4"],
       "targetNodeIds": ["P4", "D4"],
       "evidencePath": "选择项 -> 电子外电路流向、得电子反应场所",
+      "directAssessment": {
+        "mode": "record-primary",
+        "version": "pretest-exam1-electron-flow.direct.v1",
+        "votes": 3,
+        "lowConfidenceThreshold": 0.75,
+        "context": ["a 为 K 负极，b 为 O₂ 正极；电子只沿外电路从 a 流向 b。"],
+        "adjudication": ["方向和载流路径均须与学生原文一致，不从正确极性替学生补全电子方向。"],
+        "nodes": [
+          { "nodeId": "P4", "guidance": ["电子从 a 经外电路到 b 为 hit，反向或走隔膜为 miss。"] },
+          { "nodeId": "D4", "guidance": ["电子流入 b 体现 b 是得电子反应场所。"] }
+        ],
+        "examples": [
+          { "answer": "a到b", "assessments": [
+            { "nodeId": "P4", "verdict": "hit", "rationale": "电子方向正确。" },
+            { "nodeId": "D4", "verdict": "hit", "rationale": "终点 b 与得电子场所一致。" }
+          ] },
+          { "answer": "b到a", "assessments": [
+            { "nodeId": "P4", "verdict": "miss", "rationale": "电子方向反向。" },
+            { "nodeId": "D4", "verdict": "miss", "rationale": "把得电子场所判反。" }
+          ] }
+        ]
+      },
       "group": {
         "id": "exam-q1-k-o2",
         "title": "高考真题",
@@ -266,6 +310,25 @@
       "rubricIds": ["rubric-p6"],
       "targetNodeIds": ["P6"],
       "evidencePath": "选择项 -> 电子守恒、K 与 O₂ 的化学计量比",
+      "directAssessment": {
+        "mode": "record-primary",
+        "version": "pretest-exam1-stoichiometry.direct.v1",
+        "votes": 3,
+        "lowConfidenceThreshold": 0.75,
+        "context": ["生成 KO₂ 时 K 与 O₂ 各对应转移 1 mol 电子，物质的量之比为 1:1。"],
+        "adjudication": ["数值等价表达 1∶1、1比1 均为 hit；其它比例为 miss。"],
+        "nodes": [
+          { "nodeId": "P6", "guidance": ["按电子守恒判断 K:O₂=1:1。"] }
+        ],
+        "examples": [
+          { "answer": "1比1", "assessments": [
+            { "nodeId": "P6", "verdict": "hit", "rationale": "比例等价于 1:1。" }
+          ] },
+          { "answer": "2:1", "assessments": [
+            { "nodeId": "P6", "verdict": "miss", "rationale": "电子计量比例错误。" }
+          ] }
+        ]
+      },
       "group": {
         "id": "exam-q1-k-o2",
         "title": "高考真题",
@@ -307,6 +370,32 @@
       "rubricIds": ["rubric-d3", "rubric-p1"],
       "targetNodeIds": ["D3", "P1"],
       "evidencePath": "简答原文 -> 隔膜选择性、半反应分隔理由",
+      "directAssessment": {
+        "mode": "record-primary",
+        "version": "pretest-exam1-membrane.direct.v1",
+        "votes": 3,
+        "lowConfidenceThreshold": 0.75,
+        "context": ["隔膜允许 K⁺ 迁移但必须隔开单质 K 与 O₂；O₂ 到 a 极会导致直接反应或形成 K₂O 而非目标 KO₂。"],
+        "adjudication": [
+          "D3：明确答不能为 hit，明确答能为 miss，未作判断为 miss。",
+          "P1：说明防止 K 与 O₂ 直接反应、分隔半反应，或说明 O₂ 到 a 极会生成 K₂O 而非 KO₂，均为 hit；只答不能而无理由为 miss。",
+          "仅说防止电极 a 被氧化、只允许 K⁺ 通过或转录存疑时判 needs-review，不替陆老师裁决。"
+        ],
+        "nodes": [
+          { "nodeId": "D3", "guidance": ["只判断隔膜能否通过 O₂，不把理由质量混入本节点。"] },
+          { "nodeId": "P1", "guidance": ["理由必须说明反应分隔的必要性或等价的 K₂O 深层论证。"] }
+        ],
+        "examples": [
+          { "answer": "不能，避免钾和氧气直接反应", "assessments": [
+            { "nodeId": "D3", "verdict": "hit", "rationale": "明确判断 O₂ 不能通过。" },
+            { "nodeId": "P1", "verdict": "hit", "rationale": "说明了分隔直接反应的目的。" }
+          ] },
+          { "answer": "不能", "assessments": [
+            { "nodeId": "D3", "verdict": "hit", "rationale": "结论正确。" },
+            { "nodeId": "P1", "verdict": "miss", "rationale": "没有说明分隔理由。" }
+          ] }
+        ]
+      },
       "group": {
         "id": "exam-q1-k-o2",
         "title": "高考真题",
@@ -348,6 +437,28 @@
       "rubricIds": ["rubric-d1", "rubric-d4"],
       "targetNodeIds": ["D1", "D4"],
       "evidencePath": "选择项 -> 电极极性、氧化还原反应场所",
+      "directAssessment": {
+        "mode": "record-primary",
+        "version": "pretest-exam4-polarity.direct.v1",
+        "votes": 3,
+        "lowConfidenceThreshold": 0.75,
+        "context": ["a 极发生 O₂ 得电子的还原反应，是正极；b 极发生 Cu₂O 失电子再生 CuO 的氧化反应，是负极。"],
+        "adjudication": ["a 为正极、b 为负极才是完整正确；逐节点按学生写出的对应极性判断。"],
+        "nodes": [
+          { "nodeId": "D1", "guidance": ["判断 b 为失电子的负极场所。"] },
+          { "nodeId": "D4", "guidance": ["判断 a 为得电子的正极场所。"] }
+        ],
+        "examples": [
+          { "answer": "正|负", "assessments": [
+            { "nodeId": "D1", "verdict": "hit", "rationale": "b 为负极正确。" },
+            { "nodeId": "D4", "verdict": "hit", "rationale": "a 为正极正确。" }
+          ] },
+          { "answer": "负|正", "assessments": [
+            { "nodeId": "D1", "verdict": "miss", "rationale": "负极场所判反。" },
+            { "nodeId": "D4", "verdict": "miss", "rationale": "正极场所判反。" }
+          ] }
+        ]
+      },
       "group": {
         "id": "exam-q4-glucose",
         "title": "高考真题",
@@ -369,6 +480,25 @@
       "rubricIds": ["rubric-p6"],
       "targetNodeIds": ["P6"],
       "evidencePath": "电极反应式 -> 正极氧还原半反应",
+      "directAssessment": {
+        "mode": "record-primary",
+        "version": "pretest-exam4-cathode-equation.direct.v1",
+        "votes": 3,
+        "lowConfidenceThreshold": 0.75,
+        "context": ["血液近中性，本题按碱性介质书写正极氧还原半反应：O₂ + 2H₂O + 4e⁻ = 4OH⁻。"],
+        "adjudication": ["完全守恒且电子在反应物侧为 hit；配平错误或电子数错误如何给 partial 尚待陆老师裁量，统一 needs-review；反应物产物方向根本错误为 miss。"],
+        "nodes": [
+          { "nodeId": "P6", "guidance": ["检查原子、总电荷、电子数和电子所在一侧。"] }
+        ],
+        "examples": [
+          { "answer": "O₂+2H₂O+4e⁻=4OH⁻", "assessments": [
+            { "nodeId": "P6", "verdict": "hit", "rationale": "碱性介质正极半反应完整守恒。" }
+          ] },
+          { "answer": "O₂+H₂O+2e⁻=OH⁻", "assessments": [
+            { "nodeId": "P6", "verdict": "needs-review", "rationale": "配平和电子数错误的 partial 口径待教师裁量。" }
+          ] }
+        ]
+      },
       "group": {
         "id": "exam-q4-glucose",
         "title": "高考真题",
@@ -390,6 +520,28 @@
       "rubricIds": ["rubric-d5", "rubric-d1"],
       "targetNodeIds": ["D5", "D1"],
       "evidencePath": "选择项 -> 电极材料与参与反应物质的区分",
+      "directAssessment": {
+        "mode": "record-primary",
+        "version": "pretest-exam4-material.direct.v1",
+        "votes": 3,
+        "lowConfidenceThreshold": 0.75,
+        "context": ["b 电极材料为纳米 CuO/导电聚合物；裸写纳米 CuO 或 CuO 也表达了题目所问材料。"],
+        "adjudication": ["纳米CuO、CuO、纳米CuO/导电聚合物均为 hit；Cu₂O、石墨、葡萄糖均为 miss。"],
+        "nodes": [
+          { "nodeId": "D5", "guidance": ["区分电极材料、反应中间物和反应物。"] },
+          { "nodeId": "D1", "guidance": ["材料答案正确时认可其对应 b 负极反应场所。"] }
+        ],
+        "examples": [
+          { "answer": "纳米CuO", "assessments": [
+            { "nodeId": "D5", "verdict": "hit", "rationale": "命中电极材料核心成分。" },
+            { "nodeId": "D1", "verdict": "hit", "rationale": "识别了 b 极材料及其场所。" }
+          ] },
+          { "answer": "Cu₂O", "assessments": [
+            { "nodeId": "D5", "verdict": "miss", "rationale": "把循环中的还原产物当作电极材料。" },
+            { "nodeId": "D1", "verdict": "miss", "rationale": "未正确识别负极材料。" }
+          ] }
+        ]
+      },
       "group": {
         "id": "exam-q4-glucose",
         "title": "高考真题",
@@ -412,6 +564,25 @@
       "rubricIds": ["rubric-d5"],
       "targetNodeIds": ["D5"],
       "evidencePath": "选择项 -> 实际失电子物质与催化剂循环",
+      "directAssessment": {
+        "mode": "record-primary",
+        "version": "pretest-exam4-electron-loser.direct.v1",
+        "votes": 3,
+        "lowConfidenceThreshold": 0.75,
+        "context": ["b 极上实际失电子的是 Cu₂O，失电子后再生成 CuO；葡萄糖被 CuO 氧化但不是在电极上直接失电子的物质。"],
+        "adjudication": ["只答 Cu₂O/氧化亚铜为 hit；同时写 Cu₂O 和葡萄糖的多答是否给 partial 尚待陆老师裁量，统一 needs-review。"],
+        "nodes": [
+          { "nodeId": "D5", "guidance": ["区分电极材料、催化循环物和实际在电极失电子的 Cu₂O。"] }
+        ],
+        "examples": [
+          { "answer": "氧化亚铜", "assessments": [
+            { "nodeId": "D5", "verdict": "hit", "rationale": "氧化亚铜即 Cu₂O，是实际失电子物质。" }
+          ] },
+          { "answer": "Cu₂O、葡萄糖", "assessments": [
+            { "nodeId": "D5", "verdict": "needs-review", "rationale": "包含正确项的多答给分口径待教师裁量。" }
+          ] }
+        ]
+      },
       "group": {
         "id": "exam-q4-glucose",
         "title": "高考真题",
@@ -434,6 +605,28 @@
       "rubricIds": ["rubric-d5", "rubric-p2"],
       "targetNodeIds": ["D5", "P2"],
       "evidencePath": "简答原文 -> CuO 角色、再生循环与葡萄糖氧化关系",
+      "directAssessment": {
+        "mode": "record-primary",
+        "version": "pretest-exam4-process.direct.v1",
+        "votes": 3,
+        "lowConfidenceThreshold": 0.75,
+        "context": ["CuO 将葡萄糖氧化为葡萄糖酸并被还原为 Cu₂O；Cu₂O 在 b 极失电子再生 CuO，因此 CuO 起催化作用。"],
+        "adjudication": ["D5 完整角色和再生循环为 hit，只说催化而无循环为 partial，说中间产物或仅氧化剂为 miss；P2 明确葡萄糖被氧化为 hit。转录存疑或作用关系无法确定时 needs-review。"],
+        "nodes": [
+          { "nodeId": "D5", "guidance": ["分别检查 CuO 催化角色和 Cu₂O 失电子再生 CuO 的循环。"] },
+          { "nodeId": "P2", "guidance": ["检查是否表达 CuO 将葡萄糖氧化或葡萄糖被氧化。"] }
+        ],
+        "examples": [
+          { "answer": "CuO氧化葡萄糖后变为Cu₂O，Cu₂O失电子又生成CuO，所以CuO是催化剂", "assessments": [
+            { "nodeId": "D5", "verdict": "hit", "rationale": "角色和再生循环完整。" },
+            { "nodeId": "P2", "verdict": "hit", "rationale": "明确表达葡萄糖被氧化。" }
+          ] },
+          { "answer": "CuO是催化剂", "assessments": [
+            { "nodeId": "D5", "verdict": "partial", "rationale": "作用正确但缺少再生循环。" },
+            { "nodeId": "P2", "verdict": "miss", "rationale": "未表达葡萄糖氧化关系。" }
+          ] }
+        ]
+      },
       "group": {
         "id": "exam-q4-glucose",
         "title": "高考真题",
@@ -490,6 +683,25 @@
       "rubricIds": ["rubric-p6"],
       "targetNodeIds": ["P6"],
       "evidencePath": "选择项 -> 葡萄糖氧化电子转移与物质的量计算",
+      "directAssessment": {
+        "mode": "record-primary",
+        "version": "pretest-exam4-stoichiometry.direct.v1",
+        "votes": 3,
+        "lowConfidenceThreshold": 0.75,
+        "context": ["18 mg 葡萄糖为 0.1 mmol；每 mol 葡萄糖氧化转移 2 mol 电子，因此电子为 0.2 mmol。"],
+        "adjudication": ["0.2、.2、0.20 均为 hit；单位和数量级错误按 miss。"],
+        "nodes": [
+          { "nodeId": "P6", "guidance": ["先换算葡萄糖物质的量，再按 1:2 的电子计量计算。"] }
+        ],
+        "examples": [
+          { "answer": ".2", "assessments": [
+            { "nodeId": "P6", "verdict": "hit", "rationale": "数值等价于 0.2 mmol。" }
+          ] },
+          { "answer": "0.02", "assessments": [
+            { "nodeId": "P6", "verdict": "miss", "rationale": "数量级错误。" }
+          ] }
+        ]
+      },
       "group": {
         "id": "exam-q4-glucose",
         "title": "高考真题",

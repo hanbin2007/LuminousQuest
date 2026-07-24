@@ -167,6 +167,11 @@ function seedOf(id: string) {
   return hash;
 }
 
+function unitPhase(value: number) {
+  if (!Number.isFinite(value)) return 0;
+  return ((value % 1) + 1) % 1;
+}
+
 /**
  * 运行迹象:沿浸没电极两侧上浮的空心小气泡(STYLE §3 气泡惯例)。
  * time=0 时输出确定性的静态分布(reduced-motion 同样能读出"在工作")。
@@ -182,14 +187,16 @@ function drawRunningBubbles(
   const travel = bottom - liquidTop - 6;
   if (travel <= 12) return;
   const seed = seedOf(electrode.instanceId);
+  const animationTime = Number.isFinite(time) ? time : 0;
   ctx.save();
   ctx.lineWidth = 1.2;
   for (let index = 0; index < 7; index += 1) {
-    const offset = ((seed >> (index * 3)) % 97) / 97;
-    const speed = 0.00009 + (((seed >> (index * 2)) % 13) / 13) * 0.00006;
-    const phase = (offset + time * speed) % 1;
+    // Unsigned shifts keep UUID-derived seeds in the expected [0, n) range.
+    const offset = ((seed >>> (index * 3)) % 97) / 97;
+    const speed = 0.00009 + (((seed >>> (index * 2)) % 13) / 13) * 0.00006;
+    const phase = unitPhase(offset + animationTime * speed);
     const side = index % 2 === 0 ? -3 : geometry.width + 3;
-    const wobble = Math.sin(time * 0.003 + index * 2.1 + offset * 6) * 1.6;
+    const wobble = Math.sin(animationTime * 0.003 + index * 2.1 + offset * 6) * 1.6;
     const x = electrode.x + side + wobble;
     const y = bottom - phase * travel;
     const radius = 1.1 + phase * 1.5;

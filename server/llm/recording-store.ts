@@ -348,6 +348,106 @@ export class RecordingStore {
     };
   }
 
+  async publishDirectAssessmentDemoRecordings(cacheKeys: readonly string[]) {
+    const uniqueKeys = [...new Set(cacheKeys)];
+    if (uniqueKeys.length === 0) {
+      throw new RecordingValidationError(
+        'recordings/cache',
+        '$',
+        'no direct assessment recordings were selected',
+      );
+    }
+    const selected = await Promise.all(uniqueKeys.map(async (cacheKey) => {
+      if (!/^[a-f0-9]{64}$/.test(cacheKey)) {
+        throw new RecordingValidationError(
+          path.join('recordings', 'cache'),
+          'cacheKey',
+          `invalid direct assessment cache key ${cacheKey}`,
+        );
+      }
+      const relativeFile = path.join('recordings', 'cache', `${cacheKey}.json`);
+      const value = await readJson(relativeFile, path.join(this.cacheRoot, `${cacheKey}.json`));
+      if (value === null) {
+        throw new RecordingValidationError(relativeFile, '$', 'recording is missing');
+      }
+      const recording = parseRecording(relativeFile, value);
+      const request = recordedRequest(recording);
+      const requestInput = request?.input && typeof request.input === 'object'
+        ? request.input as Record<string, unknown>
+        : undefined;
+      const scope = requestInput?.scope && typeof requestInput.scope === 'object'
+        ? requestInput.scope as Record<string, unknown>
+        : undefined;
+      if (
+        recording.metadata.schemaVersion !== 'direct-assessment.v1'
+        || recording.metadata.prompt.id !== 'direct-assessment'
+        || recordedCacheKey(recording) !== cacheKey
+        || typeof scope?.version !== 'string'
+        || !Number.isInteger(requestInput?.voteIndex)
+        || Number(requestInput?.voteIndex) < 1
+        || Number(requestInput?.voteIndex) > 3
+      ) {
+        throw new RecordingValidationError(
+          relativeFile,
+          'request',
+          'direct assessment recording must preserve its cache key, scope version, and vote index',
+        );
+      }
+      if (
+        !request?.schema
+        || typeof request.schema !== 'object'
+        || Array.isArray(request.schema)
+      ) {
+        throw new RecordingValidationError(
+          relativeFile,
+          'request.schema',
+          'direct assessment recording requires its replay schema',
+        );
+      }
+      const fileName = `direct-${cacheKey}.json`;
+      return {
+        cacheKey,
+        recording,
+        fileName,
+        step: {
+          id: `direct-${cacheKey}`,
+          recording: `demo/${fileName}`,
+          resourceRefs: [],
+          configVersion: recording.metadata.configVersion,
+          schemaVersion: recording.metadata.schemaVersion,
+          schema: request.schema,
+          prompt: recording.metadata.prompt,
+        },
+      };
+    }));
+
+    await Promise.all(selected.map(({ fileName, recording }) =>
+      writeJsonAtomically(path.join(this.demoRoot, fileName), recording)));
+
+    const existing = await this.loadDemoScript(false);
+    const selectedKeys = new Set(uniqueKeys);
+    const retainedSteps: DemoScript['steps'] = [];
+    for (const step of existing?.steps ?? []) {
+      const recording = await this.readDemoRecording(step.recording);
+      if (recording && selectedKeys.has(recordedCacheKey(recording) ?? '')) continue;
+      retainedSteps.push(step);
+    }
+    const manifest = demoScriptSchema.parse({
+      version: 'demo-script.v2',
+      steps: [...retainedSteps, ...selected.map((entry) => entry.step)],
+    });
+    await writeJsonAtomically(
+      path.join(this.recordingsRoot, 'demo-script.json'),
+      manifest,
+    );
+    this.validatedManifest = null;
+    return {
+      cacheKeys: uniqueKeys,
+      recordings: selected.map((entry) => entry.step.recording),
+      stepIds: selected.map((entry) => entry.step.id),
+    };
+  }
+
   async getDemo(stepId: string): Promise<LLMResponse | null> {
     const manifest = this.validatedManifest ?? await this.loadDemoScript(false);
     if (!manifest) return null;

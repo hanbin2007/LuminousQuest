@@ -264,7 +264,9 @@ export class LLMService {
       model: request.model,
       prompt: {
         ...AGENT_RECORDING_PROMPT,
-        text: request.systemPrompt,
+        text: Array.isArray(request.systemPrompt)
+          ? request.systemPrompt.join('\n')
+          : request.systemPrompt,
       },
       schemaVersion: 'agent-turn-trace.v1',
       configVersion: execution.configVersion,

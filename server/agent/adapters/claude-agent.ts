@@ -229,6 +229,7 @@ export class ClaudeAgentTurnAdapter implements AgentTurnAdapter {
       tools: sdkTools,
       alwaysLoad: true,
     });
+    const allowedTools = selectedToolSpecs.map((spec) => `mcp__lq__${spec.name}`);
     const abortController = new AbortController();
     const abort = () => abortController.abort(request.signal?.reason);
     const configuredTimeout = Number(
@@ -246,6 +247,8 @@ export class ClaudeAgentTurnAdapter implements AgentTurnAdapter {
     else request.signal?.addEventListener('abort', abort, { once: true });
 
     let resultMessage: Extract<SDKMessage, { type: 'result' }> | undefined;
+    let compacted = false;
+    let contextUsage: { totalTokens?: number } | undefined;
     try {
       const conversation = this.sdk.query({
         prompt: JSON.stringify({ messages: request.messages }),
@@ -257,16 +260,46 @@ export class ClaudeAgentTurnAdapter implements AgentTurnAdapter {
             request.maxTurns,
           ),
           tools: [],
-          allowedTools: ['mcp__lq__*'],
+          allowedTools,
           mcpServers: { lq: mcpServer },
           strictMcpConfig: true,
           settingSources: [],
-          persistSession: false,
+          persistSession: Boolean(request.sdkSession),
+          ...(request.sdkSession
+            ? request.sdkSession.resume
+              ? { resume: request.sdkSession.sessionId }
+              : { sessionId: request.sdkSession.sessionId }
+            : {}),
+          ...(request.sdkSession
+            ? {
+                sessionStore: request.sdkSession.store,
+                sessionStoreFlush: 'eager' as const,
+                loadTimeoutMs: 30_000,
+                settings: { autoMemoryEnabled: false },
+                hooks: {
+                  PreCompact: [{
+                    hooks: [async () => {
+                      compacted = true;
+                      return { continue: true };
+                    }],
+                  }],
+                  PostCompact: [{
+                    hooks: [async () => {
+                      compacted = true;
+                      return { continue: true };
+                    }],
+                  }],
+                },
+              }
+            : {}),
           abortController,
         },
       });
 
       for await (const message of conversation) {
+        if (message.type === 'system' && message.subtype === 'compact_boundary') {
+          compacted = true;
+        }
         if (message.type === 'assistant') {
           const content = Array.isArray(message.message.content)
             ? message.message.content
@@ -304,6 +337,14 @@ export class ClaudeAgentTurnAdapter implements AgentTurnAdapter {
         }
         if (message.type === 'result') resultMessage = message;
       }
+      if (request.sdkSession) {
+        try {
+          const usage = await conversation.getContextUsage();
+          contextUsage = { totalTokens: usage.totalTokens };
+        } catch {
+          // Telemetry is advisory; the durable transcript is still authoritative.
+        }
+      }
     } finally {
       clearTimeout(timeout);
       request.signal?.removeEventListener('abort', abort);
@@ -320,6 +361,15 @@ export class ClaudeAgentTurnAdapter implements AgentTurnAdapter {
       throw new AgentTurnAdapterError(
         `claude-agent run failed: ${resultMessage.subtype}`,
         resultMessage.subtype === 'error_max_turns' ? 'max-turns' : 'provider-error',
+      );
+    }
+    if (
+      request.sdkSession
+      && resultMessage.session_id !== request.sdkSession.sessionId
+    ) {
+      throw new AgentTurnAdapterError(
+        'claude-agent returned a different SDK session id',
+        'session-id-mismatch',
       );
     }
 
@@ -363,6 +413,11 @@ export class ClaudeAgentTurnAdapter implements AgentTurnAdapter {
         outputTokens,
         totalTokens: (inputTokens ?? 0) + (outputTokens ?? 0),
       },
+      ...(request.sdkSession
+        ? { sdkSessionId: request.sdkSession.sessionId }
+        : {}),
+      ...(compacted ? { compacted: true } : {}),
+      ...(contextUsage ? { contextUsage } : {}),
     });
   }
 }

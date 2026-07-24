@@ -6,6 +6,7 @@ release/
 .DS_Store
 coverage/
 recordings/cache/
+recordings/runtime/
 recordings/eval-candidates/
 !recordings/eval-candidates/
 recordings/eval-candidates/*

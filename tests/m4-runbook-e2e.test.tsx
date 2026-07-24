@@ -13,6 +13,7 @@ import { createServerApp } from '../server/app';
 import type { LLMProvider } from '../server/llm/types';
 import { App } from '../src/App';
 import { defaultRuntime } from '../src/runtime/api';
+import { withoutAgentConversation } from './helpers/training-runtime';
 
 const apiToken = 'm4-runbook-e2e-token';
 const routeTransitionTimeout = { timeout: 5_000 };
@@ -95,7 +96,7 @@ describe('M4.2 competition runbook click path', () => {
       ), 'utf8')));
     const user = userEvent.setup();
 
-    render(<App runtime={defaultRuntime} />);
+    render(<App runtime={withoutAgentConversation(defaultRuntime)} />);
     await user.click(await screen.findByRole(
       'button',
       { name: '课程与会话工具' },

@@ -26,6 +26,7 @@ export interface AppContextValue {
   demoModePending: boolean;
   demoModeError: string | null;
   toggleDemoMode: () => Promise<LLMExecutionMode>;
+  activateDevelopmentPretest: () => Promise<StudentSession>;
 }
 
 export const AppContext = createContext<AppContextValue | null>(null);

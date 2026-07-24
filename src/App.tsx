@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BrowserRouter } from 'react-router-dom';
 
+import developmentPretestSessionSource from '../recordings/development/pretest-ready.json';
 import type { LoadedConfig } from '../shared/config/schemas';
+import { buildLearnerProfile } from '../shared/scoring/profile';
+import { importSession } from '../shared/session/session';
 import { sessionServerSequence } from '../shared/session/sync';
 import { createAgentActivityRuntime } from './agent/agent-activity';
 import {
@@ -30,6 +33,20 @@ import { useLocalSession } from './session/useLocalSession';
 
 const demoPreviousModeKey = 'luminous-quest:demo.v1:previous-mode';
 type DemoActivation = Awaited<ReturnType<NonNullable<AppRuntime['activateDemo']>>>;
+
+function runtimeConflictPayload(error: unknown, kind: string) {
+  if (
+    error instanceof RuntimeHttpError
+    && error.status === 409
+    && error.payload
+    && typeof error.payload === 'object'
+    && 'error' in error.payload
+    && error.payload.error === kind
+  ) {
+    return error.payload as Record<string, unknown>;
+  }
+  return null;
+}
 
 export type { AppRuntime } from './runtime/api';
 
@@ -124,49 +141,73 @@ function ConfiguredApp({ config, runtime: baseRuntime }: { config: LoadedConfig;
     target: typeof session,
     reason: 'startup' | 'import' | 'recovery' = 'recovery',
   ) => {
+    const requestedSessionId = target.id;
+    let activeSyncTargetId = target.id;
     hydratedSessionIds.current.add(target.id);
     sessionSyncTargetId.current = target.id;
     setSessionSyncError(null);
     if (!runtime.syncSession) return target;
 
-    const initialExpectedSequence = sessionServerSequence(target);
     // 每次尝试独立 key:sync 是前缀调和,天然幂等;跨启动复用同 key 会因
     // 会话内容漂移(updatedAt 等)触发服务端指纹冲突,把会话锁死在 409。
     const attemptNonce = crypto.randomUUID();
-    const synchronize = (expectedSequence: number, suffix = '') => runtime.syncSession!({
-      session: target,
-      expectedSequence,
-      idempotencyKey: `sync:${reason}:${target.id}:${initialExpectedSequence}:${attemptNonce}${suffix}`,
-    });
-
-    try {
-      let result;
+    const synchronize = async (
+      candidate: typeof target,
+      expectedSequence: number,
+      attemptLabel: string,
+    ) => {
+      const send = (sequence: number, suffix = '') => runtime.syncSession!({
+        session: candidate,
+        expectedSequence: sequence,
+        idempotencyKey:
+          `sync:${reason}:${attemptLabel}:${attemptNonce}${suffix}`,
+      });
       try {
-        result = await synchronize(initialExpectedSequence);
+        return await send(expectedSequence);
       } catch (error) {
-        const actualSequence = error instanceof RuntimeHttpError
-          && error.status === 409
-          && error.payload
-          && typeof error.payload === 'object'
-          && 'error' in error.payload
-          && error.payload.error === 'session-sequence-conflict'
-          && 'actualSequence' in error.payload
-          && typeof error.payload.actualSequence === 'number'
-          ? error.payload.actualSequence
+        const conflict = runtimeConflictPayload(error, 'session-sequence-conflict');
+        const actualSequence = typeof conflict?.actualSequence === 'number'
+          ? conflict.actualSequence
           : null;
         if (actualSequence === null) throw error;
-        result = await synchronize(actualSequence, `:retry-${actualSequence}`);
+        return send(actualSequence, `:retry-${actualSequence}`);
       }
-      const merged = mergeServerSession(target, result.session);
-      setSession((current) => current.id === target.id
-        ? mergeServerSession(current, result.session)
-        : current);
+    };
+
+    try {
+      let candidate = target;
+      let result;
+      try {
+        result = await synchronize(
+          candidate,
+          sessionServerSequence(candidate),
+          'primary',
+        );
+      } catch (error) {
+        if (!runtimeConflictPayload(error, 'session-prefix-conflict')) throw error;
+        candidate = importSession(JSON.stringify({
+          ...target,
+          id: `recovered-${crypto.randomUUID()}`,
+          serverSequence: 0,
+        }));
+        hydratedSessionIds.current.add(candidate.id);
+        activeSyncTargetId = candidate.id;
+        sessionSyncTargetId.current = candidate.id;
+        result = await synchronize(candidate, 0, 'fork');
+      }
+      const merged = mergeServerSession(candidate, result.session);
+      setSession((current) => {
+        if (current.id === candidate.id) {
+          return mergeServerSession(current, result.session);
+        }
+        return current.id === requestedSessionId ? merged : current;
+      });
       return merged;
     } catch (error) {
       const detail = error instanceof Error && error.message.trim()
         ? `：${error.message}`
         : '';
-      if (sessionSyncTargetId.current === target.id) {
+      if (sessionSyncTargetId.current === activeSyncTargetId) {
         setSessionSyncError(`会话同步失败，本机记录仍可查看${detail}`);
       }
       return target;
@@ -258,6 +299,39 @@ function ConfiguredApp({ config, runtime: baseRuntime }: { config: LoadedConfig;
     }
   }, [executionMode, runtime, session, setSession, setTransientSession, workspaceStorage]);
 
+  const activateDevelopmentPretest = useCallback(async () => {
+    if (!testNavigation) throw new Error('调试前测仅在 LQ_TEST_NAV=1 时可用');
+    const fixture = importSession(JSON.stringify(developmentPretestSessionSource));
+    if (JSON.stringify(fixture.configVersions) !== JSON.stringify(session.configVersions)) {
+      throw new Error('调试前测数据与当前配置版本不匹配');
+    }
+    buildLearnerProfile(fixture, config);
+    const developmentSession = {
+      ...fixture,
+      id: `development-${crypto.randomUUID()}`,
+      anonymousStudentId: session.anonymousStudentId,
+    };
+    const nextProgress = {
+      schemaVersion: 'stage-progress.v3' as const,
+      pretestComplete: true,
+      trainingComplete: false,
+    };
+    writeStageProgress(workspaceStorage, developmentSession.id, nextProgress);
+    setProgress(nextProgress);
+    setSession(developmentSession);
+    const hydrated = await hydrateSession(developmentSession, 'import');
+    setSession(hydrated);
+    setProgress(nextProgress);
+    return hydrated;
+  }, [
+    config,
+    hydrateSession,
+    session.configVersions,
+    setSession,
+    testNavigation,
+    workspaceStorage,
+  ]);
+
   return (
     <AppContext.Provider value={{
       config,
@@ -277,6 +351,7 @@ function ConfiguredApp({ config, runtime: baseRuntime }: { config: LoadedConfig;
       demoModeError,
       toggleDemoMode,
       testNavigation,
+      activateDevelopmentPretest,
     }}>
       <AppErrorBoundary session={session} onReset={resetSession}>
         <BrowserRouter>

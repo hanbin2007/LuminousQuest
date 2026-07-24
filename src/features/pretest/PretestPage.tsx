@@ -108,20 +108,6 @@ export function PretestPage() {
   };
   const advance = () => goToStep(draft.step + 1);
   const goPrevious = () => goToStep(draft.step - 1);
-  const skipQuestion = () => {
-    if (!activeQuestion) return;
-    setDraft((current) => {
-      const answers = { ...current.answers };
-      delete answers[activeQuestion.id];
-      return {
-        ...current,
-        answers,
-        step: Math.min(maxStep, current.step + 1),
-      };
-    });
-    navigate(pretestStepPath(config, Math.min(maxStep, draft.step + 1)));
-  };
-
   const submittedQuestionIds = useMemo(() => new Set(
     session.events
       .filter((event) => event.kind === 'answer.submitted')
@@ -224,13 +210,20 @@ export function PretestPage() {
     setDraft((current) => current.step === routeStep ? current : { ...current, step: routeStep });
   }, [config, draftSessionId, navigate, pathname, session.id]);
 
-  const submitQuestion = async (answer: string) => {
+  const submitQuestion = async (
+    answer: string,
+    submissionKind: 'answer' | 'skip' = 'answer',
+  ) => {
     if (!activeQuestion) return;
     setError(null);
     const choiceAnswer = activeQuestion.type === 'choice'
       ? resolveOriginalExamChoice(activeQuestion.id, answer)
       : null;
-    if (activeQuestion.type === 'choice' && choiceAnswer === null) {
+    if (
+      submissionKind === 'answer'
+      && activeQuestion.type === 'choice'
+      && choiceAnswer === null
+    ) {
       setError('请按题目要求填写完整答案。');
       return;
     }
@@ -246,7 +239,9 @@ export function PretestPage() {
           expectedSequence: sessionServerSequence(session),
           idempotencyKey: submissionId,
           questionId: activeQuestion.id,
-          optionId: choiceAnswer ?? answer,
+          ...(choiceAnswer ? { optionId: choiceAnswer } : {}),
+          rawAnswer: answer,
+          submissionKind,
           submissionId,
         });
         if (result.session) setSession(mergeServerSession(session, result.session));
@@ -268,12 +263,22 @@ export function PretestPage() {
         }
       }
       submissionIds.current.delete(submissionKey);
+      if (submissionKind === 'skip') {
+        setDraft((current) => {
+          const answers = { ...current.answers };
+          delete answers[activeQuestion.id];
+          return { ...current, answers };
+        });
+      }
       advance();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : '判分请求失败，请重试');
     } finally {
       setBusy(false);
     }
+  };
+  const skipQuestion = () => {
+    void submitQuestion('', 'skip');
   };
 
   const timerText = `${String(Math.floor(secondsLeft / 60)).padStart(2, '0')}:${String(secondsLeft % 60).padStart(2, '0')}`;

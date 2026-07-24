@@ -5,7 +5,7 @@
       "id": "m0-health-check",
       "recording": "demo/m0-health-check.json",
       "resourceRefs": [],
-      "configVersion": "sha256:1b5e265dd6deae61770ef6c0b058fd518776d2d984f12b6a6d94d6c9a0d00997",
+      "configVersion": "sha256:68600fe73d42cd5dc936278e725f35aadb9607a752c71d59d7fa42aaf4da7a03",
       "schemaVersion": "chat-response.v1",
       "prompt": {
         "id": "chat-system",
@@ -22,7 +22,7 @@
         "recordings/demo/class/student-02.json",
         "recordings/demo/class/student-03.json"
       ],
-      "configVersion": "sha256:1b5e265dd6deae61770ef6c0b058fd518776d2d984f12b6a6d94d6c9a0d00997",
+      "configVersion": "sha256:68600fe73d42cd5dc936278e725f35aadb9607a752c71d59d7fa42aaf4da7a03",
       "schemaVersion": "socratic-action.v2",
       "schema": {
         "type": "object",
@@ -42,7 +42,7 @@
       "id": "hand-drawing-feedback",
       "recording": "demo/hand-drawing-feedback.json",
       "resourceRefs": [],
-      "configVersion": "sha256:1b5e265dd6deae61770ef6c0b058fd518776d2d984f12b6a6d94d6c9a0d00997",
+      "configVersion": "sha256:68600fe73d42cd5dc936278e725f35aadb9607a752c71d59d7fa42aaf4da7a03",
       "schemaVersion": "hand-drawing-feedback.v1",
       "schema": {
         "type": "object",

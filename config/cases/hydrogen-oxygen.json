@@ -82,6 +82,48 @@
       "accepted": ["2H2 + O2 -> 2H2O"]
     }
   ],
+  "agentObjectives": [
+    {
+      "id": "device-and-reactants",
+      "goal": "区分两片铂电极场所、外部氢氧气体和闭合通路。",
+      "targetNodeIds": ["D1", "D2", "D3", "D4", "D5", "P1", "P2"],
+      "boardKinds": ["single-choice", "short-fill"],
+      "unlockAnchorId": "case-polarity"
+    },
+    {
+      "id": "transport-and-observation",
+      "goal": "建立电子、质子迁移与气体消耗和水生成的因果链。",
+      "targetNodeIds": ["P4", "P5"],
+      "boardKinds": ["single-choice", "short-fill"]
+    },
+    {
+      "id": "negative-equation",
+      "goal": "写出酸性介质中的氢气负极半反应式。",
+      "targetNodeIds": ["P3", "P6"],
+      "boardKinds": ["equation-fill"],
+      "equationSetId": "hydrogen-negative"
+    },
+    {
+      "id": "positive-equation",
+      "goal": "写出酸性介质中的氧气正极半反应式。",
+      "targetNodeIds": ["P3", "P6"],
+      "boardKinds": ["equation-fill"],
+      "equationSetId": "oxygen-positive"
+    },
+    {
+      "id": "overall-equation",
+      "goal": "配平电子并得到氢氧燃料电池总反应式。",
+      "targetNodeIds": ["P7"],
+      "boardKinds": ["equation-fill"],
+      "equationSetId": "hydrogen-oxygen-overall"
+    },
+    {
+      "id": "energy-chain",
+      "goal": "确认燃料电池直接能量转化、来源和效率边界。",
+      "targetNodeIds": ["E1", "E2", "E3"],
+      "boardKinds": ["single-choice", "short-fill"]
+    }
+  ],
   "tutoring": [
     { "nodeId": "D1" },
     { "nodeId": "D2" },

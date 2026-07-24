@@ -16,6 +16,7 @@ import type { AssessmentCompletedEvent, StudentSession } from '../shared/session
 import { App } from '../src/App';
 import { defaultRuntime } from '../src/runtime/api';
 import { createTemporaryDirectory, writeValidContentTree } from './helpers/content-fixture';
+import { withoutAgentConversation } from './helpers/training-runtime';
 
 const fixtureRoot = path.join(process.cwd(), 'tests', 'fixtures', 'ac2', '7e9fd74');
 const apiToken = 'ac2-test-token';
@@ -238,7 +239,7 @@ describe('AC2 config-only hot loading', () => {
     });
 
     const privateConfig = await loadAllConfig(root);
-    render(<App runtime={defaultRuntime} />);
+    render(<App runtime={withoutAgentConversation(defaultRuntime)} />);
     for (const trainingCase of privateConfig.cases.filter((entry) => entry.caseType === 'training')) {
       expect(await screen.findByRole(
         'heading',

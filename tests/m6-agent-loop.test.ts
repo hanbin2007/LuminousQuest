@@ -321,10 +321,13 @@ describe('M6 Phase 2 agent context and guards', () => {
 });
 
 describe('M6 Phase 2 loop transaction and replay', () => {
-  it('serially executes tools and atomically commits turn, judgment, and divergence', async () => {
+  it('updates working understanding each turn and commits it only at final training end', async () => {
     const { config, question, session } = await assessedPretest();
     const trigger = session.events.at(-1)!;
     const nodeId = question.targetNodeIds[0];
+    const registry = new ResponseContractRegistry({
+      idFactory: () => 'unused-random-id',
+    });
     const adapter: AgentTurnAdapter = {
       id: 'openai-compatible',
       async execute(request) {
@@ -346,6 +349,11 @@ describe('M6 Phase 2 loop transaction and replay', () => {
           arguments: {
             text: '请解释你做出这个判断的思路。',
             responseContractId: context.freeResponseContractCandidateId,
+            board: {
+              kind: 'fill-blank',
+              placeholder: '填写关键词',
+              maxLength: 40,
+            },
           },
         });
         return {
@@ -370,9 +378,7 @@ describe('M6 Phase 2 loop transaction and replay', () => {
       config,
       service,
       adapter,
-      responseContracts: new ResponseContractRegistry({
-        idFactory: () => 'unused-random-id',
-      }),
+      responseContracts: registry,
       executionMode: 'live',
       provider: 'test-openai',
       model: 'frozen-model',
@@ -385,18 +391,14 @@ describe('M6 Phase 2 loop transaction and replay', () => {
     });
 
     expect(result.degraded).toBe(false);
-    expect(result.session.events.slice(-3).map((event) => event.kind)).toEqual([
-      'agent.turn.completed',
-      'agent.judgment.recorded',
-      'agent.divergence.changed',
-    ]);
-    expect(result.session.events.at(-1)).toMatchObject({
-      kind: 'agent.divergence.changed',
-      status: 'detected',
-      agentVerdict: 'hit',
-      shadowVerdict: 'miss',
-    });
-    const turn = result.session.events.at(-3);
+    expect(result.session.events.at(-1)?.kind).toBe('agent.turn.completed');
+    expect(result.session.events.some(
+      (event) => event.kind === 'agent.judgment.recorded',
+    )).toBe(false);
+    expect(result.session.events.some(
+      (event) => event.kind === 'agent.divergence.changed',
+    )).toBe(false);
+    const turn = result.session.events.at(-1);
     expect(turn).toMatchObject({
       kind: 'agent.turn.completed',
       orderedActions: [
@@ -421,20 +423,165 @@ describe('M6 Phase 2 loop transaction and replay', () => {
     expect(nextContext.context.latestJudgments[0]).toMatchObject({
       nodeId,
       verdict: 'hit',
+      persistence: 'working-memory',
     });
     expect(nextContext.context.latestJudgments[0]).not.toHaveProperty('rationale');
+
+    const submitted = await submitAgentAnswer({
+      session: result.session,
+      config,
+      responseContracts: registry,
+      submission: {
+        turnId: 'runtime-turn',
+        answer: { format: 'text', value: '氧化' },
+      },
+      occurredAt: '2026-07-23T18:00:03.000Z',
+    });
+    const finalAdapter: AgentTurnAdapter = {
+      id: 'openai-compatible',
+      async execute(request) {
+        const terminal = await request.executeTool!({
+          callId: 'final-end',
+          name: 'end_session',
+          arguments: { summary: '本轮训练到这里结束。' },
+        });
+        return {
+          source: 'provider',
+          model: request.model,
+          orderedActions: [terminal.action],
+          terminalAction: {
+            callId: terminal.action.callId,
+            name: 'end_session',
+          },
+          usage: { totalTokens: 8 },
+        };
+      },
+    };
+    const finalService = {
+      executeAgentTurn: (
+        request: AgentTurnAdapterRequest,
+      ) => finalAdapter.execute(request),
+    } as Pick<LLMService, 'executeAgentTurn'>;
+    const finalized = await runAgentLoopTurn({
+      session: submitted.session,
+      config,
+      service: finalService,
+      adapter: finalAdapter,
+      responseContracts: registry,
+      executionMode: 'live',
+      provider: 'test-openai',
+      model: 'frozen-model',
+      turnId: 'final-runtime-turn',
+      triggerEventId: submitted.session.events.at(-1)!.id,
+      caseId: 'methane-fuel',
+      stageId: 'assessment',
+      attemptId: 'final-runtime-response-attempt',
+      occurredAt: '2026-07-23T18:00:04.000Z',
+      commitUnderstanding: true,
+    });
+
+    expect(finalized.session.events.slice(-3).map((event) => event.kind)).toEqual([
+      'agent.turn.completed',
+      'agent.judgment.recorded',
+      'agent.divergence.changed',
+    ]);
+    expect(finalized.session.events.at(-2)).toMatchObject({
+      kind: 'agent.judgment.recorded',
+      turnId: 'runtime-turn',
+      nodeId,
+      verdict: 'hit',
+    });
+    expect(finalized.session.events.at(-1)).toMatchObject({
+      kind: 'agent.divergence.changed',
+      status: 'detected',
+      agentVerdict: 'hit',
+      shadowVerdict: 'miss',
+    });
+  });
+
+  it('retries a transient provider failure with a fresh tool transaction', async () => {
+    const { config, session } = await assessedPretest();
+    const trigger = session.events.at(-1)!;
+    const execute = vi.fn(async (request: AgentTurnAdapterRequest) => {
+      if (execute.mock.calls.length === 1) {
+        throw Object.assign(new Error('temporary provider failure'), {
+          category: 'provider-error',
+        });
+      }
+      const context = JSON.parse(request.messages[0].content) as {
+        freeResponseContractCandidateId: string;
+      };
+      const terminal = await request.executeTool!({
+        callId: 'retry-success',
+        name: 'ask_student',
+        arguments: {
+          text: '请解释你做出这个判断的思路。',
+          responseContractId: context.freeResponseContractCandidateId,
+        },
+      });
+      return {
+        source: 'provider' as const,
+        model: request.model,
+        orderedActions: [terminal.action],
+        terminalAction: {
+          callId: terminal.action.callId,
+          name: 'ask_student' as const,
+        },
+        usage: { totalTokens: 20 },
+      };
+    });
+    const adapter: AgentTurnAdapter = {
+      id: 'openai-compatible',
+      execute,
+    };
+    const service = {
+      executeAgentTurn: (
+        request: AgentTurnAdapterRequest,
+      ) => adapter.execute(request),
+    } as Pick<LLMService, 'executeAgentTurn'>;
+
+    const result = await runAgentLoopTurn({
+      session,
+      config,
+      service,
+      adapter,
+      responseContracts: new ResponseContractRegistry(),
+      executionMode: 'live',
+      provider: 'flaky-provider',
+      model: 'flaky-model',
+      turnId: 'retry-turn',
+      triggerEventId: trigger.id,
+      caseId: 'pretest',
+      stageId: 'assessment',
+      attemptId: 'retry-response-attempt',
+      occurredAt: '2026-07-23T18:00:03.000Z',
+    });
+
+    expect(execute).toHaveBeenCalledTimes(2);
+    expect(result).toMatchObject({
+      degraded: false,
+      providerAttempts: 2,
+      adapterResult: { source: 'provider' },
+    });
+    expect(result.session.events.at(-1)).toMatchObject({
+      kind: 'agent.turn.completed',
+      source: 'provider',
+      providerAttempts: 2,
+      terminalAction: { name: 'ask_student' },
+    });
   });
 
   it('records a student-visible deterministic fallback when the adapter fails', async () => {
     const { config, session } = await assessedPretest();
     const trigger = session.events.at(-1)!;
+    const execute = vi.fn(async () => {
+      throw Object.assign(new Error('provider unavailable'), {
+        category: 'provider-error',
+      });
+    });
     const adapter: AgentTurnAdapter = {
       id: 'openai-compatible',
-      async execute() {
-        throw Object.assign(new Error('provider unavailable'), {
-          category: 'provider-error',
-        });
-      },
+      execute,
     };
     const service = {
       executeAgentTurn: (
@@ -463,15 +610,22 @@ describe('M6 Phase 2 loop transaction and replay', () => {
     expect(result).toMatchObject({
       degraded: true,
       failureCategory: 'provider-error',
+      providerAttempts: 2,
       adapterResult: { source: 'fallback' },
     });
+    expect(execute).toHaveBeenCalledTimes(2);
     expect(result.session.events.at(-1)).toMatchObject({
       kind: 'agent.turn.completed',
       source: 'fallback',
+      failureCategory: 'provider-error',
+      providerAttempts: 2,
       terminalAction: { name: 'ask_student' },
       orderedActions: [{
         name: 'ask_student',
-        arguments: { text: expect.stringContaining('固定训练流程') },
+        arguments: {
+          text: expect.stringContaining('请选择你当前最接近的状态'),
+          board: { kind: 'choice' },
+        },
       }],
     });
     const assessmentsBefore = result.session.events.filter(

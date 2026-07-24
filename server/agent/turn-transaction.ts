@@ -13,7 +13,19 @@ import type {
 type AgentTurnInput = Extract<SessionEventInput, { kind: 'agent.turn.completed' }>;
 type AgentWriteInput = Extract<
   SessionEventInput,
-  { kind: 'agent.judgment.recorded' | 'agent.divergence.changed' }
+  {
+    kind:
+      | 'agent.judgment.recorded'
+      | 'agent.divergence.changed'
+      | 'agent.question.started'
+      | 'agent.understanding.updated'
+      | 'agent.memory.recalled'
+      | 'agent.question.resolved'
+      | 'agent.memory.snapshot.committed'
+      | 'agent.case.completed'
+      | 'agent.anchor.revealed'
+      | 'agent.context.compacted';
+  }
 >;
 type AgentTurnMetadata = Omit<AgentTurnInput, 'orderedActions' | 'terminalAction'>;
 
@@ -79,7 +91,11 @@ export class AgentTurnTransaction {
   }
 
   stageWrite(event: AgentWriteInput) {
-    this.requireOpen('agent write');
+    if (this.transactionState === 'committed' || this.transactionState === 'aborted') {
+      throw new AgentTurnTransactionError(
+        `Cannot record agent write after ${this.transactionState}`,
+      );
+    }
     this.stagedWrites.push(event);
   }
 

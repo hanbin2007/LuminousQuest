@@ -18,11 +18,10 @@ function configuredValue(value: string | undefined) {
 export function inferConfiguredProvider(environment: NodeJS.ProcessEnv) {
   const selected = configuredValue(environment.LQ_LLM_PROVIDER);
   if (selected) return selected;
-  if (configuredValue(environment.MODELVERSE_API_KEY)) return 'modelverse';
-  if (configuredValue(environment.ZHIPU_API_KEY)) return 'zhipu';
-  if (configuredValue(environment.TONGYI_API_KEY)) return 'tongyi';
-  if (configuredValue(environment.DEEPSEEK_API_KEY)) return 'deepseek';
-  return 'unconfigured';
+  // The Claude Agent SDK authenticates through the local Claude OAuth session;
+  // it intentionally does not require an API key. Other configured provider
+  // keys remain available only through an explicit LQ_LLM_PROVIDER selection.
+  return 'claude-agent';
 }
 
 export function defaultModelForProvider(provider: string) {

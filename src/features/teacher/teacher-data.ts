@@ -47,9 +47,11 @@ function answerText(session: StudentSession, answerId: string) {
   const answer = session.events.find((event) =>
     event.kind === 'answer.submitted' && event.id === answerId);
   if (!answer || answer.kind !== 'answer.submitted') return '';
-  return answer.answer.format === 'text'
+  return answer.answer.format === 'text' || answer.answer.format === 'equation'
     ? answer.answer.value
-    : JSON.stringify(answer.answer.value);
+    : answer.answer.format === 'choice'
+      ? answer.answer.optionId
+      : JSON.stringify(answer.answer.value);
 }
 
 function assessmentOutcome(event: AssessmentCompletedEvent) {
@@ -87,6 +89,19 @@ function selectedAssessmentForNode(
     && event.nodeId === node.nodeId
     && event.id === node.selectedAssessment!.eventId
     && event.sequence === node.selectedAssessment!.sequence);
+}
+
+function referencedEventIds(value: unknown, key = ''): string[] {
+  if (Array.isArray(value)) {
+    return /EventIds$/u.test(key)
+      ? value.filter((entry): entry is string => typeof entry === 'string')
+      : value.flatMap((entry) => referencedEventIds(entry));
+  }
+  if (!value || typeof value !== 'object') {
+    return typeof value === 'string' && /EventId$/u.test(key) ? [value] : [];
+  }
+  return Object.entries(value).flatMap(([entryKey, entry]) =>
+    referencedEventIds(entry, entryKey));
 }
 
 export function buildTeacherStudentReport(sessionInput: unknown, config: LoadedConfig) {
@@ -219,6 +234,10 @@ export function buildTeacherStudentReport(sessionInput: unknown, config: LoadedC
 
   const judgmentById = new Map(session.events.flatMap((event) =>
     event.kind === 'agent.judgment.recorded' ? [[event.id, event] as const] : []));
+  const assessmentById = new Map(session.events.flatMap((event) =>
+    event.kind === 'assessment.completed' ? [[event.id, event] as const] : []));
+  const assessmentAuditById = new Map(session.events.flatMap((event) =>
+    event.kind === 'assessment.audit.completed' ? [[event.id, event] as const] : []));
   const judgments = session.events.flatMap((event) => {
     if (event.kind !== 'agent.judgment.recorded') return [];
     return [{
@@ -237,34 +256,190 @@ export function buildTeacherStudentReport(sessionInput: unknown, config: LoadedC
       supersedesEventId: event.supersedesEventId ?? null,
     }];
   });
-  const divergenceRows = session.events.flatMap((event) => {
-    if (event.kind !== 'agent.divergence.changed') return [];
-    const judgment = judgmentById.get(event.judgmentEventId);
-    if (!judgment) return [];
-    return [{
-      eventId: event.id,
-      sequence: event.sequence,
-      occurredAt: event.occurredAt,
-      caseId: event.caseId,
-      caseTitle: caseById.get(event.caseId)?.title ?? event.caseId,
-      stageId: event.stageId,
-      nodeId: judgment.nodeId,
-      judgmentEventId: event.judgmentEventId,
-      shadowAssessmentEventId: event.shadowAssessmentEventId,
-      agentVerdict: event.agentVerdict,
-      shadowVerdict: event.shadowVerdict,
-      status: event.status,
-      comparisonPolicyVersion: event.comparisonPolicyVersion,
-    }];
+  type DivergenceRow = {
+    eventId: string;
+    sequence: number;
+    occurredAt: string;
+    caseId: string;
+    caseTitle: string;
+    stageId: string;
+    attemptId: string;
+    nodeId: string;
+    judgmentEventId: string;
+    shadowAssessmentEventId: string;
+    agentVerdict: 'hit' | 'partial' | 'miss';
+    shadowVerdict: 'hit' | 'partial' | 'miss';
+    status: 'detected' | 'resolved' | 'matched';
+    comparisonPolicyVersion: string;
+    source: 'agent' | 'assessment';
+    questionId: string | null;
+    originalAnswer: string;
+    primaryRationale: string;
+    primaryConfidence: number | null;
+    auditRationale: string;
+    auditEvidence: Array<{ quote: string; start: number; end: number }>;
+    auditEngine: { id: string; version: string } | null;
+    scopeKey: string;
+  };
+  const divergenceRows = session.events.flatMap<DivergenceRow>((event) => {
+    if (event.kind === 'agent.divergence.changed') {
+      const judgment = judgmentById.get(event.judgmentEventId);
+      if (!judgment) return [];
+      return [{
+        eventId: event.id,
+        sequence: event.sequence,
+        occurredAt: event.occurredAt,
+        caseId: event.caseId,
+        caseTitle: caseById.get(event.caseId)?.title ?? event.caseId,
+        stageId: event.stageId,
+        attemptId: judgment.attemptId,
+        nodeId: judgment.nodeId,
+        judgmentEventId: event.judgmentEventId,
+        shadowAssessmentEventId: event.shadowAssessmentEventId,
+        agentVerdict: event.agentVerdict,
+        shadowVerdict: event.shadowVerdict,
+        status: event.status,
+        comparisonPolicyVersion: event.comparisonPolicyVersion,
+        source: 'agent' as const,
+        questionId: null,
+        originalAnswer: '',
+        primaryRationale: judgment.rationale,
+        primaryConfidence: null,
+        auditRationale: '',
+        auditEvidence: [],
+        auditEngine: null,
+        scopeKey: `agent\u0000${judgment.nodeId}`,
+      }];
+    }
+    if (event.kind === 'assessment.divergence.changed') {
+      const primary = assessmentById.get(event.primaryAssessmentEventId);
+      const audit = assessmentAuditById.get(event.auditEventId);
+      if (!primary || !audit) return [];
+      return [{
+        eventId: event.id,
+        sequence: event.sequence,
+        occurredAt: event.occurredAt,
+        caseId: event.caseId,
+        caseTitle: caseById.get(event.caseId)?.title ?? event.caseId,
+        stageId: event.stageId,
+        attemptId: event.attemptId,
+        nodeId: event.nodeId,
+        judgmentEventId: event.primaryAssessmentEventId,
+        shadowAssessmentEventId: event.auditEventId,
+        agentVerdict: event.primaryVerdict,
+        shadowVerdict: event.auditVerdict,
+        status: event.status,
+        comparisonPolicyVersion: event.comparisonPolicyVersion,
+        source: 'assessment' as const,
+        questionId: audit.questionId,
+        originalAnswer: answerText(session, event.sourceAnswerEventId),
+        primaryRationale: 'reason' in primary.ruleDecision
+          ? primary.ruleDecision.reason
+          : 'Direct assessment did not persist a scored rationale.',
+        primaryConfidence: primary.extraction.status === 'assessed'
+          ? primary.extraction.judgment?.confidence ?? null
+          : null,
+        auditRationale: audit.rationale,
+        auditEvidence: audit.evidence,
+        auditEngine: audit.engine,
+        scopeKey: `assessment\u0000${event.sourceAnswerEventId}\u0000${event.nodeId}`,
+      }];
+    }
+    return [];
   });
-  const latestDivergenceByNode = new Map<string, typeof divergenceRows[number]>();
-  divergenceRows.forEach((event) => latestDivergenceByNode.set(event.nodeId, event));
-  const divergences = divergenceRows.map((event) => ({
+  const latestDivergenceByScope = new Map<string, typeof divergenceRows[number]>();
+  divergenceRows.forEach((event) => latestDivergenceByScope.set(event.scopeKey, event));
+  const divergences = divergenceRows.map(({ scopeKey, ...event }) => ({
     ...event,
     unresolved: event.status === 'detected'
-      && latestDivergenceByNode.get(event.nodeId)?.eventId === event.eventId,
+      && latestDivergenceByScope.get(scopeKey)?.eventId === event.eventId,
   }));
   const unresolvedDivergences = divergences.filter((event) => event.unresolved);
+
+  const eventIds = new Set(session.events.map((event) => event.id));
+  const turnEventByTurnId = new Map(session.events.flatMap((event) =>
+    event.kind === 'agent.turn.completed' ? [[event.turnId, event.id] as const] : []));
+  const links = new Map<string, Set<string>>();
+  const link = (left: string, right: string) => {
+    if (left === right || !eventIds.has(left) || !eventIds.has(right)) return;
+    const leftLinks = links.get(left) ?? new Set<string>();
+    const rightLinks = links.get(right) ?? new Set<string>();
+    leftLinks.add(right);
+    rightLinks.add(left);
+    links.set(left, leftLinks);
+    links.set(right, rightLinks);
+  };
+  for (const event of session.events) {
+    referencedEventIds(event).forEach((eventId) => link(event.id, eventId));
+    if ('turnId' in event && typeof event.turnId === 'string') {
+      const turnEventId = turnEventByTurnId.get(event.turnId);
+      if (turnEventId) link(event.id, turnEventId);
+    }
+    if (
+      event.kind === 'answer.submitted'
+      && event.responseToAgentTurnId
+    ) {
+      const turnEventId = turnEventByTurnId.get(event.responseToAgentTurnId);
+      if (turnEventId) link(event.id, turnEventId);
+    }
+  }
+  const relatedAgentEventIds = new Set(session.events.flatMap((event) => {
+    const commandName = event.command?.commandName
+      ?? (event.kind === 'session.command.executed' ? event.commandName : undefined);
+    return event.kind.startsWith('agent.')
+      || commandName === 'agent-turn'
+      || commandName === 'agent-answer'
+      ? [event.id]
+      : [];
+  }));
+  const pendingRelatedIds = [...relatedAgentEventIds];
+  while (pendingRelatedIds.length > 0) {
+    const eventId = pendingRelatedIds.pop()!;
+    for (const linkedId of links.get(eventId) ?? []) {
+      if (relatedAgentEventIds.has(linkedId)) continue;
+      relatedAgentEventIds.add(linkedId);
+      pendingRelatedIds.push(linkedId);
+    }
+  }
+  const agentEventChain = session.events.flatMap((event) => {
+    if (!relatedAgentEventIds.has(event.id)) return [];
+    let relation = '';
+    if (event.kind === 'agent.turn.completed') {
+      relation = `trigger=${event.triggerEventId} · turn=${event.turnId}`;
+    } else if (event.kind === 'answer.submitted' && event.responseToAgentTurnId) {
+      relation = `responseTo=${event.responseToAgentTurnId}`;
+    } else if (
+      event.kind === 'assessment.completed'
+      || event.kind === 'assessment.audit.completed'
+      || event.kind === 'assessment.divergence.changed'
+    ) {
+      relation = `sourceAnswer=${event.sourceAnswerEventId}`;
+    } else if (event.kind === 'agent.judgment.recorded') {
+      relation = `turn=${event.turnId} · node=${event.nodeId}`;
+    } else if (event.kind === 'agent.divergence.changed') {
+      relation = `judgment=${event.judgmentEventId}`;
+    } else if (event.kind === 'session.command.executed') {
+      relation = `command=${event.commandName} · key=${event.idempotencyKey}`;
+    } else {
+      const references = referencedEventIds(event).filter((eventId) =>
+        relatedAgentEventIds.has(eventId));
+      relation = references.length > 0
+        ? `links=${references.join(',')}`
+        : 'Agent chain event';
+    }
+    return [{
+      id: event.id,
+      sequence: event.sequence,
+      occurredAt: event.occurredAt,
+      kind: event.kind,
+      caseId: event.caseId,
+      stageId: event.stageId,
+      relation,
+      commandName: event.command?.commandName
+        ?? (event.kind === 'session.command.executed' ? event.commandName : null),
+      rawEvent: event,
+    }];
+  });
 
   const assessmentNeedsReview = session.events.flatMap((event) => {
     if (event.kind !== 'assessment.completed') return [];
@@ -286,18 +461,21 @@ export function buildTeacherStudentReport(sessionInput: unknown, config: LoadedC
   });
   const divergenceNeedsReview = unresolvedDivergences.map((event) => ({
     kind: 'divergence' as const,
+    source: event.source,
     sequence: event.sequence,
     occurredAt: event.occurredAt,
     caseId: event.caseId,
     caseTitle: event.caseTitle,
     stageId: event.stageId,
-    attemptId: judgmentById.get(event.judgmentEventId)?.attemptId ?? '',
+    attemptId: event.attemptId,
     nodeId: event.nodeId,
     judgmentEventId: event.judgmentEventId,
     shadowAssessmentEventId: event.shadowAssessmentEventId,
     agentVerdict: event.agentVerdict,
     shadowVerdict: event.shadowVerdict,
-    reason: 'Agent 判断与判分引擎记录不一致。',
+    reason: event.source === 'assessment'
+      ? '直接评判与旧判分审计结果不一致。'
+      : 'Agent 判断与判分引擎记录不一致。',
   }));
   const needsReview = [...assessmentNeedsReview, ...divergenceNeedsReview]
     .sort((left, right) => left.sequence - right.sequence);
@@ -317,6 +495,7 @@ export function buildTeacherStudentReport(sessionInput: unknown, config: LoadedC
       divergences,
       unresolvedCount: unresolvedDivergences.length,
     },
+    agentEventChain,
     profile,
   };
 }

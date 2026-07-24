@@ -67,6 +67,8 @@ describe('Hono server responsibilities', () => {
 
     expect(response.headers.get('x-lq-api-token')).toBe(apiToken);
     expect(payload).not.toHaveProperty('prompts');
+    expect(payload.pretest.questions.every((question) =>
+      !Object.hasOwn(question, 'directAssessment'))).toBe(true);
     expect(payload.cases.map((trainingCase) => trainingCase.id))
       .toEqual(['zinc-copper', 'aluminum-air', 'methane-fuel']);
     expect(payload.cases[0]?.materials).toEqual([

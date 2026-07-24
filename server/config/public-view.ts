@@ -27,7 +27,7 @@ export function createPublicConfigView(config: LoadedConfig) {
     })),
     tutoring: structuredClone(trainingCase.tutoring),
     targetNodeIds: [...trainingCase.targetNodeIds],
-  })) as LoadedConfig['cases'];
+  })) as unknown as LoadedConfig['cases'];
 
   for (const component of view.pretest.builder.components) {
     component.allowedRoles = [
@@ -39,6 +39,7 @@ export function createPublicConfigView(config: LoadedConfig) {
   }
 
   for (const question of view.pretest.questions) {
+    delete (question as Partial<typeof question>).directAssessment;
     if (question.type === 'choice') {
       for (const option of question.options) {
         delete (option as Partial<typeof option>).correct;

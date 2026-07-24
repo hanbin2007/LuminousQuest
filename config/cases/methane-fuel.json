@@ -84,6 +84,48 @@
       "accepted": ["CH4 + 2O2 -> CO2 + 2H2O"]
     }
   ],
+  "agentObjectives": [
+    {
+      "id": "device-and-reactants",
+      "goal": "独立区分两片铂电极场所、甲烷氧气反应物和闭合通路。",
+      "targetNodeIds": ["D1", "D2", "D3", "D4", "D5", "P1", "P2"],
+      "boardKinds": ["single-choice", "short-fill"],
+      "unlockAnchorId": "case-polarity"
+    },
+    {
+      "id": "transport-and-observation",
+      "goal": "独立判断电子、质子方向和物质消耗生成。",
+      "targetNodeIds": ["P4", "P5"],
+      "boardKinds": ["single-choice", "short-fill"]
+    },
+    {
+      "id": "negative-equation",
+      "goal": "独立写出酸性介质中的甲烷负极半反应式。",
+      "targetNodeIds": ["P3", "P6"],
+      "boardKinds": ["equation-fill"],
+      "equationSetId": "methane-negative"
+    },
+    {
+      "id": "positive-equation",
+      "goal": "独立写出酸性介质中的氧气正极半反应式。",
+      "targetNodeIds": ["P3", "P6"],
+      "boardKinds": ["equation-fill"],
+      "equationSetId": "oxygen-positive"
+    },
+    {
+      "id": "overall-equation",
+      "goal": "独立配平并得到甲烷燃料电池总反应式。",
+      "targetNodeIds": ["P7"],
+      "boardKinds": ["equation-fill"],
+      "equationSetId": "methane-overall"
+    },
+    {
+      "id": "energy-chain",
+      "goal": "独立迁移能量来源、转化方向和损耗判断。",
+      "targetNodeIds": ["E1", "E2", "E3"],
+      "boardKinds": ["single-choice", "short-fill"]
+    }
+  ],
   "evidencePaths": [
     {
       "id": "mf-d1", "nodeId": "D1", "description": "指出甲烷侧 Pt 是失电子场所且自身不消耗。", "source": "answer",

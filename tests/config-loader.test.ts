@@ -15,10 +15,38 @@ describe('configuration loading', () => {
     const loaded = await loadAllConfig(root);
 
     expect(loaded.knowledgeModel.version).toBe('knowledge-model.v1.2');
-    expect(loaded.pretest.version).toBe('pretest.v1.3');
+    expect(loaded.pretest.version).toBe('pretest.v1.4');
     expect(loaded.pretest.questions).toHaveLength(13);
+    const directQuestions = loaded.pretest.questions.filter((question) =>
+      question.directAssessment?.mode === 'record-primary');
+    expect(directQuestions).toHaveLength(10);
+    for (const question of directQuestions) {
+      expect(question.directAssessment?.nodes.map((node) => node.nodeId))
+        .toEqual(question.targetNodeIds);
+      expect(question.directAssessment?.examples.every((example) =>
+        example.assessments.map((assessment) => assessment.nodeId)
+          .every((nodeId, index) => nodeId === question.targetNodeIds[index])))
+        .toBe(true);
+    }
     expect(loaded.cases).toHaveLength(2);
     expect(loaded.configVersion).toMatch(/^sha256:[a-f0-9]{64}$/);
+  });
+
+  it('rejects a direct judgment scope whose node order differs from the question targets', async () => {
+    const root = await createTemporaryDirectory();
+    await writeValidContentTree(root);
+    const file = path.join(root, 'config', 'pretest.json');
+    const pretest = JSON.parse(await readFile(file, 'utf8'));
+    const question = pretest.questions.find((entry: { id: string }) =>
+      entry.id === 'pretest-exam1-membrane');
+    question.directAssessment.nodes.reverse();
+    await writeFile(file, JSON.stringify(pretest));
+
+    await expect(loadAllConfig(root)).rejects.toMatchObject({
+      file: 'config/pretest.json',
+      field: expect.stringContaining('directAssessment.nodes'),
+      reason: expect.stringContaining('exactly match targetNodeIds in order'),
+    });
   });
 
   it('loads a pure-equation pretest question without answer evidence', async () => {

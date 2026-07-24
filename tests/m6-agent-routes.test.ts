@@ -258,7 +258,7 @@ describe('M6 Phase 3 agent HTTP routes', () => {
     expect(adapterCall).toBe(2);
   });
 
-  it('commits the deterministic fallback when the configured provider is unavailable', async () => {
+  it('preserves a retryable pending input without synthesizing fallback dialogue', async () => {
     const root = await createTemporaryDirectory();
     await writeValidContentTree(root);
     const config = await loadAllConfig(root);
@@ -295,21 +295,13 @@ describe('M6 Phase 3 agent HTTP routes', () => {
         idempotencyKey: 'agent-route-fallback',
       }),
     });
-    const payload = await response.json() as {
-      degraded: boolean;
-      failureCategory: string;
-      session: StudentSession;
-    };
-
-    expect(response.status).toBe(200);
-    expect(payload).toMatchObject({
-      degraded: true,
-      failureCategory: 'provider-error',
-    });
-    expect(payload.session.events.at(-1)).toMatchObject({
-      kind: 'agent.turn.completed',
-      source: 'fallback',
-      terminalAction: { name: 'ask_student' },
-    });
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toEqual({ error: 'Agent turn failed' });
+    const stored = sessions.get('agent-route-session')!;
+    expect(stored.events.filter((event) => event.kind === 'agent.input.pending'))
+      .toHaveLength(1);
+    expect(stored.events.some((event) =>
+      event.kind === 'agent.turn.completed' && event.source === 'fallback')).toBe(false);
+    expect(execute).toHaveBeenCalledTimes(2);
   });
 });

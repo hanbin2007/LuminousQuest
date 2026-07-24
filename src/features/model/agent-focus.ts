@@ -19,6 +19,9 @@ export function latestAgentFocus(session: StudentSession): AgentFocusHint | null
       if (action.name === 'focus_node') {
         hint = { nodeId: action.arguments.nodeId, sequence: event.sequence };
       }
+      if (action.name === 'focus_cognitive_node') {
+        hint = { nodeId: action.arguments.nodeId, sequence: event.sequence };
+      }
     }
   }
   return hint;

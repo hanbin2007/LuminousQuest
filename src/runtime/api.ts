@@ -26,7 +26,12 @@ export interface ExtractAssessmentInput extends HydratableSessionCommandInput {
 
 export interface ExtractAssessmentResult {
   session: StudentSession | null;
-  status?: 'extracted' | 'needs-review' | 'deterministic' | 'already-recorded';
+  status?:
+    | 'direct-assessed'
+    | 'extracted'
+    | 'needs-review'
+    | 'deterministic'
+    | 'already-recorded';
   source?: 'provider' | 'development-cache' | 'demo-recording' | 'fallback';
   model?: string;
   degraded?: boolean;
@@ -75,7 +80,9 @@ export type TutorTurnResult = {
 export interface ChoiceAssessmentInput extends HydratableSessionCommandInput {
   sessionId: string;
   questionId: string;
-  optionId: string;
+  optionId?: string;
+  rawAnswer?: string;
+  submissionKind?: 'answer' | 'skip';
   submissionId: string;
 }
 
@@ -104,6 +111,7 @@ export interface AgentTurnResult {
   turnId: string;
   degraded: boolean;
   failureCategory?: string;
+  providerAttempts?: number;
   session: StudentSession;
 }
 
@@ -125,6 +133,7 @@ export interface AgentAnswerResult {
   nextTurnId: string;
   degraded: boolean;
   failureCategory?: string;
+  providerAttempts?: number;
   session: StudentSession;
 }
 
