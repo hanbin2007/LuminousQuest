@@ -120,12 +120,13 @@ export class ExistingTextShadowAssessment implements AgentTextShadowAssessment {
             assessedAt: input.answer.occurredAt,
             referenceCaseId: trainingCase.id,
             questionEvidence: question?.evidence,
+            reviewNodes: extraction.reviewNodes,
           })
         : recordNeedsReviewTextAssessments({
             session,
             config: input.config,
             answer: input.answer,
-            nodeIds: answerTargets,
+            nodeIds: extraction.reviewNodes.map((review) => review.nodeId),
             assistance: { kind: 'none', rounds: 0 },
             reason: extraction.reason,
             provenance,

@@ -8,6 +8,7 @@ import {
   type StructuredAssessmentResponse,
 } from '../../shared/workflows/assessment';
 import {
+  type AssessmentExtractionValidationResult,
   ExtractionValidationError,
   validateAssessmentExtraction,
 } from '../../shared/workflows/extraction-validation';
@@ -27,24 +28,26 @@ function closedFactSlotsSchema(
   baseSlots: JsonSchema,
   requirements: readonly { id: string; valueDomain?: readonly string[]; hint?: string }[],
 ) {
-  const baseItem = baseSlots.items as JsonSchema;
+  const item = structuredClone(baseSlots.items as JsonSchema);
+  const properties = objectProperties(item);
+  properties.id = {
+    type: 'string',
+    minLength: 1,
+    description: `Allowed fact slot ids: ${requirements.map((entry) => entry.id).join(', ')}`,
+  };
+  properties.value = {
+    type: 'string',
+    minLength: 1,
+    description: requirements.map((requirement) => {
+      const domain = requirement.valueDomain?.length
+        ? ` (${requirement.valueDomain.join(', ')})`
+        : '';
+      return `${requirement.id}${domain}${requirement.hint ? `: ${requirement.hint}` : ''}`;
+    }).join('; '),
+  };
   return {
     ...structuredClone(baseSlots),
-    maxItems: requirements.length,
-    items: {
-      oneOf: requirements.map((requirement) => {
-        const branch = structuredClone(baseItem) as JsonSchema;
-        objectProperties(branch).id = { type: 'string', const: requirement.id };
-        // 判断型槽位:取值域闭集(含错误取值,如 true/false),实体槽保持开放以转录学生原话
-        if (requirement.valueDomain && requirement.valueDomain.length > 0) {
-          objectProperties(branch).value = { type: 'string', enum: [...requirement.valueDomain] };
-        }
-        if (requirement.hint) {
-          branch.description = requirement.hint;
-        }
-        return branch;
-      }),
-    },
+    items: item,
   };
 }
 
@@ -147,6 +150,7 @@ export type AssessmentExtractionResult =
   | {
       status: 'extracted';
       extraction: StructuredAssessmentResponse;
+      reviewNodes: AssessmentExtractionReviewNode[];
       source: 'provider' | 'development-cache' | 'demo-recording';
       cacheKey: string;
       model: string;
@@ -155,11 +159,18 @@ export type AssessmentExtractionResult =
   | {
       status: 'needs-review';
       reason: string;
-      source: 'fallback';
+      reviewNodes: AssessmentExtractionReviewNode[];
+      source: 'provider' | 'development-cache' | 'demo-recording' | 'fallback';
       cacheKey: string;
       model: string;
       degraded: true;
     };
+
+export interface AssessmentExtractionReviewNode {
+  nodeId: string;
+  reason: string;
+  assistance: AssistanceMetadata;
+}
 
 export async function runAssessmentExtraction(
   input: AssessmentExtractionInput,
@@ -180,6 +191,34 @@ export async function runAssessmentExtraction(
       .filter((node) => input.targetNodeIds.includes(node.id))
       .map((node) => [node.id, node.misconceptions.map((entry) => entry.id)]),
   );
+  let validationResult: AssessmentExtractionValidationResult | null = null;
+  const recordCandidate = async (error: ExtractionValidationError) => {
+    try {
+      await input.evalCandidates.record({
+        category: error.category,
+        answer: input.answer,
+        detail: error.detail,
+        provenance: {
+          configDigest: input.config.configVersion,
+          thresholds: {
+            maxEditDistanceRatio:
+              input.config.scaffoldPolicy.extraction.citation.maxEditDistanceRatio,
+            normalizationCandidateMaxEditDistanceRatio:
+              input.config.scaffoldPolicy.extraction.citation
+                .normalizationCandidateMaxEditDistanceRatio,
+          },
+          prompt: { id: input.prompt.id, version: input.prompt.version },
+          schemaVersion: 'structured-assessment.v5',
+          provider: input.provider,
+          model: input.model,
+        },
+      });
+    } catch (recordingError) {
+      (input.logger ?? console).warn(
+        `[llm] eval candidate write failed: ${(recordingError as Error).message}`,
+      );
+    }
+  };
   const result = await input.service.execute({
     executionMode: input.executionMode,
     capability: 'structured',
@@ -207,7 +246,7 @@ export async function runAssessmentExtraction(
     retryCount: input.config.scaffoldPolicy.extraction.retryCount,
     validateStructured: async (value) => {
       try {
-        return validateAssessmentExtraction({
+        validationResult = validateAssessmentExtraction({
           extraction: value,
           answer: input.answer,
           caseId: input.caseId,
@@ -215,33 +254,15 @@ export async function runAssessmentExtraction(
           questionEvidence: input.questionEvidence,
           config: input.config,
         });
+        for (const failure of validationResult.failures) {
+          await recordCandidate(failure);
+        }
+        // Keep the cached provider payload schema-conforming. The validated,
+        // filtered result stays in this request-local side channel.
+        return value;
       } catch (error) {
         if (error instanceof ExtractionValidationError) {
-          try {
-            await input.evalCandidates.record({
-              category: error.category,
-              answer: input.answer,
-              detail: error.detail,
-              provenance: {
-                configDigest: input.config.configVersion,
-                thresholds: {
-                  maxEditDistanceRatio:
-                    input.config.scaffoldPolicy.extraction.citation.maxEditDistanceRatio,
-                  normalizationCandidateMaxEditDistanceRatio:
-                    input.config.scaffoldPolicy.extraction.citation
-                      .normalizationCandidateMaxEditDistanceRatio,
-                },
-                prompt: { id: input.prompt.id, version: input.prompt.version },
-                schemaVersion: 'structured-assessment.v5',
-                provider: input.provider,
-                model: input.model,
-              },
-            });
-          } catch (recordingError) {
-            (input.logger ?? console).warn(
-              `[llm] eval candidate write failed: ${(recordingError as Error).message}`,
-            );
-          }
+          await recordCandidate(error);
           throw new StructuredResponseValidationError(error.message, {
             retryable: error.retryable,
             category: error.category,
@@ -259,10 +280,31 @@ export async function runAssessmentExtraction(
   });
 
   if (result.requiresTeacherReview || result.source === 'fallback') {
+    const reason = result.failureReason ?? 'provider-error';
     return {
       status: 'needs-review',
-      reason: result.failureReason ?? 'provider-error',
+      reason,
+      reviewNodes: input.targetNodeIds.map((nodeId) => ({
+        nodeId,
+        reason,
+        assistance: input.assistance,
+      })),
       source: 'fallback',
+      cacheKey: result.cacheKey,
+      model: result.response.model,
+      degraded: true,
+    };
+  }
+  const validated = validationResult as AssessmentExtractionValidationResult | null;
+  if (!validated) {
+    throw new Error('Structured extraction completed without a validation result');
+  }
+  if (!validated.extraction) {
+    return {
+      status: 'needs-review',
+      reason: validated.reviewNodes[0]?.reason ?? 'validation-failed',
+      reviewNodes: validated.reviewNodes,
+      source: result.source,
       cacheKey: result.cacheKey,
       model: result.response.model,
       degraded: true,
@@ -270,10 +312,11 @@ export async function runAssessmentExtraction(
   }
   return {
     status: 'extracted',
-    extraction: structuredAssessmentResponseSchema.parse(result.response.structured),
+    extraction: structuredAssessmentResponseSchema.parse(validated.extraction),
+    reviewNodes: validated.reviewNodes,
     source: result.source,
     cacheKey: result.cacheKey,
     model: result.response.model,
-    degraded: result.degraded,
+    degraded: result.degraded || validated.reviewNodes.length > 0,
   };
 }

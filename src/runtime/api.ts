@@ -30,6 +30,10 @@ export interface ExtractAssessmentResult {
   source?: 'provider' | 'development-cache' | 'demo-recording' | 'fallback';
   model?: string;
   degraded?: boolean;
+  assessmentSummary?: {
+    scoredCount: number;
+    needsReviewCount: number;
+  };
 }
 
 export interface EquationAssessmentInput extends HydratableSessionCommandInput {

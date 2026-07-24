@@ -4,7 +4,7 @@ import { loadAllConfig } from '../server/config/loader';
 import {
   ExtractionValidationError,
   quoteExpressesFactValue,
-  validateAssessmentExtraction,
+  requireValidAssessmentExtraction as validateAssessmentExtraction,
 } from '../shared/workflows/extraction-validation';
 
 async function fixture() {

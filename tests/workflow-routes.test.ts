@@ -221,6 +221,104 @@ describe('server-owned assessment and tutor routes', () => {
     }
   });
 
+  it('records a mixed extraction as scored nodes plus node-local teacher review', async () => {
+    const root = await createTemporaryDirectory();
+    await writeValidContentTree(root);
+    const sessions = new TestSessionStore();
+    const answer = 'Zn在负极失电子，Cu极发生还原反应。';
+    const evidence = (quote: string) => {
+      const start = answer.indexOf(quote);
+      if (start < 0) throw new Error(`Missing test quote ${quote}`);
+      return { quote, start, end: start + quote.length };
+    };
+    const facts = (id: string, value: string, quote: string) => ({
+      response: 'substantive',
+      terminology: 'model',
+      syllabus: 'within',
+      contradiction: false,
+      typo: 'none',
+      slots: [{ id, value, evidence: evidence(quote) }],
+    });
+    const value = {
+      anchors: [],
+      assessments: [
+        {
+          nodeId: 'D1',
+          errorIds: [],
+          facts: facts('oxidation-site', 'Zn', '负极'),
+          evidence: [evidence(answer)],
+          assistance: { kind: 'none', rounds: 0 },
+        },
+        {
+          nodeId: 'D4',
+          errorIds: [],
+          facts: facts('reduction-site', 'Cu', 'Cu极'),
+          evidence: [evidence(answer)],
+          assistance: { kind: 'none', rounds: 0 },
+        },
+      ],
+    };
+    let attempts = 0;
+    const provider: LLMProvider = {
+      id: 'mixed-node-provider',
+      async chat() { throw new Error('not used'); },
+      async vision() { throw new Error('not used'); },
+      async structured() {
+        attempts += 1;
+        return { content: JSON.stringify(value), structured: structuredClone(value), model: 'mixed-v1' };
+      },
+    };
+    const app = createServerApp({
+      contentRoot: root,
+      clientRoot: path.join(root, 'client'),
+      apiToken,
+      providers: new Map([[provider.id, provider]]),
+      sessions,
+      workflow: { executionMode: 'live', provider: provider.id, model: 'mixed-v1' },
+    });
+
+    const response = await post(app, '/api/assessment/extract', {
+      sessionId: 'mixed-node-session',
+      caseId: 'zinc-copper',
+      questionId: 'zinc-copper:analysis',
+      targetNodeIds: ['D1', 'D4'],
+      studentAnswer: answer,
+      submissionId: 'mixed-node-submission',
+    });
+    const payload = await response.json() as {
+      status: string;
+      assessmentSummary: { scoredCount: number; needsReviewCount: number };
+      session: StudentSession;
+    };
+    const assessments = payload.session.events.filter(
+      (event): event is AssessmentCompletedEvent => event.kind === 'assessment.completed',
+    );
+
+    expect(response.status).toBe(200);
+    expect(attempts).toBe(1);
+    expect(payload.status).toBe('extracted');
+    expect(payload.assessmentSummary).toEqual({ scoredCount: 1, needsReviewCount: 1 });
+    expect(payload.session.events.filter((event) => event.kind === 'answer.submitted')).toHaveLength(1);
+    expect(assessments).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        nodeId: 'D4',
+        ruleDecision: { status: 'hit', ruleId: expect.any(String) },
+        score: expect.objectContaining({ status: 'scored', outcome: 'hit' }),
+      }),
+      expect.objectContaining({
+        nodeId: 'D1',
+        extraction: { status: 'needs-review' },
+        score: { status: 'unassessed' },
+      }),
+    ]));
+    expect(sessions.get('mixed-node-session')?.events).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        nodeId: 'D1',
+        extraction: expect.objectContaining({ status: 'needs-review', reason: 'fact-grounding' }),
+      }),
+    ]));
+  });
+
   it('scores the Q4 pure cathode equation without invoking answer extraction', async () => {
     const root = await createTemporaryDirectory();
     await writeValidContentTree(root);

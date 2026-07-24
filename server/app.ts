@@ -971,12 +971,13 @@ export function createServerApp(options: ServerAppOptions) {
                   assessedAt: occurredAt,
                   referenceCaseId,
                   questionEvidence: question?.evidence,
+                  reviewNodes: extractionResult.reviewNodes,
                 })
               : recordNeedsReviewTextAssessments({
                   session,
                   config,
                   answer,
-                  nodeIds: answerTargetNodeIds,
+                  nodeIds: extractionResult.reviewNodes.map((review) => review.nodeId),
                   assistance,
                   reason: extractionResult.reason,
                   provenance,
@@ -1002,11 +1003,26 @@ export function createServerApp(options: ServerAppOptions) {
             session = recorded.session;
             profile = recorded.profile;
           }
+          const submittedAssessments = session.events.filter(
+            (event): event is AssessmentCompletedEvent =>
+              event.kind === 'assessment.completed'
+              && event.sourceAnswerEventId === answer.id,
+          );
+          const assessmentSummary = {
+            scoredCount: submittedAssessments.filter((event) =>
+              event.score.status === 'scored').length,
+            needsReviewCount: submittedAssessments.filter((event) =>
+              event.extraction.status === 'needs-review'
+              || event.ruleDecision.status === 'needs-review'
+              || event.following.status === 'needs-review'
+              || event.score.status === 'needs-review').length,
+          };
           return {
             session,
             value: {
               ...(extractionResult ?? { status: 'deterministic' as const }),
               profile,
+              assessmentSummary,
               recordingStatus: 'recorded' as const,
             },
           };

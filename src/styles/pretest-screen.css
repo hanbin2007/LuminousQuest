@@ -813,6 +813,13 @@
   box-shadow: var(--shadow-card);
 }
 
+.pretest-page .diagnosis-assessment-summary {
+  margin: 8px 0 0;
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+  font-weight: 700;
+}
+
 .pretest-page .diagnosis-overview {
   padding: 20px 0 28px;
   border-top: 0;

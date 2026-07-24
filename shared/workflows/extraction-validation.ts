@@ -318,14 +318,38 @@ function verifiedClassifications(
   };
 }
 
-export function validateAssessmentExtraction(input: {
+export interface ExtractionReviewNode {
+  nodeId: string;
+  reason: ExtractionValidationCategory;
+  assistance: StructuredAssessmentResponse['assessments'][number]['assistance'];
+}
+
+export interface AssessmentExtractionValidationResult {
+  extraction: StructuredAssessmentResponse | null;
+  reviewNodes: ExtractionReviewNode[];
+  failures: ExtractionValidationError[];
+}
+
+type AssessmentExtractionValidationInput = {
   extraction: unknown;
   answer: string;
   caseId: string;
   targetNodeIds: readonly string[];
   questionEvidence?: TextQuestionEvidence;
   config: LoadedConfig;
-}): StructuredAssessmentResponse {
+};
+
+function addValidationFailure(
+  failures: ExtractionValidationError[],
+  error: unknown,
+) {
+  if (!(error instanceof ExtractionValidationError)) throw error;
+  failures.push(error);
+}
+
+export function validateAssessmentExtraction(
+  input: AssessmentExtractionValidationInput,
+): AssessmentExtractionValidationResult {
   const maximumAnswerCharacters = input.config.scaffoldPolicy.extraction.maximumAnswerCharacters;
   if (input.answer.length > maximumAnswerCharacters) {
     throw new ExtractionValidationError(
@@ -365,11 +389,26 @@ export function validateAssessmentExtraction(input: {
       node.misconceptions.map((misconception) => [misconception.id, node.id] as const)),
   );
   const anchorIds = new Set(trainingCase.followingAnchors.map((anchor) => anchor.id));
+  const failures: ExtractionValidationError[] = [];
+  const failuresByNode = new Map<string, ExtractionValidationError[]>();
+  const validatedAnchors: StructuredAssessmentResponse['anchors'] = [];
+
+  const appendNodeFailures = (
+    nodeId: string,
+    nodeFailures: readonly ExtractionValidationError[],
+  ) => {
+    if (nodeFailures.length === 0) return;
+    const existing = failuresByNode.get(nodeId) ?? [];
+    existing.push(...nodeFailures);
+    failuresByNode.set(nodeId, existing);
+  };
+
   for (const anchor of parsed.anchors) {
     const configuredAnchor = trainingCase.followingAnchors.find((entry) => entry.id === anchor.anchorId);
     if (!anchorIds.has(anchor.anchorId) || !configuredAnchor) {
       throw new ExtractionValidationError('closed-set', true, `Unknown anchor ${anchor.anchorId}`);
     }
+    const anchorFailures: ExtractionValidationError[] = [];
     const allowedFactIds = new Set(configuredAnchor.correctValue.split(';').map((entry) => {
       const separator = entry.indexOf('=');
       return separator < 1 ? '' : entry.slice(0, separator).trim();
@@ -377,20 +416,29 @@ export function validateAssessmentExtraction(input: {
     const seenFactIds = new Set<string>();
     for (const [factIndex, fact] of anchor.facts.entries()) {
       if (!allowedFactIds.has(fact.id) || seenFactIds.has(fact.id)) {
-        throw new ExtractionValidationError(
+        const error = new ExtractionValidationError(
           'closed-set',
           true,
           `Anchor ${anchor.anchorId} contains an unknown or duplicate fact slot ${fact.id}`,
           { caseId: input.caseId, anchorId: anchor.anchorId, factIndex, slotId: fact.id },
         );
+        anchorFailures.push(error);
+        failures.push(error);
+        continue;
       }
       seenFactIds.add(fact.id);
-      fact.evidence = validateEvidence(
-        fact.evidence,
-        input.answer,
-        input.config,
-        { caseId: input.caseId, anchorId: anchor.anchorId, slotId: fact.id, factIndex },
-      );
+      try {
+        fact.evidence = validateEvidence(
+          fact.evidence,
+          input.answer,
+          input.config,
+          { caseId: input.caseId, anchorId: anchor.anchorId, slotId: fact.id, factIndex },
+        );
+      } catch (error) {
+        addValidationFailure(anchorFailures, error);
+        addValidationFailure(failures, error);
+        continue;
+      }
       if (!quoteExpressesFactValue({
         quote: fact.evidence.quote,
         value: fact.value,
@@ -398,7 +446,7 @@ export function validateAssessmentExtraction(input: {
         commonTypos: input.config.scaffoldPolicy.extraction.citation.commonTypos,
         groundingContext: quoteGroundingContext(input.answer, fact.evidence),
       })) {
-        throw new ExtractionValidationError(
+        const error = new ExtractionValidationError(
           'fact-grounding',
           false,
           `Anchor fact ${fact.id} is not expressed by its bound quote`,
@@ -410,16 +458,39 @@ export function validateAssessmentExtraction(input: {
             modelQuote: fact.evidence.quote,
           },
         );
+        anchorFailures.push(error);
+        failures.push(error);
       }
     }
-    anchor.evidence = anchor.evidence.map((evidence, evidenceIndex) => validateEvidence(
-      evidence,
-      input.answer,
-      input.config,
-      { caseId: input.caseId, anchorId: anchor.anchorId, evidenceIndex },
-    ));
+    const validatedEvidence: typeof anchor.evidence = [];
+    anchor.evidence.forEach((evidence, evidenceIndex) => {
+      try {
+        validatedEvidence.push(validateEvidence(
+          evidence,
+          input.answer,
+          input.config,
+          { caseId: input.caseId, anchorId: anchor.anchorId, evidenceIndex },
+        ));
+      } catch (error) {
+        addValidationFailure(anchorFailures, error);
+        addValidationFailure(failures, error);
+      }
+    });
+    if (anchorFailures.length === 0) {
+      anchor.evidence = validatedEvidence;
+      validatedAnchors.push(anchor);
+      continue;
+    }
+    input.config.rubrics.rubrics
+      .filter((rubric) =>
+        rubric.followingAnchorId === anchor.anchorId
+        && targetNodeIds.has(rubric.nodeId))
+      .forEach((rubric) => appendNodeFailures(rubric.nodeId, anchorFailures));
   }
+
+  const validatedAssessments: StructuredAssessmentResponse['assessments'] = [];
   for (const assessment of parsed.assessments) {
+    const assessmentFailures = [...(failuresByNode.get(assessment.nodeId) ?? [])];
     assessment.facts.response = classifyTextResponse(input.answer);
     if (assessment.facts.response !== 'substantive') {
       assessment.facts.slots = [];
@@ -429,24 +500,58 @@ export function validateAssessmentExtraction(input: {
       entry.nodeId === assessment.nodeId)
       ?? trainingCase.evidencePaths.find((entry) =>
         entry.nodeId === assessment.nodeId && entry.source === 'answer');
-    const allowedSlotIds = new Set(evidencePath?.factRequirements.map((entry) => entry.id) ?? []);
+    const requirementsBySlotId = new Map(
+      evidencePath?.factRequirements.map((entry) => [entry.id, entry] as const) ?? [],
+    );
+    const allowedSlotIds = new Set(requirementsBySlotId.keys());
     const seenSlotIds = new Set<string>();
     for (const [slotIndex, slot] of assessment.facts.slots.entries()) {
       if (!allowedSlotIds.has(slot.id) || seenSlotIds.has(slot.id)) {
-        throw new ExtractionValidationError(
+        const error = new ExtractionValidationError(
           'closed-set',
           true,
           `Assessment ${assessment.nodeId} contains an unknown or duplicate fact slot ${slot.id}`,
           { caseId: input.caseId, nodeId: assessment.nodeId, slotId: slot.id, slotIndex },
         );
+        assessmentFailures.push(error);
+        failures.push(error);
+        continue;
       }
       seenSlotIds.add(slot.id);
-      slot.evidence = validateEvidence(
-        slot.evidence,
-        input.answer,
-        input.config,
-        { caseId: input.caseId, nodeId: assessment.nodeId, slotId: slot.id, slotIndex },
-      );
+      const requirement = requirementsBySlotId.get(slot.id);
+      const valueDomain = requirement && 'valueDomain' in requirement
+        ? requirement.valueDomain
+        : undefined;
+      if (valueDomain && !valueDomain.includes(slot.value)) {
+        const error = new ExtractionValidationError(
+          'closed-set',
+          true,
+          `Fact ${slot.id} contains a value outside its configured domain`,
+          {
+            caseId: input.caseId,
+            nodeId: assessment.nodeId,
+            slotId: slot.id,
+            slotIndex,
+            slotValue: slot.value,
+            valueDomain,
+          },
+        );
+        assessmentFailures.push(error);
+        failures.push(error);
+        continue;
+      }
+      try {
+        slot.evidence = validateEvidence(
+          slot.evidence,
+          input.answer,
+          input.config,
+          { caseId: input.caseId, nodeId: assessment.nodeId, slotId: slot.id, slotIndex },
+        );
+      } catch (error) {
+        addValidationFailure(assessmentFailures, error);
+        addValidationFailure(failures, error);
+        continue;
+      }
       if (!quoteExpressesFactValue({
         quote: slot.evidence.quote,
         value: slot.value,
@@ -454,7 +559,7 @@ export function validateAssessmentExtraction(input: {
         commonTypos: input.config.scaffoldPolicy.extraction.citation.commonTypos,
         groundingContext: quoteGroundingContext(input.answer, slot.evidence),
       })) {
-        throw new ExtractionValidationError(
+        const error = new ExtractionValidationError(
           'fact-grounding',
           false,
           `Fact ${slot.id} is not expressed by its bound quote`,
@@ -466,16 +571,20 @@ export function validateAssessmentExtraction(input: {
             modelQuote: slot.evidence.quote,
           },
         );
+        assessmentFailures.push(error);
+        failures.push(error);
       }
     }
     for (const errorId of assessment.errorIds) {
       if (misconceptionNode.get(errorId) !== assessment.nodeId) {
-        throw new ExtractionValidationError(
+        const error = new ExtractionValidationError(
           'closed-set',
           true,
           `Error ${errorId} is not configured for node ${assessment.nodeId}`,
           { caseId: input.caseId, nodeId: assessment.nodeId, errorId },
         );
+        assessmentFailures.push(error);
+        failures.push(error);
       }
     }
     if (
@@ -488,25 +597,82 @@ export function validateAssessmentExtraction(input: {
       )
       && assessment.evidence.length === 0
     ) {
-      throw new ExtractionValidationError(
+      const error = new ExtractionValidationError(
         'citation-mismatch',
         true,
         `Assessment ${assessment.nodeId} with declared facts or errors requires grounded evidence`,
         { caseId: input.caseId, nodeId: assessment.nodeId },
       );
+      assessmentFailures.push(error);
+      failures.push(error);
     }
-    assessment.evidence = assessment.evidence.map((evidence, evidenceIndex) => validateEvidence(
-      evidence,
-      input.answer,
-      input.config,
-      { caseId: input.caseId, nodeId: assessment.nodeId, evidenceIndex },
-    ));
-    assessment.facts.verified = verifiedClassifications(
-      assessment.facts,
-      input.answer,
-      input.config,
-      { caseId: input.caseId, nodeId: assessment.nodeId },
+    const validatedEvidence: typeof assessment.evidence = [];
+    assessment.evidence.forEach((evidence, evidenceIndex) => {
+      try {
+        validatedEvidence.push(validateEvidence(
+          evidence,
+          input.answer,
+          input.config,
+          { caseId: input.caseId, nodeId: assessment.nodeId, evidenceIndex },
+        ));
+      } catch (error) {
+        addValidationFailure(assessmentFailures, error);
+        addValidationFailure(failures, error);
+      }
+    });
+    try {
+      assessment.facts.verified = verifiedClassifications(
+        assessment.facts,
+        input.answer,
+        input.config,
+        { caseId: input.caseId, nodeId: assessment.nodeId },
+      );
+    } catch (error) {
+      addValidationFailure(assessmentFailures, error);
+      addValidationFailure(failures, error);
+    }
+    if (assessmentFailures.length === 0) {
+      assessment.evidence = validatedEvidence;
+      validatedAssessments.push(assessment);
+    } else {
+      failuresByNode.set(assessment.nodeId, assessmentFailures);
+    }
+  }
+
+  const reviewNodes = input.targetNodeIds.flatMap((nodeId) => {
+    const nodeFailures = failuresByNode.get(nodeId);
+    const assessment = parsed.assessments.find((entry) => entry.nodeId === nodeId);
+    return nodeFailures && assessment
+      ? [{
+          nodeId,
+          reason: nodeFailures[0].category,
+          assistance: assessment.assistance,
+        }]
+      : [];
+  });
+  return {
+    extraction: validatedAssessments.length > 0
+      ? structuredAssessmentResponseSchema.parse({
+          anchors: validatedAnchors,
+          assessments: validatedAssessments,
+        })
+      : null,
+    reviewNodes,
+    failures,
+  };
+}
+
+export function requireValidAssessmentExtraction(
+  input: AssessmentExtractionValidationInput,
+): StructuredAssessmentResponse {
+  const result = validateAssessmentExtraction(input);
+  if (result.failures.length > 0) throw result.failures[0];
+  if (!result.extraction) {
+    throw new ExtractionValidationError(
+      'closed-set',
+      true,
+      'Extraction did not contain any validated assessments',
     );
   }
-  return parsed;
+  return result.extraction;
 }

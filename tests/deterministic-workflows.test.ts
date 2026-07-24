@@ -15,7 +15,9 @@ import {
   recordStructuredTextAssessment,
   structuredAssessmentResponseSchema,
 } from '../shared/workflows/assessment';
-import { validateAssessmentExtraction } from '../shared/workflows/extraction-validation';
+import {
+  requireValidAssessmentExtraction as validateAssessmentExtraction,
+} from '../shared/workflows/extraction-validation';
 
 class MemoryStorage implements Pick<Storage, 'getItem' | 'setItem' | 'removeItem'> {
   private readonly values = new Map<string, string>();

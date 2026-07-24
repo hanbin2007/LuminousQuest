@@ -127,6 +127,32 @@ describe('Agent activity stream', () => {
       .toBeInTheDocument();
   });
 
+  it('reports partial scoring and teacher review without describing the whole response as handed off', async () => {
+    const runtime = runtimeWithExtraction(vi.fn(async (): Promise<ExtractAssessmentResult> => ({
+      session: null,
+      status: 'extracted',
+      source: 'provider',
+      model: 'claude-sonnet-test',
+      assessmentSummary: {
+        scoredCount: 1,
+        needsReviewCount: 1,
+      },
+    } as ExtractAssessmentResult)));
+    const user = userEvent.setup();
+
+    render(
+      <AgentActivityProvider>
+        <ExtractionHarness runtime={runtime} />
+      </AgentActivityProvider>,
+    );
+
+    await user.click(screen.getByRole('button', { name: '提交测试作答' }));
+
+    expect(await screen.findByText('部分判分已完成')).toBeInTheDocument();
+    expect(screen.getByText('已判分 1 项，1 项转教师复核。')).toBeInTheDocument();
+    expect(screen.queryByText('已转交教师复核')).not.toBeInTheDocument();
+  });
+
   it('keeps adding honest waiting checkpoints before a slow Agent returns', async () => {
     vi.useFakeTimers();
     const result = deferred<ExtractAssessmentResult>();

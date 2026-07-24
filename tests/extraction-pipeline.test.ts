@@ -17,11 +17,14 @@ import {
 import { evaluateExtractedFacts } from '../shared/scoring/policy';
 import { createSession, sessionConfigVersions } from '../shared/session';
 import { recordStructuredTextAssessment } from '../shared/workflows/assessment';
-import { validateAssessmentExtraction } from '../shared/workflows/extraction-validation';
+import {
+  requireValidAssessmentExtraction as validateAssessmentExtraction,
+} from '../shared/workflows/extraction-validation';
 import { createTemporaryDirectory } from './helpers/content-fixture';
 
 const answer = '电子由Zn极流向Cu极。';
 const p4OnlyAnswer = '电子由Zn极经外电路流向Cu极；盐桥阴离子移向Zn侧，阳离子移向Cu侧。';
+const twoNodeAnswer = 'Zn在负极失电子，Cu极发生还原反应。';
 
 function structuredResponse(quote = answer): LLMResponse {
   const extraction = {
@@ -97,6 +100,49 @@ function p4OnlyStructuredResponse(): LLMResponse {
           slots: [],
         },
         evidence: [],
+        assistance: { kind: 'none', rounds: 0 },
+      },
+    ],
+  };
+  return { content: JSON.stringify(extraction), structured: extraction, model: 'fixture-v1' };
+}
+
+function twoNodeStructuredResponse(input: {
+  failD1?: boolean;
+  failD4?: boolean;
+} = {}): LLMResponse {
+  const evidence = (quote: string) => {
+    const start = twoNodeAnswer.indexOf(quote);
+    if (start < 0) throw new Error(`Missing test quote ${quote}`);
+    return { quote, start, end: start + quote.length };
+  };
+  const facts = (
+    id: string,
+    value: string,
+    quote: string,
+  ) => ({
+    response: 'substantive',
+    terminology: 'model',
+    syllabus: 'within',
+    contradiction: false,
+    typo: 'none',
+    slots: [{ id, value, evidence: evidence(quote) }],
+  });
+  const extraction = {
+    anchors: [],
+    assessments: [
+      {
+        nodeId: 'D1',
+        errorIds: [],
+        facts: facts('oxidation-site', 'Zn', input.failD1 ? '负极' : 'Zn'),
+        evidence: [evidence(twoNodeAnswer)],
+        assistance: { kind: 'none', rounds: 0 },
+      },
+      {
+        nodeId: 'D4',
+        errorIds: [],
+        facts: facts('reduction-site', 'Cu', input.failD4 ? '还原反应' : 'Cu极'),
+        evidence: [evidence(twoNodeAnswer)],
         assistance: { kind: 'none', rounds: 0 },
       },
     ],
@@ -279,6 +325,176 @@ describe('production assessment extraction pipeline', () => {
     ]));
   });
 
+  it('scores validated nodes immediately and reviews only the node with an ungrounded slot', async () => {
+    const root = await createTemporaryDirectory();
+    let attempts = 0;
+    const response = twoNodeStructuredResponse({ failD1: true });
+    const provider: LLMProvider = {
+      id: 'mixed-slot-grounding',
+      async chat() { throw new Error('not used'); },
+      async vision() { throw new Error('not used'); },
+      async structured() {
+        attempts += 1;
+        return structuredClone(response);
+      },
+    };
+    const parts = await fixture(root, new Map([[provider.id, provider]]));
+
+    const result = await runAssessmentExtraction({
+      ...runInput(parts),
+      answer: twoNodeAnswer,
+      targetNodeIds: ['D1', 'D4'],
+      provider: provider.id,
+    });
+
+    expect(attempts).toBe(1);
+    expect(result).toMatchObject({
+      status: 'extracted',
+      extraction: { assessments: [{ nodeId: 'D4' }] },
+      reviewNodes: [{
+        nodeId: 'D1',
+        reason: 'fact-grounding',
+        assistance: { kind: 'none', rounds: 0 },
+      }],
+    });
+    if (result.status !== 'extracted') throw new Error('Expected a partial extraction result');
+    const reviewNodes = (result as typeof result & {
+      reviewNodes: Array<{
+        nodeId: string;
+        reason: string;
+        assistance: { kind: 'none'; rounds: 0 };
+      }>;
+    }).reviewNodes;
+    const session = createSession({
+      id: 'session-mixed-slot-grounding',
+      anonymousStudentId: 'anon-A1B2C3D4',
+      now: '2026-07-15T12:00:00.000Z',
+      configVersions: sessionConfigVersions(parts.config),
+    });
+    const recorded = recordStructuredTextAssessment({
+      session,
+      config: parts.config,
+      answer: {
+        id: 'answer-mixed-slot-grounding',
+        occurredAt: '2026-07-15T12:01:00.000Z',
+        caseId: 'zinc-copper',
+        stageId: 'analysis',
+        attemptId: 'attempt-mixed-slot-grounding',
+        questionId: 'zinc-copper:analysis',
+        value: twoNodeAnswer,
+      },
+      extraction: result.extraction,
+      provenance: {
+        promptId: parts.prompt.id,
+        promptVersion: parts.prompt.version,
+        cacheKey: result.cacheKey,
+        model: result.model,
+      },
+      assessmentEventIdPrefix: 'mixed-slot-grounding',
+      assessedAt: '2026-07-15T12:01:01.000Z',
+      reviewNodes,
+    } as Parameters<typeof recordStructuredTextAssessment>[0]);
+    const assessments = recorded.session.events.filter((event) =>
+      event.kind === 'assessment.completed');
+
+    expect(recorded.session.events.filter((event) => event.kind === 'answer.submitted'))
+      .toHaveLength(1);
+    expect(assessments).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        nodeId: 'D4',
+        objectiveOutcome: 'hit',
+        score: expect.objectContaining({ status: 'scored', outcome: 'hit' }),
+      }),
+      expect.objectContaining({
+        nodeId: 'D1',
+        extraction: expect.objectContaining({ status: 'needs-review', reason: 'fact-grounding' }),
+        score: { status: 'unassessed' },
+      }),
+    ]));
+    const files = await readdir(path.join(root, 'recordings', 'eval-candidates'));
+    expect(files).toHaveLength(1);
+    const persisted = JSON.parse(await readFile(
+      path.join(root, 'recordings', 'eval-candidates', files[0]),
+      'utf8',
+    )) as Record<string, unknown>;
+    expect(persisted).toMatchObject({
+      category: 'fact-grounding',
+      context: { nodeId: 'D1', slotId: 'oxidation-site', slotValue: 'Zn' },
+    });
+  });
+
+  it('reviews the whole response without retrying when every target node has a failed slot', async () => {
+    const root = await createTemporaryDirectory();
+    let attempts = 0;
+    const response = twoNodeStructuredResponse({ failD1: true, failD4: true });
+    const provider: LLMProvider = {
+      id: 'all-slots-ungrounded',
+      async chat() { throw new Error('not used'); },
+      async vision() { throw new Error('not used'); },
+      async structured() {
+        attempts += 1;
+        return structuredClone(response);
+      },
+    };
+    const parts = await fixture(root, new Map([[provider.id, provider]]));
+
+    const result = await runAssessmentExtraction({
+      ...runInput(parts),
+      answer: twoNodeAnswer,
+      targetNodeIds: ['D1', 'D4'],
+      provider: provider.id,
+    });
+
+    expect(attempts).toBe(1);
+    expect(result).toMatchObject({
+      status: 'needs-review',
+      source: 'provider',
+      reviewNodes: [
+        { nodeId: 'D1', reason: 'fact-grounding' },
+        { nodeId: 'D4', reason: 'fact-grounding' },
+      ],
+    });
+    const files = await readdir(path.join(root, 'recordings', 'eval-candidates'));
+    expect(files).toHaveLength(2);
+  });
+
+  it('localizes an unknown closed-set slot to its node instead of retrying the response', async () => {
+    const root = await createTemporaryDirectory();
+    let attempts = 0;
+    const response = twoNodeStructuredResponse();
+    const structured = response.structured as {
+      assessments: Array<{ facts: { slots: Array<{ id: string }> } }>;
+    };
+    structured.assessments[0].facts.slots[0].id = 'invented-slot';
+    response.content = JSON.stringify(structured);
+    const provider: LLMProvider = {
+      id: 'mixed-closed-set-slot',
+      async chat() { throw new Error('not used'); },
+      async vision() { throw new Error('not used'); },
+      async structured() {
+        attempts += 1;
+        return structuredClone(response);
+      },
+    };
+    const parts = await fixture(root, new Map([[provider.id, provider]]));
+
+    const result = await runAssessmentExtraction({
+      ...runInput(parts),
+      answer: twoNodeAnswer,
+      targetNodeIds: ['D1', 'D4'],
+      provider: provider.id,
+    });
+
+    expect(attempts).toBe(1);
+    expect(result).toMatchObject({
+      status: 'extracted',
+      extraction: { assessments: [{ nodeId: 'D4' }] },
+      reviewNodes: [{ nodeId: 'D1', reason: 'closed-set' }],
+    });
+    const files = await readdir(path.join(root, 'recordings', 'eval-candidates'));
+    expect(files).toHaveLength(1);
+  });
+
   it('exposes classification evidence but not server verification flags to providers', async () => {
     const root = await createTemporaryDirectory();
     const parts = await fixture(root, new Map());
@@ -369,7 +585,7 @@ describe('production assessment extraction pipeline', () => {
     expect(result).toMatchObject({ status: 'extracted', source: 'demo-recording' });
   });
 
-  it('retries a hallucinated citation and records the rejected sample for eval', async () => {
+  it('does not retry a hallucinated citation and records the rejected slot for eval', async () => {
     const root = await createTemporaryDirectory();
     let attempts = 0;
     const provider: LLMProvider = {
@@ -378,7 +594,7 @@ describe('production assessment extraction pipeline', () => {
       async vision() { throw new Error('not used'); },
       async structured() {
         attempts += 1;
-        return attempts === 1 ? structuredResponse('我声称了原文中不存在的结论') : structuredResponse();
+        return structuredResponse('我声称了原文中不存在的结论');
       },
     };
     const parts = await fixture(root, new Map([[provider.id, provider]]));
@@ -389,8 +605,12 @@ describe('production assessment extraction pipeline', () => {
       provider: provider.id,
     });
 
-    expect(attempts).toBe(2);
-    expect(result.status).toBe('extracted');
+    expect(attempts).toBe(1);
+    expect(result).toMatchObject({
+      status: 'needs-review',
+      source: 'provider',
+      reviewNodes: [{ nodeId: 'P4', reason: 'citation-mismatch' }],
+    });
     const files = await readdir(path.join(root, 'recordings', 'eval-candidates'));
     expect(files).toHaveLength(1);
     const persisted = JSON.parse(await readFile(
@@ -513,6 +733,48 @@ describe('production assessment extraction pipeline', () => {
       category: 'fact-grounding',
       context: { nodeId: 'P4', slotId: 'electron-from', slotValue: 'Zn' },
     });
+  });
+
+  it('records every failed slot while creating only one review node', async () => {
+    const root = await createTemporaryDirectory();
+    const response = structuredResponse();
+    const structured = response.structured as {
+      assessments: Array<{
+        facts: {
+          slots: Array<{ evidence: { quote: string; start: number; end: number } }>;
+        };
+      }>;
+    };
+    structured.assessments[0].facts.slots.forEach((slot) => {
+      slot.evidence = { quote: '电子', start: 0, end: 2 };
+    });
+    response.content = JSON.stringify(structured);
+    const provider: LLMProvider = {
+      id: 'two-ungrounded-slots',
+      async chat() { throw new Error('not used'); },
+      async vision() { throw new Error('not used'); },
+      async structured() { return structuredClone(response); },
+    };
+    const parts = await fixture(root, new Map([[provider.id, provider]]));
+
+    const result = await runAssessmentExtraction({
+      ...runInput(parts),
+      provider: provider.id,
+    });
+
+    expect(result).toMatchObject({
+      status: 'needs-review',
+      reviewNodes: [{ nodeId: 'P4', reason: 'fact-grounding' }],
+    });
+    const files = await readdir(path.join(root, 'recordings', 'eval-candidates'));
+    expect(files).toHaveLength(2);
+    const candidates = await Promise.all(files.map(async (file) =>
+      JSON.parse(await readFile(
+        path.join(root, 'recordings', 'eval-candidates', file),
+        'utf8',
+      )) as { context: { slotId: string } }));
+    expect(candidates.map((candidate) => candidate.context.slotId).sort())
+      .toEqual(['electron-from', 'electron-to']);
   });
 
   it('refuses an over-limit answer before calling the provider', async () => {

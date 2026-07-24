@@ -28,8 +28,19 @@ function annotationStatus(node: ReturnType<typeof buildLearnerProfile>['nodes'][
   return node.outcome ?? 'unassessed';
 }
 
+export function assessmentReviewSummary(scoredCount: number, needsReviewCount: number) {
+  if (needsReviewCount === 0) return null;
+  return scoredCount > 0
+    ? `已判分 ${scoredCount} 项，${needsReviewCount} 项转教师复核`
+    : `${needsReviewCount} 项均已转交教师复核`;
+}
+
 export function DiagnosisView({ config, session }: DiagnosisViewProps) {
   const profile = useMemo(() => buildLearnerProfile(session, config), [config, session]);
+  const reviewSummary = assessmentReviewSummary(
+    profile.nodes.filter((node) => node.status === 'scored').length,
+    profile.nodes.filter((node) => node.status === 'needs-review').length,
+  );
   const dimensionById = new Map<string, typeof config.knowledgeModel.dimensions[number]>(
     config.knowledgeModel.dimensions.map((dimension) => [dimension.id, dimension]),
   );
@@ -40,6 +51,9 @@ export function DiagnosisView({ config, session }: DiagnosisViewProps) {
       <header className="page-heading">
         <span>前测完成</span>
         <h1 id="diagnosis-title">诊断结果</h1>
+        {reviewSummary
+          ? <p className="diagnosis-assessment-summary">{reviewSummary}</p>
+          : null}
       </header>
       <div className="diagnosis-overview">
         <div className="diagnosis-chart-column">

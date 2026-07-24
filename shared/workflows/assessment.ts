@@ -367,6 +367,11 @@ export interface RecordStructuredTextAssessmentInput {
   assessedAt: string;
   referenceCaseId?: string;
   questionEvidence?: TextQuestionEvidence;
+  reviewNodes?: readonly {
+    nodeId: string;
+    reason: string;
+    assistance: AssistanceMetadata;
+  }[];
 }
 
 export interface RecordNeedsReviewTextAssessmentInput {
@@ -506,6 +511,14 @@ function directionRequirements(
 
 export function recordStructuredTextAssessment(input: RecordStructuredTextAssessmentInput) {
   const extraction = structuredAssessmentResponseSchema.parse(input.extraction);
+  const extractedNodeIds = new Set(extraction.assessments.map((assessment) => assessment.nodeId));
+  const reviewNodeIds = new Set(input.reviewNodes?.map((review) => review.nodeId) ?? []);
+  if (
+    reviewNodeIds.size !== (input.reviewNodes?.length ?? 0)
+    || [...reviewNodeIds].some((nodeId) => extractedNodeIds.has(nodeId))
+  ) {
+    throw new Error('Validated and needs-review node ids must be unique and disjoint');
+  }
   const referenceCaseId = input.referenceCaseId ?? input.answer.caseId;
   const trainingCase = input.config.cases.find((entry) => entry.id === referenceCaseId);
   if (!trainingCase) throw new Error(`No case configured for ${referenceCaseId}`);
@@ -745,6 +758,21 @@ export function recordStructuredTextAssessment(input: RecordStructuredTextAssess
       },
       ...decision,
     });
+  });
+  input.reviewNodes?.forEach((review, index) => {
+    session = appendNeedsReviewAssessment(
+      session,
+      {
+        config: input.config,
+        answer: input.answer,
+        assistance: review.assistance,
+        reason: review.reason,
+        provenance: input.provenance,
+        assessedAt: input.assessedAt,
+      },
+      review.nodeId,
+      `${input.assessmentEventIdPrefix}-review-${index + 1}`,
+    );
   });
 
   return {

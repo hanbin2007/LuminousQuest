@@ -177,10 +177,21 @@ export function createAgentActivityRuntime(
         const result = await runtime.extractAssessment(input);
         const resultSource = result.source;
         const resultModel = result.model;
-        if (result.status === 'needs-review') {
+        const scoredCount = result.assessmentSummary?.scoredCount ?? 0;
+        const needsReviewCount = result.assessmentSummary?.needsReviewCount ?? 0;
+        if (scoredCount > 0 && needsReviewCount > 0) {
+          activity.complete(runId, {
+            title: '部分判分已完成',
+            body: `已判分 ${scoredCount} 项，${needsReviewCount} 项转教师复核。`,
+            meta: finishMeta(startedAt, resultSource, resultModel),
+            state: 'warning',
+          });
+        } else if (result.status === 'needs-review' || needsReviewCount > 0) {
           activity.complete(runId, {
             title: '已转交教师复核',
-            body: 'Agent 未能可靠提取证据，当前作答已完整保留。',
+            body: needsReviewCount > 0
+              ? `${needsReviewCount} 项均未通过自动校验，当前作答已完整保留。`
+              : 'Agent 未能可靠提取证据，当前作答已完整保留。',
             meta: finishMeta(startedAt, resultSource, resultModel),
             state: 'warning',
           });

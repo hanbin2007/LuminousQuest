@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { AnnotationCard } from '../src/features/diagnosis/AnnotationCard';
 import { radarSeriesValues } from '../src/features/diagnosis/DiagnosisRadar';
+import { assessmentReviewSummary } from '../src/features/diagnosis/DiagnosisView';
 
 afterEach(cleanup);
 
@@ -76,5 +77,11 @@ describe('diagnostic annotation card', () => {
       { id: 'principle', label: '原理', value: null },
       { id: 'energy', label: '能量', value: 0 },
     ])).toEqual([75, '-', 0]);
+  });
+
+  it('describes mixed diagnosis results as partial scoring rather than whole-response handoff', () => {
+    expect(assessmentReviewSummary(3, 1)).toBe('已判分 3 项，1 项转教师复核');
+    expect(assessmentReviewSummary(0, 2)).toBe('2 项均已转交教师复核');
+    expect(assessmentReviewSummary(3, 0)).toBeNull();
   });
 });
