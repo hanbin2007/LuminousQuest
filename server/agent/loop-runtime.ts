@@ -1,5 +1,10 @@
 import type { LoadedConfig } from '../../shared/config/schemas';
-import type { NormalizedAgentAction } from '../../shared/agent/contracts';
+import {
+  AGENT_CONTRACT_REVISION,
+  AGENT_CONTEXT_BUILDER_VERSION,
+  AGENT_TOOLSET_DIGEST,
+  type NormalizedAgentAction,
+} from '../../shared/agent/contracts';
 import {
   sessionSchema,
   type StudentSession,
@@ -117,6 +122,19 @@ export async function runAgentLoopTurn(
   input: RunAgentLoopTurnInput,
 ): Promise<AgentLoopTurnResult> {
   const session = sessionSchema.parse(input.session);
+  // schema 不再钉死契约标记(避免旧会话被删档);agent loop 是唯一依赖
+  // 标记一致性的运行时(requestHash/回放),在入口显式校验。
+  if (
+    session.agentContractRevision !== AGENT_CONTRACT_REVISION
+    || session.toolsetDigest !== AGENT_TOOLSET_DIGEST
+    || session.contextBuilderVersion !== AGENT_CONTEXT_BUILDER_VERSION
+  ) {
+    throw new Error(
+      `agent loop refused: session contract markers do not match this build `
+      + `(session ${session.toolsetDigest}/${session.agentContractRevision}/`
+      + `${session.contextBuilderVersion})`,
+    );
+  }
   const built = buildAgentTurnContext({
     session,
     config: input.config,

@@ -334,15 +334,15 @@ function synchronizeStore(
     const sessionIdempotency = state.idempotency.get(parsed.id)
       ?? new Map<string, StoredIdempotencyResult>();
     const previousCommand = sessionIdempotency.get(command.idempotencyKey);
-    if (previousCommand) {
-      if (previousCommand.fingerprint !== fingerprint) {
-        throw new SessionIdempotencyConflictError(command.idempotencyKey);
-      }
+    if (previousCommand && previousCommand.fingerprint === fingerprint) {
       return {
         ...previousCommand.result,
         replayed: true,
       };
     }
+    // 指纹不同不视为冲突:sync 是前缀调和,同 key 携带演进后的会话属预期
+    // (客户端跨启动重放、updatedAt 漂移)。按新尝试正常执行并覆盖记录;
+    // 真正的分叉由下方 sequence/prefix 校验拦截。
 
     const current = store.get(parsed.id);
     const actualSequence = current?.events.length ?? 0;

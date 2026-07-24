@@ -624,12 +624,22 @@ const pipelineStageOrder = {
 export const sessionSchema = z
   .object({
     schemaVersion: z.literal('session.v2'),
+    // 契约标记记录会话产生时的版本;不用 z.literal 钉死——否则任何一次
+    // 工具集/契约演进都会让全部已存会话 parse 失败(restoreLatest 会直接
+    // 删档)。回放/agent loop 的版本一致性由各自运行时显式校验。
     agentContractRevision: z
-      .literal(AGENT_CONTRACT_REVISION)
+      .string()
+      .trim()
+      .min(1)
       .default(AGENT_CONTRACT_REVISION),
-    toolsetDigest: z.literal(AGENT_TOOLSET_DIGEST).default(AGENT_TOOLSET_DIGEST),
+    toolsetDigest: z
+      .string()
+      .regex(/^sha256:[0-9a-f]{16,64}$/)
+      .default(AGENT_TOOLSET_DIGEST),
     contextBuilderVersion: z
-      .literal(AGENT_CONTEXT_BUILDER_VERSION)
+      .string()
+      .trim()
+      .min(1)
       .default(AGENT_CONTEXT_BUILDER_VERSION),
     id: identifierSchema,
     anonymousStudentId: z.string().regex(/^anon-[A-Z0-9]{8,}$/),

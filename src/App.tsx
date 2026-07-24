@@ -130,10 +130,13 @@ function ConfiguredApp({ config, runtime: baseRuntime }: { config: LoadedConfig;
     if (!runtime.syncSession) return target;
 
     const initialExpectedSequence = sessionServerSequence(target);
+    // 每次尝试独立 key:sync 是前缀调和,天然幂等;跨启动复用同 key 会因
+    // 会话内容漂移(updatedAt 等)触发服务端指纹冲突,把会话锁死在 409。
+    const attemptNonce = crypto.randomUUID();
     const synchronize = (expectedSequence: number, suffix = '') => runtime.syncSession!({
       session: target,
       expectedSequence,
-      idempotencyKey: `sync:${reason}:${target.id}:${initialExpectedSequence}${suffix}`,
+      idempotencyKey: `sync:${reason}:${target.id}:${initialExpectedSequence}:${attemptNonce}${suffix}`,
     });
 
     try {

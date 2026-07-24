@@ -311,8 +311,10 @@ describe('/api/session/sync', () => {
         idempotencyKey: 'initial-sync',
       }),
     });
+    // sync 幂等 key 复用+载荷演进不再直接 409:落入常规校验,此处因服务端
+    // 序列已前进而报 sequence-conflict(客户端对此有 actualSequence 重试路径)
     expect(reusedKey.status).toBe(409);
-    expect(await reusedKey.json()).toMatchObject({ error: 'session-idempotency-conflict' });
+    expect(await reusedKey.json()).toMatchObject({ error: 'session-sequence-conflict' });
 
     const wrongConfig = await app.request('/api/session/sync', {
       method: 'POST',
@@ -403,6 +405,6 @@ describe('/api/session/sync', () => {
     await expect(sessions.synchronize(
       { ...first, updatedAt: '2026-07-23T15:00:02.000Z' },
       { expectedSequence: 0, idempotencyKey: 'typed-initial' },
-    )).rejects.toBeInstanceOf(SessionIdempotencyConflictError);
+    )).rejects.toBeInstanceOf(SessionSequenceConflictError);
   });
 });

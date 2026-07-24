@@ -345,7 +345,9 @@ export const defaultRuntime: AppRuntime = {
 
   async extractAssessment(input) {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 20_000);
+    // 判分链路含 LLM 抽取与校验重试:claude-agent 开发通道 P95≈92s、含重试可达
+    // 数分钟;服务端超时(LLM_TIMEOUT_MS)才是权威上限,客户端只兜底更长的窗口。
+    const timeout = setTimeout(() => controller.abort(), 240_000);
     try {
       const result = await postSessionCommand<
         ExtractAssessmentResult,
